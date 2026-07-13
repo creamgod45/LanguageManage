@@ -1,0 +1,13 @@
+<idea-plugin>
+    <dependencies>
+        <module name="intellij.platform.frontend"/>
+        <module name="LanguageManage.shared"/>
+    </dependencies>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <toolWindow
+                id="ModularPlugin"
+                factoryClass="cg.creamgod45.toolWindow.ModularPluginToolWindowFactory"
+                icon="cg.creamgod45.ModularPluginIcons.ToolWindow"/>
+    </extensions>
+</idea-plugin>

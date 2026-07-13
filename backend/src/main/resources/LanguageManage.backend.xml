@@ -1,0 +1,17 @@
+<idea-plugin>
+    <dependencies>
+        <module name="intellij.platform.backend"/>
+        <module name="intellij.platform.kernel.backend"/>
+        <module name="LanguageManage.shared"/>
+
+        <module name="intellij.json"/>
+        <module name="intellij.properties"/>
+        <module name="intellij.properties.psi"/>
+        <module name="intellij.yaml"/>
+        <plugin id="com.jetbrains.php"/>
+    </dependencies>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <platform.rpc.backend.remoteApiProvider implementation="cg.creamgod45.BackendRpcApiProvider"/>
+    </extensions>
+</idea-plugin>

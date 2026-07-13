@@ -1,0 +1,22 @@
+package cg.creamgod45.localization.ui
+
+import cg.creamgod45.localization.*
+import com.intellij.openapi.project.Project
+import com.intellij.platform.project.projectId
+import fleet.rpc.client.durable
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
+
+internal class LocalizationFrontendRepository(private val project: Project) {
+    val state: Flow<LocalizationStateDto> = flow {
+        durable { LocalizationManagerRpcApi.getInstance().state(project.projectId()).collect { emit(it) } }
+    }
+    suspend fun createScheme(name: String, files: List<String>) = LocalizationManagerRpcApi.getInstance().createScheme(project.projectId(), name, files)
+    suspend fun deleteScheme(id: String) = LocalizationManagerRpcApi.getInstance().deleteScheme(project.projectId(), id)
+    suspend fun activateScheme(id: String) = LocalizationManagerRpcApi.getInstance().activateScheme(project.projectId(), id)
+    suspend fun reload(id: String) = LocalizationManagerRpcApi.getInstance().reload(project.projectId(), id, true)
+    suspend fun save(id: String, mutation: EntryMutationDto) = LocalizationManagerRpcApi.getInstance().saveEntry(project.projectId(), id, mutation)
+    suspend fun delete(id: String, entryIds: List<String>) = LocalizationManagerRpcApi.getInstance().deleteEntries(project.projectId(), id, entryIds)
+    suspend fun rename(id: String, oldKey: String, newKey: String) = LocalizationManagerRpcApi.getInstance().renameKey(project.projectId(), id, oldKey, newKey)
+    suspend fun repair(id: String) = LocalizationManagerRpcApi.getInstance().repair(project.projectId(), id)
+}
