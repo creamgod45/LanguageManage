@@ -1,5 +1,12 @@
 # Language Manager Changelog
 
+## 1.3.2
+
+- 修正翻譯表直接修改共用 renderer 顏色，造成滑鼠移動重繪時 Hover Row 誤沿用選取反色的問題。
+- 整列高亮改由 JTable 原生 selection 狀態與 IDE Look & Feel 繪製，保留單一儲存格複製／貼上及 Light/Dark 主題支援。
+- 翻譯編輯 Form 的 Value TextArea 起始高度調整為三行／72 px，超出內容仍可使用 ScrollPane 捲動。
+- Sidebar Header 從固定 FlowLayout 改為回應式 Grid；Tool Window 變窄時控制項會自動換列並重新計算高度，避免水平擠壓或裁切。
+
 ## 1.3.1
 
 - PHP 安全 parser 支援 Laravel 語言檔在 `return` 前使用 `declare(strict_types=1);`，修正官方簡中／繁中範例被誤判為「預期：return」。

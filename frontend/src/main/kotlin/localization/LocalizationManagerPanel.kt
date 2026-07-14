@@ -28,10 +28,13 @@ import com.intellij.ui.table.JBTable
 import com.intellij.util.ui.JBUI
 import kotlinx.coroutines.*
 import java.awt.BorderLayout
+import java.awt.Component
+import java.awt.Container
 import java.awt.Dimension
 import java.awt.FlowLayout
 import java.awt.GridBagConstraints
 import java.awt.GridBagLayout
+import java.awt.LayoutManager2
 import java.awt.Toolkit
 import java.awt.datatransfer.DataFlavor
 import java.awt.datatransfer.StringSelection
@@ -78,14 +81,17 @@ internal class LocalizationManagerPanel(private val project: Project) : JPanel(B
         scope.launch { repository.state.collect { state -> withContext(Dispatchers.EDT) { render(state) } } }
     }
 
-    private fun createHeader() = JPanel(BorderLayout(6, 6)).apply {
-        val schemeRow = JPanel(FlowLayout(FlowLayout.LEFT, 5, 0)).apply {
+    private fun createHeader() = JPanel().apply {
+        layout = BoxLayout(this, BoxLayout.Y_AXIS)
+        val schemeRow = ResponsiveGridPanel(JBUI.scale(5), JBUI.scale(4)).apply {
+            alignmentX = Component.LEFT_ALIGNMENT
             add(JBLabel(message("label.scheme"))); schemeBox.preferredSize = Dimension(220, schemeBox.preferredSize.height); add(schemeBox)
             add(schemeCreationDropdown()); add(button(message("button.scheme.delete"), ::deleteScheme)); add(button(message("button.reload")) { runAction { repository.reload(activeId()) } })
             add(button(message("button.repair.normalize")) { previewAndApply(ChangePreviewRequestDto(normalizeAll = true), message("summary.repair.normalize")) })
             add(ActionLink(message("action.report.issue")) { BrowserUtil.browse(ISSUE_REPORT_URL) }.apply { setExternalLinkIcon() })
         }
-        val searchRow = JPanel(FlowLayout(FlowLayout.LEFT, 5, 0)).apply {
+        val searchRow = ResponsiveGridPanel(JBUI.scale(5), JBUI.scale(4)).apply {
+            alignmentX = Component.LEFT_ALIGNMENT
             add(JBLabel(message("label.search"))); searchField.columns = 25; add(searchField)
             searchMode.renderer = object : DefaultListCellRenderer() {
                 override fun getListCellRendererComponent(list: JList<*>?, value: Any?, index: Int, selected: Boolean, focus: Boolean) =
@@ -95,7 +101,9 @@ internal class LocalizationManagerPanel(private val project: Project) : JPanel(B
             add(JBLabel(message("label.language"))); localeBox.preferredSize = Dimension(110, localeBox.preferredSize.height); add(localeBox)
             add(actionDropdown())
         }
-        add(schemeRow, BorderLayout.NORTH); add(searchRow, BorderLayout.SOUTH)
+        add(schemeRow)
+        add(Box.createVerticalStrut(JBUI.scale(4)))
+        add(searchRow)
     }
 
     private fun createTabs() = tabs.apply {
@@ -286,7 +294,7 @@ internal class LocalizationManagerPanel(private val project: Project) : JPanel(B
     }
     private fun showEntryDialog(entry: LanguageEntryDto?, scheme: LanguageSchemeDto) {
         val file = ComboBox(scheme.files.toTypedArray()); file.selectedItem = entry?.filePath ?: scheme.files.first()
-        val locale = JBTextField(); val namespace = JBTextField(); val key = JBTextField(entry?.key.orEmpty()); val value = JBTextArea(entry?.value.orEmpty(), 6, 40).apply { lineWrap = true }
+        val locale = JBTextField(); val namespace = JBTextField(); val key = JBTextField(entry?.key.orEmpty()); val value = JBTextArea(entry?.value.orEmpty(), 3, 40).apply { lineWrap = true }
         var targetEntry = entry
         locale.isEditable = false; namespace.isEditable = false
         fun updateSelectedFile() {
@@ -305,10 +313,14 @@ internal class LocalizationManagerPanel(private val project: Project) : JPanel(B
             }
         }
         file.addActionListener { updateSelectedFile() }; updateSelectedFile()
-        val valueScroll = JBScrollPane(value).apply { preferredSize = Dimension(520, 160) }
+        val valueScrollHeight = JBUI.scale(72)
+        val valueScroll = JBScrollPane(value).apply {
+            preferredSize = Dimension(JBUI.scale(520), valueScrollHeight)
+            minimumSize = Dimension(JBUI.scale(240), valueScrollHeight)
+        }
         val panel = JPanel(GridBagLayout()).apply {
             border = JBUI.Borders.empty(8)
-            preferredSize = Dimension(720, 280)
+            preferredSize = Dimension(JBUI.scale(720), JBUI.scale(220))
             fun addField(row: Int, label: String, component: JComponent, growVertically: Boolean = false) {
                 add(JBLabel(label), GridBagConstraints().apply {
                     gridx = 0
@@ -320,7 +332,7 @@ internal class LocalizationManagerPanel(private val project: Project) : JPanel(B
                     gridx = 1
                     gridy = row
                     weightx = 1.0
-                    weighty = if (growVertically) 1.0 else 0.0
+                    weighty = 0.0
                     fill = if (growVertically) GridBagConstraints.BOTH else GridBagConstraints.HORIZONTAL
                     insets = JBUI.insets(5, 0)
                 })
@@ -703,16 +715,72 @@ private class FolderCandidateTableModel(candidates: List<LanguageFileCandidateDt
     }
 }
 
-/** Keeps cell selection semantics while making every selected row visually obvious. */
-private class RowHighlightTable(model: javax.swing.table.TableModel) : JBTable(model) {
-    override fun prepareRenderer(renderer: TableCellRenderer, row: Int, column: Int): java.awt.Component {
-        val component = super.prepareRenderer(renderer, row, column)
-        if (selectionModel.isSelectedIndex(row)) {
-            component.background = selectionBackground
-            component.foreground = selectionForeground
-            if (component is JComponent) component.isOpaque = true
+/** Keeps cell selection semantics while letting the active Look & Feel paint selected rows. */
+internal class RowHighlightTable(model: javax.swing.table.TableModel) : JBTable(model) {
+    override fun isCellSelected(row: Int, column: Int): Boolean =
+        super.isCellSelected(row, column) || selectionModel.isSelectedIndex(row)
+}
+
+internal class ResponsiveGridPanel(horizontalGap: Int, verticalGap: Int) : JPanel(
+    ResponsiveGridLayout(horizontalGap, verticalGap),
+) {
+    private var lastWidth = -1
+
+    override fun setBounds(x: Int, y: Int, width: Int, height: Int) {
+        val widthChanged = width != lastWidth
+        super.setBounds(x, y, width, height)
+        if (widthChanged) {
+            lastWidth = width
+            revalidate()
+            parent?.revalidate()
         }
-        return component
+    }
+}
+
+internal class ResponsiveGridLayout(
+    private val horizontalGap: Int,
+    private val verticalGap: Int,
+) : LayoutManager2 {
+    override fun addLayoutComponent(component: Component, constraints: Any?) = Unit
+    override fun addLayoutComponent(name: String?, component: Component?) = Unit
+    override fun removeLayoutComponent(component: Component?) = Unit
+    override fun invalidateLayout(target: Container?) = Unit
+    override fun getLayoutAlignmentX(target: Container?) = 0f
+    override fun getLayoutAlignmentY(target: Container?) = 0f
+    override fun maximumLayoutSize(target: Container?) = Dimension(Int.MAX_VALUE, Int.MAX_VALUE)
+
+    override fun preferredLayoutSize(parent: Container): Dimension = measure(parent, useMinimumSize = false, applyBounds = false)
+    override fun minimumLayoutSize(parent: Container): Dimension = measure(parent, useMinimumSize = true, applyBounds = false)
+    override fun layoutContainer(parent: Container) { measure(parent, useMinimumSize = false, applyBounds = true) }
+
+    private fun measure(parent: Container, useMinimumSize: Boolean, applyBounds: Boolean): Dimension {
+        val insets = parent.insets
+        val availableWidth = (parent.width.takeIf { it > 0 } ?: JBUI.scale(900))
+            .minus(insets.left + insets.right)
+            .coerceAtLeast(1)
+        var x = insets.left
+        var y = insets.top
+        var rowHeight = 0
+        var usedWidth = 0
+
+        parent.components.filter(Component::isVisible).forEach { component ->
+            val requested = if (useMinimumSize) component.minimumSize else component.preferredSize
+            val cellWidth = requested.width.coerceAtMost(availableWidth)
+            if (x > insets.left && x + cellWidth > insets.left + availableWidth) {
+                x = insets.left
+                y += rowHeight + verticalGap
+                rowHeight = 0
+            }
+            if (applyBounds) component.setBounds(x, y, cellWidth, requested.height)
+            x += cellWidth + horizontalGap
+            rowHeight = maxOf(rowHeight, requested.height)
+            usedWidth = maxOf(usedWidth, x - horizontalGap - insets.left)
+        }
+
+        return Dimension(
+            usedWidth + insets.left + insets.right,
+            y + rowHeight + insets.bottom,
+        )
     }
 }
 
