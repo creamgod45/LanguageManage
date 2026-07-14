@@ -1,5 +1,10 @@
 # Language Manager Changelog
 
+## 1.3.1
+
+- PHP 安全 parser 支援 Laravel 語言檔在 `return` 前使用 `declare(strict_types=1);`，修正官方簡中／繁中範例被誤判為「預期：return」。
+- 仍只接受靜態 `return` array；其他 `declare` 指令、變數、函式呼叫與可執行 PHP 會繼續拒絕。
+
 ## 1.3.0
 
 - 建立方案時可一次多選多個語言資料夾，例如 `en`、`zh_CN`、`zh_TW`，並合併識別結果。

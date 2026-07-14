@@ -371,13 +371,25 @@ internal object LanguageFileCodec {
 }
 
 internal class PhpArrayParser(private val source: String) {
+    companion object {
+        private val STRICT_TYPES_DECLARE = Regex("declare\\s*\\(\\s*strict_types\\s*=\\s*1\\s*\\)\\s*;")
+    }
+
     private var index = 0
     private val out = linkedMapOf<String, String>()
 
     fun parse(): LinkedHashMap<String, String> {
+        if (source.startsWith('\uFEFF')) index++
         skipTrivia()
         if (peek("<?php")) index += 5
-        skipTrivia(); expectWord("return"); skipTrivia()
+        skipTrivia()
+        if (peekWord("declare")) {
+            val declaration = STRICT_TYPES_DECLARE.find(source, index)
+            require(declaration != null && declaration.range.first == index) { backendMessage("php.declare.strict.only") }
+            index = declaration.range.last + 1
+            skipTrivia()
+        }
+        expectWord("return"); skipTrivia()
         parseMap("")
         skipTrivia(); if (index < source.length && source[index] == ';') index++
         skipTrivia(); require(index == source.length) { backendMessage("php.trailing.code") }

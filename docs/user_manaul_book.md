@@ -10,7 +10,7 @@
 
 - JSON：`.json`
 - YAML：`.yaml`、`.yml`
-- Laravel PHP：`.php`，內容必須是靜態 `return [...]` 或 `return array(...)`
+- Laravel PHP：`.php`，內容可有 `declare(strict_types=1);`，之後必須是靜態 `return [...]` 或 `return array(...)`
 
 ### 介面語言
 
@@ -212,9 +212,9 @@ lang/zh_TW/validation.php  -> locale: zh_TW, namespace: validation
 
 ### Laravel PHP
 
-- 僅接受靜態 return array。
+- 僅接受可選的 `declare(strict_types=1);` 與靜態 return array。
 - 支援字串、數字、布林與巢狀 array。
-- 不支援函式呼叫、變數、字串串接或任意 expression。
+- 不支援其他 `declare` 指令、函式呼叫、變數、字串串接或任意 expression。
 - 插件不會執行 PHP。
 
 ## 10. 快取與重新讀取
@@ -247,7 +247,7 @@ lang/zh_TW/validation.php  -> locale: zh_TW, namespace: validation
 - 在問題列點擊「處理」開啟來源檔。
 - JSON 必須有 object 根節點且語法完整。
 - YAML 不可用 tab 縮排。
-- PHP 必須是純靜態 return array。
+- PHP 必須是可選的 `declare(strict_types=1);` 加上純靜態 return array。
 
 ### 貼上沒有作用
 

@@ -96,6 +96,39 @@ class LanguageFileSupportTest {
     }
 
     @Test
+    fun `parses Laravel language files with strict types declaration before return`() {
+        val localeDir = temp.resolve("zh_TW").createDirectories()
+        val file = localeDir.resolve("auth.php").apply { writeText("""<?php
+
+            declare(strict_types=1);
+
+            return [
+                'failed' => '這些憑證與我們的記錄不符。',
+                'password' => '提供的密碼錯誤。',
+            ];
+        """.trimIndent()) }
+
+        val parsed = LanguageFileCodec.parse(file, "scheme")
+
+        assertTrue(parsed.issues.isEmpty())
+        assertEquals("zh_TW", parsed.locale)
+        assertEquals("auth", parsed.namespace)
+        assertEquals(2, parsed.values.size)
+    }
+
+    @Test
+    fun `rejects unsupported PHP declare directives`() {
+        val file = temp.resolve("unsafe.php").apply {
+            writeText("<?php declare(ticks=1); return ['key' => 'value'];")
+        }
+
+        val issue = LanguageFileCodec.parse(file, "scheme").issues.single()
+
+        assertEquals("PARSE_ERROR", issue.code)
+        assertTrue(issue.message.contains("declare(strict_types=1)"))
+    }
+
+    @Test
     fun `rejects executable php expressions`() {
         val file = temp.resolve("evil.php").apply { writeText("<?php return ['x' => shell_exec('whoami')];") }
         val issue = LanguageFileCodec.parse(file, "scheme").issues.single()
