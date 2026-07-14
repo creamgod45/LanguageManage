@@ -16,6 +16,7 @@ import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.EDT
 import com.intellij.openapi.fileChooser.FileChooserDescriptor
 import com.intellij.openapi.fileChooser.FileChooserFactory
+import com.intellij.openapi.fileChooser.FileSaverDescriptor
 import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.fileTypes.FileTypeManager
 import com.intellij.openapi.ui.DialogWrapper
@@ -248,6 +249,43 @@ internal class LocalizationManagerPanel(private val project: Project) : JPanel(B
         val scheme = activeScheme() ?: return showError(message("error.no.active.scheme"))
         val dialog = SchemeUsageSettingsDialog(project, scheme)
         if (dialog.showAndGet()) runAction { repository.updateSchemeUsageSettings(scheme.id, dialog.result()) }
+    }
+
+    private fun exportSchemeSettings() {
+        if (current.schemes.isEmpty()) return showError(message("scheme.transfer.export.empty"))
+        val descriptor = FileSaverDescriptor(
+            message("scheme.transfer.export.title"),
+            message("scheme.transfer.export.description"),
+            "json",
+        )
+        val base = project.basePath?.let { LocalFileSystem.getInstance().findFileByPath(it) }
+        val target = FileChooserFactory.getInstance().createSaveFileDialog(descriptor, project)
+            .save(base, "language-manager-schemes.json") ?: return
+        runAction {
+            val content = repository.exportSchemeSettings()
+            withContext(Dispatchers.IO) { SchemeSettingsLocalFileAccess.write(target.file.toPath(), content) }
+            withContext(Dispatchers.EDT) {
+                Messages.showInfoMessage(project, message("scheme.transfer.export.success", current.schemes.size), message("scheme.transfer.export.title"))
+            }
+        }
+    }
+
+    private fun importSchemeSettings() {
+        val descriptor = FileChooserDescriptor(true, false, false, false, false, false)
+            .withTitle(message("scheme.transfer.import.title"))
+            .withFileFilter { it.extension?.equals("json", true) == true }
+        FileChooserFactory.getInstance().createFileChooser(descriptor, project, this).choose(project).singleOrNull()?.let { source ->
+            runAction {
+                val content = withContext(Dispatchers.IO) { SchemeSettingsLocalFileAccess.read(source) }
+                val preview = repository.previewSchemeSettingsImport(content)
+                val accepted = withContext(Dispatchers.EDT) { SchemeImportPreviewDialog(project, preview).showAndGet() }
+                if (!accepted) return@runAction
+                repository.importSchemeSettings(content)
+                withContext(Dispatchers.EDT) {
+                    Messages.showInfoMessage(project, message("scheme.transfer.import.success", preview.schemes.size), message("scheme.transfer.import.title"))
+                }
+            }
+        }
     }
     private fun addEntry() { val scheme = activeScheme() ?: return; showEntryDialog(null, scheme) }
     private fun addLocaleVersion() {
@@ -555,6 +593,9 @@ internal class LocalizationManagerPanel(private val project: Project) : JPanel(B
         val menu = JPopupMenu().apply {
             add(JMenuItem(message("action.scheme.by.files")).apply { addActionListener { createScheme() } })
             add(JMenuItem(message("action.scheme.by.folder")).apply { addActionListener { createSchemeFromFolder() } })
+            addSeparator()
+            add(JMenuItem(message("action.scheme.import.settings")).apply { addActionListener { importSchemeSettings() } })
+            add(JMenuItem(message("action.scheme.export.settings")).apply { addActionListener { exportSchemeSettings() } })
         }
         return JButton(message("button.scheme.add.dropdown")).apply {
             addActionListener { menu.show(this, 0, height) }

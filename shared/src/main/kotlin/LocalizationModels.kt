@@ -124,3 +124,40 @@ data class FolderDiscoveryDto(
     val truncated: Boolean = false,
     val folderPaths: List<String> = listOf(folderPath),
 )
+
+@Serializable
+data class PortableLanguageSchemeDto(
+    val name: String,
+    val files: List<String>,
+    val usageScanSettings: UsageScanSettingsDto = UsageScanSettingsDto(),
+)
+
+@Serializable
+data class SchemeSettingsTransferDto(
+    val formatVersion: Int = 1,
+    val schemes: List<PortableLanguageSchemeDto> = emptyList(),
+)
+
+@Serializable
+data class SchemeImportFilePreviewDto(
+    val configuredPath: String,
+    val resolvedPath: String,
+    val available: Boolean,
+    val recognized: Boolean,
+    val detail: String = "",
+)
+
+@Serializable
+data class SchemeImportItemPreviewDto(
+    val name: String,
+    val files: List<SchemeImportFilePreviewDto>,
+)
+
+@Serializable
+data class SchemeImportPreviewDto(
+    val formatVersion: Int = 0,
+    val basePath: String = "",
+    val schemes: List<SchemeImportItemPreviewDto> = emptyList(),
+) {
+    val canImport: Boolean get() = schemes.isNotEmpty() && schemes.all { scheme -> scheme.files.isNotEmpty() && scheme.files.all { it.available } }
+}

@@ -19,6 +19,11 @@ internal class LocalizationFrontendRepository(private val project: Project) {
         LocalizationManagerRpcApi.getInstance().updateSchemeUsageSettings(project.projectId(), id, settings)
     suspend fun reload(id: String) = LocalizationManagerRpcApi.getInstance().reload(project.projectId(), id, true)
     suspend fun discoverLanguageFiles(folderPaths: List<String>) = LocalizationManagerRpcApi.getInstance().discoverLanguageFiles(project.projectId(), folderPaths)
+    suspend fun exportSchemeSettings() = LocalizationManagerRpcApi.getInstance().exportSchemeSettings(project.projectId())
+    suspend fun previewSchemeSettingsImport(content: String) =
+        LocalizationManagerRpcApi.getInstance().previewSchemeSettingsImport(project.projectId(), content)
+    suspend fun importSchemeSettings(content: String) =
+        LocalizationManagerRpcApi.getInstance().importSchemeSettings(project.projectId(), content)
     suspend fun save(id: String, mutation: EntryMutationDto) = LocalizationManagerRpcApi.getInstance().saveEntry(project.projectId(), id, mutation)
     suspend fun delete(id: String, entryIds: List<String>) = LocalizationManagerRpcApi.getInstance().deleteEntries(project.projectId(), id, entryIds)
     suspend fun rename(id: String, oldKey: String, newKey: String) = LocalizationManagerRpcApi.getInstance().renameKey(project.projectId(), id, oldKey, newKey)

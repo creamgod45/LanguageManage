@@ -21,6 +21,9 @@ interface LocalizationManagerRpcApi : RemoteApi<Unit> {
     suspend fun updateSchemeUsageSettings(projectId: ProjectId, schemeId: String, settings: UsageScanSettingsDto)
     suspend fun reload(projectId: ProjectId, schemeId: String, force: Boolean)
     suspend fun discoverLanguageFiles(projectId: ProjectId, folderPaths: List<String>): FolderDiscoveryDto
+    suspend fun exportSchemeSettings(projectId: ProjectId): String
+    suspend fun previewSchemeSettingsImport(projectId: ProjectId, content: String): SchemeImportPreviewDto
+    suspend fun importSchemeSettings(projectId: ProjectId, content: String)
     suspend fun saveEntry(projectId: ProjectId, schemeId: String, mutation: EntryMutationDto)
     suspend fun deleteEntries(projectId: ProjectId, schemeId: String, entryIds: List<String>)
     suspend fun renameKey(projectId: ProjectId, schemeId: String, oldKey: String, newKey: String)

@@ -23,6 +23,12 @@ class BackendLocalizationManagerRpcApi : LocalizationManagerRpcApi {
             projectId.service()?.discoverLanguageFiles(folderPaths)
                 ?: FolderDiscoveryDto(folderPaths.firstOrNull().orEmpty(), folderPaths = folderPaths)
         }
+    override suspend fun exportSchemeSettings(projectId: ProjectId): String =
+        withContext(Dispatchers.IO) { projectId.service()?.exportSchemeSettings().orEmpty() }
+    override suspend fun previewSchemeSettingsImport(projectId: ProjectId, content: String): SchemeImportPreviewDto =
+        withContext(Dispatchers.IO) { projectId.service()?.previewSchemeSettingsImport(content) ?: SchemeImportPreviewDto() }
+    override suspend fun importSchemeSettings(projectId: ProjectId, content: String) =
+        withContext(Dispatchers.IO) { projectId.service()?.importSchemeSettings(content); Unit }
     override suspend fun saveEntry(projectId: ProjectId, schemeId: String, mutation: EntryMutationDto) = withContext(Dispatchers.IO) { projectId.service()?.saveEntry(schemeId, mutation); Unit }
     override suspend fun deleteEntries(projectId: ProjectId, schemeId: String, entryIds: List<String>) = withContext(Dispatchers.IO) { projectId.service()?.deleteEntries(schemeId, entryIds); Unit }
     override suspend fun renameKey(projectId: ProjectId, schemeId: String, oldKey: String, newKey: String) = withContext(Dispatchers.IO) { projectId.service()?.renameKey(schemeId, oldKey, newKey); Unit }

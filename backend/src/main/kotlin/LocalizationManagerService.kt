@@ -128,6 +128,32 @@ class LocalizationManagerService(
 
     fun discoverLanguageFiles(folderPaths: List<String>): FolderDiscoveryDto = LanguageFolderDiscovery.discover(folderPaths)
 
+    suspend fun exportSchemeSettings(): String = mutex.withLock {
+        SchemeSettingsTransferSupport.export(mutableState.value.schemes, project.basePath)
+    }
+
+    fun previewSchemeSettingsImport(content: String): SchemeImportPreviewDto =
+        SchemeSettingsTransferSupport.preview(content, project.basePath)
+
+    suspend fun importSchemeSettings(content: String) = mutex.withLock {
+        val imported = SchemeSettingsTransferSupport.resolve(content, project.basePath)
+        val now = System.currentTimeMillis()
+        val newSchemes = imported.mapIndexed { index, scheme ->
+            LanguageSchemeDto(
+                id = UUID.randomUUID().toString(),
+                name = sanitizeText(scheme.name, 80),
+                files = scheme.files,
+                updatedAtEpochMs = now + index,
+                usageScanSettings = scheme.usageScanSettings,
+            )
+        }
+        val schemes = mutableState.value.schemes + newSchemes
+        val active = newSchemes.last().id
+        mutableState.value = mutableState.value.copy(schemes = schemes, activeSchemeId = active, errorMessage = null)
+        persistSchemes()
+        loadScheme(newSchemes.last(), true)
+    }
+
     suspend fun saveEntry(schemeId: String, mutation: EntryMutationDto) = mutex.withLock {
         val scheme = requireScheme(schemeId)
         validateMutation(scheme, mutation)

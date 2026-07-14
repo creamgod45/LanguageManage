@@ -2,6 +2,9 @@
 
 ## 1.4.0
 
+- Tool Window「新增方案」下拉選單新增「匯入方案設定」與「匯出方案設定」，使用有版本的可攜式 JSON。
+- 匯出包含方案名稱、列管檔案、base path、Regex 與排除清單；專案內路徑自動轉為相對路徑，不匯出 cache、entries 或 issues。
+- 匯入前顯示方案／檔案／解析路徑／識別結果預覽；缺失、超出專案根目錄或不安全路徑會禁止匯入。
 - `Settings → Tools → LanguageManager` 保留穩定的插件顯示語言選項；方案設定改由 Tool Window 目前選取方案直接開啟。
 - 每個方案可指定獨立的使用率掃描 base path；留白時仍使用目前 IDE 專案根目錄。
 - 使用率判斷改為可編輯的 Regex 清單，支援 `(?<key>…)` 命名群組、第一個 capture group 或完整 match。
