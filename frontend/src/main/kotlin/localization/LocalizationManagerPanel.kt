@@ -9,6 +9,7 @@ import com.intellij.diff.DiffRequestPanel
 import com.intellij.diff.requests.SimpleDiffRequest
 import com.intellij.find.FindManager
 import com.intellij.find.findInProject.FindInProjectManager
+import com.intellij.ide.BrowserUtil
 import com.intellij.ide.DataManager
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.EDT
@@ -63,6 +64,7 @@ internal class LocalizationManagerPanel(private val project: Project) : JPanel(B
 
     companion object {
         private const val PAGE_SIZE = 100
+        private const val ISSUE_REPORT_URL = "https://github.com/creamgod45/LanguageManage/issues/new"
     }
 
     init {
@@ -79,6 +81,7 @@ internal class LocalizationManagerPanel(private val project: Project) : JPanel(B
             add(JBLabel(message("label.scheme"))); schemeBox.preferredSize = Dimension(220, schemeBox.preferredSize.height); add(schemeBox)
             add(button(message("button.scheme.add"), ::createScheme)); add(button(message("button.scheme.delete"), ::deleteScheme)); add(button(message("button.reload")) { runAction { repository.reload(activeId()) } })
             add(button(message("button.repair.normalize")) { previewAndApply(ChangePreviewRequestDto(normalizeAll = true), message("summary.repair.normalize")) })
+            add(ActionLink(message("action.report.issue")) { BrowserUtil.browse(ISSUE_REPORT_URL) }.apply { setExternalLinkIcon() })
         }
         val searchRow = JPanel(FlowLayout(FlowLayout.LEFT, 5, 0)).apply {
             add(JBLabel(message("label.search"))); searchField.columns = 25; add(searchField)

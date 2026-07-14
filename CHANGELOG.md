@@ -1,5 +1,12 @@
 # Language Manager Changelog
 
+## 1.1.1
+
+- 新增工具視窗「回報問題」外部連結，可直接開啟 GitHub Issue 建立頁面。
+- 新增錯誤回報、功能需求與格式相容性三種 GitHub Issue Forms。
+- 新增專案級 `AGENTS.md`，保存架構、安全、UI、多國語言、測試與 Git 工作原則。
+- 新增使用者操作手冊與完整開發／需求文件導覽。
+
 ## 1.1.0
 
 - 新增 JetBrains 標準日文（`ja`）、韓文（`ko`）與簡體中文（`zh_CN`）語言字典。

@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 使用者操作手冊 / User Manual
+    url: https://github.com/creamgod45/LanguageManage/blob/main/docs/user_manaul_book.md
+    about: 提交問題前，請先確認安裝、方案、格式與 Diff 操作方式。
