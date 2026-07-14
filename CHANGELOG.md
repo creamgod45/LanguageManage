@@ -1,5 +1,12 @@
 # Language Manager Changelog
 
+## 1.3.4
+
+- 新增 JetBrains／Java ResourceBundle `.properties` 語言檔支援，可安全解析、編輯、正規化寫回及資料夾探索。
+- 支援 base bundle 與 locale 後綴命名，例如 `LanguageManagerBundle.properties` 對應英文，`LanguageManagerBundle_zh_TW.properties` 對應繁體中文。
+- 支援註解、`=`／`:`／空白分隔、續行、跳脫字元及 `\\uXXXX`；重複 key、空 key 與錯誤 Unicode escape 會回報 `PARSE_ERROR`。
+- 「新增語言版本」可由 base bundle 產生例如 `LanguageManagerBundle_es.properties`，並保留相同 namespace 與 key 結構。
+
 ## 1.3.3
 
 - 新增 `Settings → Tools → LanguageManager` 全域進階設定，可保留自動跟隨 IDE，或指定英文、繁中、簡中、日文、韓文；套用後會立即重建已開啟的插件工具視窗。

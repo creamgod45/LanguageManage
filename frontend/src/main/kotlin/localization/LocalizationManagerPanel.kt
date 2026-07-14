@@ -194,7 +194,7 @@ internal class LocalizationManagerPanel(private val project: Project) : JPanel(B
     }
 
     private fun createScheme() {
-        val descriptor = FileChooserDescriptor(true, false, false, false, false, true).withTitle(message("chooser.language.files")).withFileFilter { it.extension?.lowercase() in setOf("json", "yaml", "yml", "php") }
+        val descriptor = FileChooserDescriptor(true, false, false, false, false, true).withTitle(message("chooser.language.files")).withFileFilter { it.extension?.lowercase() in setOf("json", "yaml", "yml", "php", "properties") }
         FileChooserFactory.getInstance().createFileChooser(descriptor, project, this).choose(project).takeIf { it.isNotEmpty() }?.let { files ->
             val name = Messages.showInputDialog(project, message("dialog.scheme.name.prompt"), message("dialog.scheme.add.title"), null)?.trim().orEmpty()
             if (name.isNotEmpty()) runAction { repository.createScheme(name, files.map { it.path }) }

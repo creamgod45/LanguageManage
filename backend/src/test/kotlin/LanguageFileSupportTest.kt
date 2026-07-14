@@ -142,6 +142,7 @@ class LanguageFileSupportTest {
             "en.json" to "{\"old\":\"value\"}",
             "en.yml" to "old: value\n",
             "messages.php" to "<?php return ['old' => 'value'];",
+            "LanguageManagerBundle.properties" to "old=value\n",
         )
         cases.forEach { (name, initial) ->
             val parent = if (name.endsWith("php")) temp.resolve("en").createDirectories() else temp
@@ -153,6 +154,49 @@ class LanguageFileSupportTest {
             assertEquals("new value", reread.values["new.key"], name)
             assertTrue(reread.issues.isEmpty(), name)
         }
+    }
+
+    @Test
+    fun `parses Java properties syntax and locale suffix`() {
+        val file = temp.resolve("LanguageManagerBundle_zh_TW.properties").apply {
+            writeText(
+                "# JetBrains resource bundle\n" +
+                    "greeting=哈囉\n" +
+                    "escaped\\ key:escaped\\ value\n" +
+                    "unicode=\\u4F60\\u597D\n" +
+                    "continued=first\\\n  second\n" +
+                    "equation=a=b:c\n",
+            )
+        }
+
+        val parsed = LanguageFileCodec.parse(file, "scheme")
+
+        assertTrue(parsed.issues.isEmpty())
+        assertEquals("zh_TW", parsed.locale)
+        assertEquals("LanguageManagerBundle", parsed.namespace)
+        assertEquals("哈囉", parsed.values["greeting"])
+        assertEquals("escaped value", parsed.values["escaped key"])
+        assertEquals("你好", parsed.values["unicode"])
+        assertEquals("firstsecond", parsed.values["continued"])
+        assertEquals("a=b:c", parsed.values["equation"])
+
+        parsed.values["path"] = "C:\\Users\\Language Manager"
+        LanguageFileCodec.write(parsed)
+        val reread = LanguageFileCodec.parse(file, "scheme")
+        assertEquals("C:\\Users\\Language Manager", reread.values["path"])
+    }
+
+    @Test
+    fun `reports malformed properties without throwing`() {
+        val duplicate = temp.resolve("Duplicate.properties").apply {
+            writeText("same=first\nsame=second\n")
+        }
+        val invalidUnicode = temp.resolve("Invalid.properties").apply {
+            writeText("bad=\\u12XZ\n")
+        }
+
+        assertEquals("PARSE_ERROR", LanguageFileCodec.parse(duplicate, "scheme").issues.single().code)
+        assertEquals("PARSE_ERROR", LanguageFileCodec.parse(invalidUnicode, "scheme").issues.single().code)
     }
 
     @Test
@@ -197,6 +241,27 @@ class LanguageFileSupportTest {
     }
 
     @Test
+    fun `creates a blank Spanish properties bundle from the base bundle`() {
+        val source = temp.resolve("LanguageManagerFrontendBundle.properties").apply {
+            writeText("button.save=Save\ntab.translations=Translations\n")
+        }
+        val sourceDocument = LanguageFileCodec.parse(source, "scheme")
+
+        val target = LanguageLocaleVersionSupport.buildTargets(
+            listOf(sourceDocument),
+            "en",
+            "es",
+        ).single()
+
+        assertEquals("LanguageManagerFrontendBundle_es.properties", target.path.fileName.toString())
+        target.path.writeText(target.content)
+        val parsed = LanguageFileCodec.parse(target.path, "scheme")
+        assertEquals("es", parsed.locale)
+        assertEquals("LanguageManagerFrontendBundle", parsed.namespace)
+        assertTrue(parsed.values.values.all(String::isEmpty))
+    }
+
+    @Test
     fun `new JSON locale keeps array structure while clearing scalar translations`() {
         val source = temp.resolve("en.json").apply {
             writeText("""{"title":"Welcome","features":["Fast","Safe"]}""")
@@ -220,6 +285,7 @@ class LanguageFileSupportTest {
     @Test
     fun `folder discovery parses supported files and skips generated directories`() {
         temp.resolve("en.json").writeText("""{"hello":"Hello","bye":"Bye"}""")
+        temp.resolve("LanguageManagerBundle_ja.properties").writeText("hello=こんにちは\n")
         temp.resolve("bad.yaml").writeText("root:\n\tkey: invalid indentation")
         temp.resolve("notes.txt").writeText("not a language file")
         temp.resolve("zh_TW").createDirectories().resolve("messages.php")
@@ -230,8 +296,11 @@ class LanguageFileSupportTest {
         val result = LanguageFolderDiscovery.discover(temp.toString())
 
         assertFalse(result.truncated)
-        assertEquals(3, result.files.size)
+        assertEquals(4, result.files.size)
         assertTrue(result.files.single { it.filePath.endsWith("en.json") }.let { it.recognized && it.entryCount == 2 && it.locale == "en" })
+        assertTrue(result.files.single { it.filePath.endsWith("LanguageManagerBundle_ja.properties") }.let {
+            it.recognized && it.entryCount == 1 && it.locale == "ja" && it.namespace == "LanguageManagerBundle"
+        })
         assertTrue(result.files.single { it.filePath.endsWith("messages.php") }.let { it.recognized && it.locale == "zh_TW" && it.namespace == "messages" })
         assertFalse(result.files.single { it.filePath.endsWith("bad.yaml") }.recognized)
         assertTrue(result.files.none { it.filePath.endsWith("notes.txt") || it.filePath.contains("vendor") })

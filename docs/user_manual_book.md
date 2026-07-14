@@ -11,6 +11,7 @@
 - JSON：`.json`
 - YAML：`.yaml`、`.yml`
 - Laravel PHP：`.php`，內容可有 `declare(strict_types=1);`，之後必須是靜態 `return [...]` 或 `return array(...)`
+- JetBrains／Java ResourceBundle Properties：`.properties`
 
 ### 介面語言
 
@@ -39,7 +40,7 @@
 1. 開啟「在地化管理器」工具視窗。
 2. 點擊「新增方案」下拉選單。
 3. 選擇建立方式：
-   - 「依檔案選取」：在 file chooser 中選擇一個或多個 JSON、YAML/YML、PHP 語言檔，再輸入方案名稱。
+   - 「依檔案選取」：在 file chooser 中選擇一個或多個 JSON、YAML/YML、PHP、Properties 語言檔，再輸入方案名稱。
    - 「依資料夾選取」：一次選擇一個或多個資料夾，例如 `en`、`zh_CN`、`zh_TW`，等待 backend 合併掃描並嘗試解析支援格式檔案。
 4. 資料夾識別視窗會顯示完整路徑、格式、locale、namespace、entry 筆數與識別結果。解析失敗的檔案會保留錯誤原因，但無法勾選；如有遺漏，可點擊「增加資料夾」重新合併掃描。
 5. 輸入容易辨識的方案名稱，例如「網站前台」或「Admin API」，確認要列管的可識別檔案後點擊「建立方案」。
@@ -72,6 +73,15 @@ lang/zh_TW.yaml    -> locale: zh_TW, namespace: 空
 ```text
 lang/en/messages.php       -> locale: en, namespace: messages
 lang/zh_TW/validation.php  -> locale: zh_TW, namespace: validation
+```
+
+### JetBrains／Java ResourceBundle Properties
+
+檔名的 base 部分是 namespace；沒有 locale 後綴的 bundle 視為英文：
+
+```text
+LanguageManagerBundle.properties        -> locale: en, namespace: LanguageManagerBundle
+LanguageManagerBundle_zh_TW.properties  -> locale: zh_TW, namespace: LanguageManagerBundle
 ```
 
 ## 5. 使用翻譯表
@@ -192,7 +202,7 @@ lang/zh_TW/validation.php  -> locale: zh_TW, namespace: validation
 ### 修復／正規化會做什麼
 
 - 以 key 補上空白 value。
-- 將可解析內容依標準 JSON、YAML 或 PHP 格式重新輸出。
+- 將可解析內容依標準 JSON、YAML、PHP 或 Properties 格式重新輸出。
 - 無法解析的檔案不會被猜測修復或寫回。
 
 ## 9. 格式注意事項
@@ -216,6 +226,14 @@ lang/zh_TW/validation.php  -> locale: zh_TW, namespace: validation
 - 支援字串、數字、布林與巢狀 array。
 - 不支援其他 `declare` 指令、函式呼叫、變數、字串串接或任意 expression。
 - 插件不會執行 PHP。
+
+### JetBrains／Java ResourceBundle Properties
+
+- 接受以 `#` 或 `!` 開頭的註解，以及 `=`、`:` 或空白分隔 key/value。
+- 支援反斜線續行及 Java escape，例如 `\\t`、`\\n`、`\\ `、`\\:` 與 `\\u4F60`。
+- 同一檔案內的重複 key、空白 key、未完成 escape 或錯誤 `\\uXXXX` 會安全回報 `PARSE_ERROR`，不會寫回來源檔。
+- 編輯或正規化後使用 UTF-8 輸出；註解與原始排版不保留，因此套用前請檢查 Diff。
+- 新增語言版本時，`Bundle.properties` 可產生 `Bundle_es.properties`；既有 `Bundle_zh_TW.properties` 也會保留 `Bundle` namespace。
 
 ## 10. 快取與重新讀取
 
@@ -271,6 +289,6 @@ lang/zh_TW/validation.php  -> locale: zh_TW, namespace: validation
 
 - 錯誤回報：可重現的 UI、RPC、解析、寫入或效能問題。
 - 功能需求：新的操作、分析、格式或 IDE 整合需求。
-- 格式相容性：JSON、YAML、Laravel PHP 無法 parse／round-trip 的最小案例。
+- 格式相容性：JSON、YAML、Laravel PHP、ResourceBundle Properties 無法 parse／round-trip 的最小案例。
 
 提交前請移除 log、路徑與語言檔中的密碼、token、客戶名稱及其他敏感資料。
