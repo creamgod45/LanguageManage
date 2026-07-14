@@ -106,7 +106,7 @@ class LocalizationManagerService(
         loadScheme(scheme, force)
     }
 
-    fun discoverLanguageFiles(folderPath: String): FolderDiscoveryDto = LanguageFolderDiscovery.discover(folderPath)
+    fun discoverLanguageFiles(folderPaths: List<String>): FolderDiscoveryDto = LanguageFolderDiscovery.discover(folderPaths)
 
     suspend fun saveEntry(schemeId: String, mutation: EntryMutationDto) = mutex.withLock {
         val scheme = requireScheme(schemeId)
@@ -207,6 +207,52 @@ class LocalizationManagerService(
         loadScheme(scheme, true)
     }
 
+    suspend fun previewLocaleVersion(schemeId: String, request: LocaleVersionRequestDto): ChangePreviewDto = mutex.withLock {
+        buildLocaleVersionPreview(requireScheme(schemeId), request)
+    }
+
+    suspend fun createLocaleVersion(
+        schemeId: String,
+        request: LocaleVersionRequestDto,
+        expectedTargetHashes: Map<String, String>,
+    ) = mutex.withLock {
+        val scheme = requireScheme(schemeId)
+        val preview = buildLocaleVersionPreview(scheme, request)
+        val actualHashes = preview.files.associate { it.filePath to it.beforeSha256 }
+        require(actualHashes == expectedTargetHashes) { backendMessage("preview.changed") }
+        preview.files.forEach { change ->
+            require(!Files.exists(Path.of(change.filePath))) { backendMessage("locale.version.target.exists", change.filePath) }
+        }
+
+        val previousState = mutableState.value
+        val createdFiles = mutableListOf<Path>()
+        try {
+            preview.files.forEach { change ->
+                val path = Path.of(change.filePath).toAbsolutePath().normalize()
+                path.parent.createDirectories()
+                Files.createFile(path)
+                createdFiles.add(path)
+                SafeLanguageFileAccess.atomicWrite(path, change.afterContent)
+            }
+            val updatedScheme = scheme.copy(
+                files = (scheme.files + createdFiles.map(Path::toString)).distinct(),
+                updatedAtEpochMs = System.currentTimeMillis(),
+            )
+            mutableState.value = previousState.copy(
+                schemes = previousState.schemes.map { if (it.id == scheme.id) updatedScheme else it },
+                activeSchemeId = scheme.id,
+                errorMessage = null,
+            )
+            persistSchemes()
+            loadScheme(updatedScheme, true)
+        } catch (error: Exception) {
+            createdFiles.asReversed().forEach { path -> runCatching { Files.deleteIfExists(path) } }
+            mutableState.value = previousState
+            runCatching { persistSchemes() }
+            throw error
+        }
+    }
+
     suspend fun previewChanges(schemeId: String, request: ChangePreviewRequestDto): ChangePreviewDto = mutex.withLock {
         buildChangePreview(requireScheme(schemeId), request)
     }
@@ -268,6 +314,19 @@ class LocalizationManagerService(
             val before = SafeLanguageFileAccess.read(document.path)
             val after = LanguageFileCodec.render(document)
             if (before == after) null else FileChangePreviewDto(document.path.toString(), before, after, contentSha256(before))
+        })
+    }
+
+    private fun buildLocaleVersionPreview(scheme: LanguageSchemeDto, request: LocaleVersionRequestDto): ChangePreviewDto {
+        val targets = LanguageLocaleVersionSupport.buildTargets(parseDocuments(scheme), request.sourceLocale, request.targetLocale)
+        val emptyHash = contentSha256("")
+        return ChangePreviewDto(targets.map { target ->
+            FileChangePreviewDto(
+                filePath = target.path.toString(),
+                beforeContent = "",
+                afterContent = target.content,
+                beforeSha256 = emptyHash,
+            )
         })
     }
 

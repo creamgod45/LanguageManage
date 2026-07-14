@@ -25,6 +25,14 @@ object EntrySearch {
         val page = requestedPage.coerceIn(0, pageCount - 1)
         return JoinedTranslationPage(rows.drop(page * pageSize).take(pageSize), page, pageCount, rows.size)
     }
+
+    fun deletionFor(rows: List<JoinedTranslationRow>): JoinedTranslationDeletion {
+        val selectedRows = rows.distinctBy { it.namespace to it.key }
+        return JoinedTranslationDeletion(
+            rowCount = selectedRows.size,
+            entryIds = selectedRows.flatMap { it.translations }.map { it.id }.distinct(),
+        )
+    }
 }
 
 data class JoinedTranslationRow(
@@ -41,4 +49,9 @@ data class JoinedTranslationPage(
     val page: Int,
     val pageCount: Int,
     val totalRows: Int,
+)
+
+data class JoinedTranslationDeletion(
+    val rowCount: Int,
+    val entryIds: List<String>,
 )

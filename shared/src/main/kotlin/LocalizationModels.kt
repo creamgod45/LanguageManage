@@ -80,6 +80,12 @@ data class ChangePreviewDto(
 )
 
 @Serializable
+data class LocaleVersionRequestDto(
+    val sourceLocale: String,
+    val targetLocale: String,
+)
+
+@Serializable
 data class LanguageFileCandidateDto(
     val filePath: String,
     val format: String,
@@ -95,4 +101,5 @@ data class FolderDiscoveryDto(
     val folderPath: String,
     val files: List<LanguageFileCandidateDto> = emptyList(),
     val truncated: Boolean = false,
+    val folderPaths: List<String> = listOf(folderPath),
 )

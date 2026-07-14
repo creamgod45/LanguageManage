@@ -41,4 +41,12 @@ class EntrySearchTest {
         assertEquals(3, last.pageCount)
         assertEquals(205, last.totalRows)
     }
+
+    @Test fun `bulk deletion reports joined row count while deleting every locale entry`() {
+        val joined = EntrySearch.join(entries)
+        val selection = EntrySearch.deletionFor(listOf(joined[0], joined[0], joined[1]))
+
+        assertEquals(2, selection.rowCount)
+        assertEquals(setOf("1", "2", "3"), selection.entryIds.toSet())
+    }
 }

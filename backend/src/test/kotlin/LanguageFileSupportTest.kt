@@ -144,6 +144,47 @@ class LanguageFileSupportTest {
     }
 
     @Test
+    fun `creates a blank Spanish Laravel locale from every English namespace`() {
+        val en = temp.resolve("lang/en").createDirectories()
+        val auth = en.resolve("auth.php").apply { writeText("<?php return ['failed' => 'Invalid credentials'];") }
+        val validation = en.resolve("validation.php").apply { writeText("<?php return ['required' => 'Required'];") }
+        val sources = listOf(auth, validation).map { LanguageFileCodec.parse(it, "scheme") }
+
+        val targets = LanguageLocaleVersionSupport.buildTargets(sources, "en", "es")
+
+        assertEquals(setOf("auth.php", "validation.php"), targets.map { it.path.fileName.toString() }.toSet())
+        assertTrue(targets.all { it.path.parent.fileName.toString() == "es" })
+        targets.forEach { target ->
+            target.path.parent.createDirectories()
+            target.path.writeText(target.content)
+            val parsed = LanguageFileCodec.parse(target.path, "scheme")
+            assertEquals("es", parsed.locale)
+            assertTrue(parsed.values.values.all(String::isEmpty))
+        }
+    }
+
+    @Test
+    fun `new JSON locale keeps array structure while clearing scalar translations`() {
+        val source = temp.resolve("en.json").apply {
+            writeText("""{"title":"Welcome","features":["Fast","Safe"]}""")
+        }
+        val target = LanguageLocaleVersionSupport.buildTargets(
+            listOf(LanguageFileCodec.parse(source, "scheme")),
+            "en",
+            "es",
+        ).single()
+
+        target.path.writeText(target.content)
+        val parsed = LanguageFileCodec.parse(target.path, "scheme")
+        assertEquals("", parsed.values["title"])
+        assertEquals(
+            Json.parseToJsonElement("[\"Fast\",\"Safe\"]"),
+            Json.parseToJsonElement(parsed.values.getValue("features")),
+        )
+        assertTrue("features" in parsed.structuredValueKeys)
+    }
+
+    @Test
     fun `folder discovery parses supported files and skips generated directories`() {
         temp.resolve("en.json").writeText("""{"hello":"Hello","bye":"Bye"}""")
         temp.resolve("bad.yaml").writeText("root:\n\tkey: invalid indentation")
@@ -161,5 +202,28 @@ class LanguageFileSupportTest {
         assertTrue(result.files.single { it.filePath.endsWith("messages.php") }.let { it.recognized && it.locale == "zh_TW" && it.namespace == "messages" })
         assertFalse(result.files.single { it.filePath.endsWith("bad.yaml") }.recognized)
         assertTrue(result.files.none { it.filePath.endsWith("notes.txt") || it.filePath.contains("vendor") })
+    }
+
+    @Test
+    fun `folder discovery combines locale directories and removes overlapping files`() {
+        val lang = temp.resolve("lang").createDirectories()
+        val en = lang.resolve("en").createDirectories()
+        val zhCn = lang.resolve("zh_CN").createDirectories()
+        val zhTw = lang.resolve("zh_TW").createDirectories()
+        en.resolve("auth.php").writeText("<?php return ['failed' => 'Invalid credentials'];")
+        en.resolve("validation.php").writeText("<?php return ['required' => 'Required'];")
+        zhCn.resolve("auth.php").writeText("<?php return ['failed' => '账号或密码错误'];")
+        zhCn.resolve("validation.php").writeText("<?php return ['required' => '必填'];")
+        zhTw.resolve("auth.php").writeText("<?php return ['failed' => '帳號或密碼錯誤'];")
+        zhTw.resolve("validation.php").writeText("<?php return ['required' => '必填'];")
+
+        val result = LanguageFolderDiscovery.discover(listOf(lang.toString(), en.toString(), zhCn.toString(), zhTw.toString()))
+
+        assertFalse(result.truncated)
+        assertEquals(4, result.folderPaths.size)
+        assertEquals(6, result.files.size)
+        assertEquals(setOf("en", "zh_CN", "zh_TW"), result.files.map { it.locale }.toSet())
+        assertEquals(setOf("auth", "validation"), result.files.map { it.namespace }.toSet())
+        assertTrue(result.files.all { it.recognized && it.entryCount == 1 })
     }
 }

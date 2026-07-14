@@ -79,29 +79,38 @@ internal object LanguageFolderDiscovery {
     private val extensions = setOf("json", "yaml", "yml", "php")
     private val ignoredDirectories = setOf(".git", ".idea", ".gradle", "build", "dist", "vendor", "node_modules", "storage", "cache", "coverage")
 
-    fun discover(rawFolder: String): FolderDiscoveryDto {
-        val root = SafeLanguageFileAccess.validateDirectory(rawFolder)
-        val candidates = mutableListOf<LanguageFileCandidateDto>()
-        var truncated = false
-        Files.walkFileTree(root, emptySet(), MAX_DEPTH, object : SimpleFileVisitor<Path>() {
-            override fun preVisitDirectory(dir: Path, attrs: BasicFileAttributes): FileVisitResult =
-                if (dir != root && dir.fileName.toString().lowercase() in ignoredDirectories) FileVisitResult.SKIP_SUBTREE else FileVisitResult.CONTINUE
+    fun discover(rawFolder: String): FolderDiscoveryDto = discover(listOf(rawFolder))
 
-            override fun visitFile(file: Path, attrs: BasicFileAttributes): FileVisitResult {
-                val extension = file.extension.lowercase()
-                if (extension !in extensions) return FileVisitResult.CONTINUE
-                if (candidates.size >= MAX_FILES) {
-                    truncated = true
-                    return FileVisitResult.TERMINATE
+    fun discover(rawFolders: List<String>): FolderDiscoveryDto {
+        require(rawFolders.isNotEmpty()) { backendMessage("folder.selection.required") }
+        val roots = rawFolders.map(SafeLanguageFileAccess::validateDirectory).distinct()
+        val candidates = linkedMapOf<String, LanguageFileCandidateDto>()
+        var truncated = false
+        roots.forEach { root ->
+            if (truncated) return@forEach
+            Files.walkFileTree(root, emptySet(), MAX_DEPTH, object : SimpleFileVisitor<Path>() {
+                override fun preVisitDirectory(dir: Path, attrs: BasicFileAttributes): FileVisitResult =
+                    if (dir != root && dir.fileName.toString().lowercase() in ignoredDirectories) FileVisitResult.SKIP_SUBTREE else FileVisitResult.CONTINUE
+
+                override fun visitFile(file: Path, attrs: BasicFileAttributes): FileVisitResult {
+                    val extension = file.extension.lowercase()
+                    if (extension !in extensions) return FileVisitResult.CONTINUE
+                    val normalizedPath = file.toAbsolutePath().normalize().toString()
+                    if (normalizedPath in candidates) return FileVisitResult.CONTINUE
+                    if (candidates.size >= MAX_FILES) {
+                        truncated = true
+                        return FileVisitResult.TERMINATE
+                    }
+                    candidates[normalizedPath] = inspect(file, extension)
+                    return FileVisitResult.CONTINUE
                 }
-                candidates += inspect(file, extension)
-                return FileVisitResult.CONTINUE
-            }
-        })
+            })
+        }
         return FolderDiscoveryDto(
-            root.toString(),
-            candidates.sortedBy { it.filePath.lowercase() },
-            truncated,
+            folderPath = roots.first().toString(),
+            files = candidates.values.sortedBy { it.filePath.lowercase() },
+            truncated = truncated,
+            folderPaths = roots.map(Path::toString),
         )
     }
 
@@ -125,6 +134,59 @@ internal object LanguageFolderDiscovery {
             recognized = false,
             errorMessage = (error.message ?: error.javaClass.simpleName).take(500),
         )
+    }
+}
+
+internal data class LocaleVersionTarget(val path: Path, val content: String)
+
+internal object LanguageLocaleVersionSupport {
+    private val localePattern = Regex("[A-Za-z][A-Za-z0-9_-]{0,31}")
+    private val windowsDevices = buildSet {
+        addAll(listOf("CON", "PRN", "AUX", "NUL"))
+        (1..9).forEach { index -> add("COM$index"); add("LPT$index") }
+    }
+
+    fun buildTargets(
+        documents: List<ParsedLanguageFile>,
+        sourceLocale: String,
+        targetLocale: String,
+    ): List<LocaleVersionTarget> {
+        require(sourceLocale.matches(localePattern)) { backendMessage("locale.invalid") }
+        require(targetLocale.matches(localePattern) && targetLocale.uppercase() !in windowsDevices) { backendMessage("locale.invalid") }
+        require(!sourceLocale.equals(targetLocale, ignoreCase = true)) { backendMessage("locale.version.same") }
+        require(documents.none { it.locale.equals(targetLocale, ignoreCase = true) }) { backendMessage("locale.version.exists", targetLocale) }
+        val sources = documents.filter { it.locale == sourceLocale }
+        require(sources.isNotEmpty()) { backendMessage("locale.version.source.missing", sourceLocale) }
+        require(sources.none { document -> document.issues.any { it.severity == IssueSeverity.ERROR } }) {
+            backendMessage("locale.version.parse.blocked")
+        }
+
+        val targets = sources.map { source ->
+            val targetPath = when (source.path.extension.lowercase()) {
+                "php" -> {
+                    val localeRoot = source.path.parent?.parent ?: error(backendMessage("locale.version.path.invalid"))
+                    localeRoot.resolve(targetLocale).resolve(source.path.fileName).toAbsolutePath().normalize()
+                }
+                "json", "yaml", "yml" -> source.path.resolveSibling("$targetLocale.${source.path.extension.lowercase()}")
+                    .toAbsolutePath().normalize()
+                else -> error(backendMessage("format.unsupported"))
+            }
+            require(!Files.exists(targetPath)) { backendMessage("locale.version.target.exists", targetPath) }
+            val values = linkedMapOf<String, String>().apply {
+                source.values.forEach { (key, value) -> put(key, if (key in source.structuredValueKeys) value else "") }
+            }
+            val targetDocument = ParsedLanguageFile(
+                path = targetPath,
+                locale = targetLocale,
+                namespace = source.namespace,
+                values = values,
+                structuredValueKeys = source.structuredValueKeys.toMutableSet(),
+                keyPaths = source.keyPaths.toMutableMap(),
+            )
+            LocaleVersionTarget(targetPath, LanguageFileCodec.render(targetDocument))
+        }
+        require(targets.map { it.path }.distinct().size == targets.size) { backendMessage("locale.version.path.conflict") }
+        return targets
     }
 }
 

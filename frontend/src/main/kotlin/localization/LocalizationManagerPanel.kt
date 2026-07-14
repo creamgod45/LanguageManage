@@ -30,6 +30,8 @@ import kotlinx.coroutines.*
 import java.awt.BorderLayout
 import java.awt.Dimension
 import java.awt.FlowLayout
+import java.awt.GridBagConstraints
+import java.awt.GridBagLayout
 import java.awt.Toolkit
 import java.awt.datatransfer.DataFlavor
 import java.awt.datatransfer.StringSelection
@@ -50,7 +52,7 @@ internal class LocalizationManagerPanel(private val project: Project) : JPanel(B
     private val searchMode = ComboBox(SearchMode.entries.toTypedArray())
     private val localeBox = ComboBox<String>()
     private val entryModel = EntryTableModel()
-    private val entryTable = JBTable(entryModel)
+    private val entryTable = RowHighlightTable(entryModel)
     private val issueModel = IssueTableModel()
     private val issueTable = JBTable(issueModel)
     private val tabs = JTabbedPane()
@@ -192,18 +194,24 @@ internal class LocalizationManagerPanel(private val project: Project) : JPanel(B
     }
 
     private fun createSchemeFromFolder() {
-        val descriptor = FileChooserDescriptor(false, true, false, false, false, false)
+        val descriptor = FileChooserDescriptor(false, true, false, false, false, true)
             .withTitle(message("chooser.language.folder"))
-        val folder = FileChooserFactory.getInstance().createFileChooser(descriptor, project, this)
-            .choose(project).singleOrNull() ?: return
+        val folders = FileChooserFactory.getInstance().createFileChooser(descriptor, project, this)
+            .choose(project).map { it.path }.distinct()
+        if (folders.isEmpty()) return
         runAction {
-            val discovery = repository.discoverLanguageFiles(folder.path)
+            val discovery = repository.discoverLanguageFiles(folders)
             val selection = withContext(Dispatchers.EDT) {
                 if (discovery.files.isEmpty()) {
                     Messages.showInfoMessage(project, message("folder.discovery.none"), message("folder.discovery.none.title"))
                     null
                 } else {
-                    FolderSchemeDialog(project, discovery).let { dialog ->
+                    FolderSchemeDialog(project, discovery) { folderPaths, completed ->
+                        scope.launch {
+                            val result = runCatching { repository.discoverLanguageFiles(folderPaths) }
+                            withContext(Dispatchers.EDT) { completed(result) }
+                        }
+                    }.let { dialog ->
                         if (dialog.showAndGet()) dialog.selection() else null
                     }
                 }
@@ -213,32 +221,127 @@ internal class LocalizationManagerPanel(private val project: Project) : JPanel(B
     }
     private fun deleteScheme() { val scheme = current.schemes.firstOrNull { it.id == current.activeSchemeId } ?: return; confirm(message("confirm.scheme.delete", scheme.name)) { runAction { repository.deleteScheme(scheme.id) } } }
     private fun addEntry() { val scheme = activeScheme() ?: return; showEntryDialog(null, scheme) }
+    private fun addLocaleVersion() {
+        val scheme = activeScheme() ?: return showError(message("error.no.active.scheme"))
+        val locales = current.entries.map { it.locale }.filter(String::isNotBlank).distinct().sorted()
+        if (locales.isEmpty()) return showError(message("error.locale.version.no.source"))
+        val sourceLocale = ComboBox(locales.toTypedArray())
+        val targetLocale = JBTextField().apply { emptyText.text = message("field.locale.version.example") }
+        val panel = JPanel().apply {
+            layout = BoxLayout(this, BoxLayout.Y_AXIS)
+            add(JBLabel(message("field.locale.version.source")))
+            add(sourceLocale)
+            add(Box.createVerticalStrut(6))
+            add(JBLabel(message("field.locale.version.target")))
+            add(targetLocale)
+        }
+        if (JOptionPane.showConfirmDialog(
+                this,
+                panel,
+                message("dialog.locale.version.title"),
+                JOptionPane.OK_CANCEL_OPTION,
+                JOptionPane.PLAIN_MESSAGE,
+            ) != JOptionPane.OK_OPTION) return
+        val request = LocaleVersionRequestDto(sourceLocale.selectedItem.toString(), targetLocale.text.trim())
+        runAction {
+            val preview = repository.previewLocaleVersion(scheme.id, request)
+            val accepted = withContext(Dispatchers.EDT) {
+                val disposable = Disposer.newDisposable("Language Manager locale version preview")
+                try {
+                    ChangePreviewDialog(
+                        project,
+                        preview,
+                        message("summary.locale.version", request.sourceLocale, request.targetLocale, preview.files.size),
+                        disposable,
+                    ).showAndGet()
+                } finally {
+                    Disposer.dispose(disposable)
+                }
+            }
+            if (accepted) {
+                repository.createLocaleVersion(
+                    scheme.id,
+                    request,
+                    preview.files.associate { it.filePath to it.beforeSha256 },
+                )
+            }
+        }
+    }
     private fun editEntry() {
         val row = selectedRows().singleOrNull() ?: return showError(message("error.select.translation.key"))
-        val choices = row.translations.map { "${it.locale} — ${it.filePath}" }
-        val selected = if (choices.size == 1) choices.first() else JOptionPane.showInputDialog(
-            this, message("dialog.edit.language.prompt"), message("dialog.edit.translation.title"), JOptionPane.PLAIN_MESSAGE, null, choices.toTypedArray(), choices.first()
-        ) as? String ?: return
-        val entry = row.translations[choices.indexOf(selected)]
-        showEntryDialog(entry, activeScheme() ?: return)
+        val scheme = activeScheme() ?: return
+        val modelColumn = entryTable.columnModel.selectionModel.leadSelectionIndex
+            .takeIf { it >= 0 && entryTable.isColumnSelected(it) }
+            ?.let(entryTable::convertColumnIndexToModel)
+        val selectedLocale = modelColumn?.let(entryModel::localeAt)
+        val entry = selectedLocale?.let { locale ->
+            row.translations.firstOrNull { it.locale == locale } ?: current.entries
+                .firstOrNull { it.locale == locale && it.namespace == row.namespace }
+                ?.let { target ->
+                    LanguageEntryDto("", scheme.id, target.filePath, locale, row.namespace, row.key, "")
+                }
+                ?: return showError(message("error.locale.file.not.found", locale))
+        } ?: row.translations.firstOrNull() ?: return showError(message("error.select.translation.key"))
+        showEntryDialog(entry, scheme)
     }
     private fun showEntryDialog(entry: LanguageEntryDto?, scheme: LanguageSchemeDto) {
         val file = ComboBox(scheme.files.toTypedArray()); file.selectedItem = entry?.filePath ?: scheme.files.first()
         val locale = JBTextField(); val namespace = JBTextField(); val key = JBTextField(entry?.key.orEmpty()); val value = JBTextArea(entry?.value.orEmpty(), 6, 40).apply { lineWrap = true }
+        var targetEntry = entry
         locale.isEditable = false; namespace.isEditable = false
-        fun updateMetadata() {
-            val path = Path.of(file.selectedItem.toString())
-            val known = current.entries.firstOrNull { it.filePath == path.toString() }
+        fun updateSelectedFile() {
+            val selectedFile = file.selectedItem.toString()
+            val path = Path.of(selectedFile)
+            val known = current.entries.firstOrNull { it.filePath == selectedFile }
             locale.text = known?.locale ?: if (path.fileName.toString().substringAfterLast('.', "").equals("php", true)) path.parent?.fileName?.toString().orEmpty() else path.fileName.toString().substringBeforeLast('.')
             namespace.text = known?.namespace ?: if (path.fileName.toString().endsWith(".php", true)) path.fileName.toString().substringBeforeLast('.') else ""
+            if (entry != null) {
+                targetEntry = current.entries.firstOrNull {
+                    it.filePath == selectedFile && it.namespace == namespace.text && it.key == entry.key
+                }
+                key.text = targetEntry?.key ?: entry.key
+                value.text = targetEntry?.value.orEmpty()
+                value.caretPosition = 0
+            }
         }
-        file.addActionListener { updateMetadata() }; updateMetadata()
-        val panel = JPanel().apply { layout = BoxLayout(this, BoxLayout.Y_AXIS); listOf(message("field.file") to file, message("field.language") to locale, message("field.namespace") to namespace, message("field.key") to key, message("field.value") to JBScrollPane(value)).forEach { (label, component) -> add(JBLabel(label)); add(component as java.awt.Component); add(Box.createVerticalStrut(4)) } }
+        file.addActionListener { updateSelectedFile() }; updateSelectedFile()
+        val valueScroll = JBScrollPane(value).apply { preferredSize = Dimension(520, 160) }
+        val panel = JPanel(GridBagLayout()).apply {
+            border = JBUI.Borders.empty(8)
+            preferredSize = Dimension(720, 280)
+            fun addField(row: Int, label: String, component: JComponent, growVertically: Boolean = false) {
+                add(JBLabel(label), GridBagConstraints().apply {
+                    gridx = 0
+                    gridy = row
+                    anchor = if (growVertically) GridBagConstraints.NORTHEAST else GridBagConstraints.EAST
+                    insets = JBUI.insets(5, 0, 5, 12)
+                })
+                add(component, GridBagConstraints().apply {
+                    gridx = 1
+                    gridy = row
+                    weightx = 1.0
+                    weighty = if (growVertically) 1.0 else 0.0
+                    fill = if (growVertically) GridBagConstraints.BOTH else GridBagConstraints.HORIZONTAL
+                    insets = JBUI.insets(5, 0)
+                })
+            }
+            addField(0, message("field.file"), file)
+            addField(1, message("field.language"), locale)
+            addField(2, message("field.namespace"), namespace)
+            addField(3, message("field.key"), key)
+            addField(4, message("field.value"), valueScroll, growVertically = true)
+        }
         if (JOptionPane.showConfirmDialog(this, panel, if (entry == null) message("dialog.add.translation.title") else message("dialog.edit.translation.title"), JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE) == JOptionPane.OK_OPTION) {
-            runAction { repository.save(scheme.id, EntryMutationDto(entry?.id, file.selectedItem.toString(), locale.text, namespace.text, key.text, value.text)) }
+            runAction { repository.save(scheme.id, EntryMutationDto(targetEntry?.id, file.selectedItem.toString(), locale.text, namespace.text, key.text, value.text)) }
         }
     }
-    private fun deleteSelected() { val entries = selectedEntries(); if (entries.isEmpty()) return showError(message("error.select.entry")); confirm(message("confirm.entries.delete", entries.size)) { runAction { repository.delete(activeId(), entries.map { it.id }) } } }
+    private fun deleteSelected() {
+        val deletion = EntrySearch.deletionFor(selectedRows())
+        if (deletion.rowCount == 0) return showError(message("error.select.entry"))
+        confirm(message("confirm.entries.delete", deletion.rowCount)) {
+            runAction { repository.delete(activeId(), deletion.entryIds) }
+        }
+    }
     private fun renameKey() { val row = selectedRows().singleOrNull() ?: return showError(message("error.select.rename.source")); val value = Messages.showInputDialog(project, message("dialog.rename.prompt", row.key), message("dialog.rename.title"), null, row.key, null)?.trim() ?: return; runAction { repository.rename(activeId(), row.key, value) } }
 
     private fun findSelectedKeyInProject() {
@@ -391,7 +494,6 @@ internal class LocalizationManagerPanel(private val project: Project) : JPanel(B
     }
 
     private fun selectedRows(): List<JoinedTranslationRow> = entryTable.selectedRows.toList().mapNotNull { row -> entryModel.items.getOrNull(entryTable.convertRowIndexToModel(row)) }
-    private fun selectedEntries(): List<LanguageEntryDto> = selectedRows().flatMap { it.translations }.distinctBy { it.id }
     private fun activeScheme() = current.schemes.firstOrNull { it.id == current.activeSchemeId }
     private fun activeId() = current.activeSchemeId ?: error(message("error.no.active.scheme"))
     private fun button(text: String, action: () -> Unit) = JButton(text).apply { addActionListener { action() } }
@@ -399,6 +501,7 @@ internal class LocalizationManagerPanel(private val project: Project) : JPanel(B
         val menu = JPopupMenu().apply {
             listOf(
                 message("action.add") to ::addEntry,
+                message("action.locale.version.add") to ::addLocaleVersion,
                 message("action.edit") to ::editEntry,
                 message("action.delete.bulk") to ::deleteSelected,
                 message("action.rename") to ::renameKey,
@@ -437,12 +540,18 @@ internal class LocalizationManagerPanel(private val project: Project) : JPanel(B
 private data class FolderSchemeSelection(val name: String, val files: List<String>)
 
 private class FolderSchemeDialog(
-    project: Project,
-    private val discovery: FolderDiscoveryDto,
+    private val project: Project,
+    initialDiscovery: FolderDiscoveryDto,
+    private val discoverFolders: (List<String>, (Result<FolderDiscoveryDto>) -> Unit) -> Unit,
 ) : DialogWrapper(project, true) {
-    private val schemeName = JBTextField(Path.of(discovery.folderPath).fileName?.toString().orEmpty())
-    private val model = FolderCandidateTableModel(discovery.files)
+    private val folderPaths = initialDiscovery.folderPaths.toMutableList()
+    private var truncated = initialDiscovery.truncated
+    private var loading = false
+    private val schemeName = JBTextField(suggestSchemeName(initialDiscovery.folderPaths))
+    private val model = FolderCandidateTableModel(initialDiscovery.files)
     private val table = JBTable(model)
+    private val summaryLabel = JBLabel()
+    private val addFolderButton = JButton(message("folder.dialog.add"))
 
     init {
         title = message("folder.discovery.title")
@@ -455,6 +564,8 @@ private class FolderSchemeDialog(
             override fun changedUpdate(event: DocumentEvent?) = updateOkAction()
         })
         model.addTableModelListener { updateOkAction() }
+        addFolderButton.addActionListener { addFolders() }
+        updateSummary()
         updateOkAction()
     }
 
@@ -464,21 +575,57 @@ private class FolderSchemeDialog(
     )
 
     private fun updateOkAction() {
-        isOKActionEnabled = schemeName.text.trim().isNotEmpty() && model.rows.any { it.selected && it.candidate.recognized }
+        isOKActionEnabled = !loading && schemeName.text.trim().isNotEmpty() && model.rows.any { it.selected && it.candidate.recognized }
+    }
+
+    private fun addFolders() {
+        val descriptor = FileChooserDescriptor(false, true, false, false, false, true)
+            .withTitle(message("chooser.language.folder"))
+        val additions = FileChooserFactory.getInstance().createFileChooser(descriptor, project, table)
+            .choose(project).map { it.path }.filterNot { it in folderPaths }.distinct()
+        if (additions.isEmpty()) return
+        setLoading(true)
+        discoverFolders((folderPaths + additions).distinct()) { result ->
+            if (!isShowing) return@discoverFolders
+            result.onSuccess { discovery ->
+                folderPaths.clear()
+                folderPaths += discovery.folderPaths
+                truncated = discovery.truncated
+                model.replaceCandidates(discovery.files)
+                updateSummary()
+            }.onFailure { error ->
+                Messages.showErrorDialog(project, error.message?.take(500) ?: message("error.action.failed"), message("folder.discovery.add.failed.title"))
+            }
+            setLoading(false)
+        }
+    }
+
+    private fun setLoading(value: Boolean) {
+        loading = value
+        addFolderButton.isEnabled = !value
+        addFolderButton.text = message(if (value) "folder.dialog.add.loading" else "folder.dialog.add")
+        updateOkAction()
+    }
+
+    private fun updateSummary() {
+        val recognized = model.rows.count { it.candidate.recognized }
+        summaryLabel.text = buildString {
+            append(message("folder.discovery.folder.count", folderPaths.size))
+            append(' ')
+            append(message("folder.discovery.summary", recognized, model.rows.size))
+            if (truncated) append(message("folder.discovery.truncated"))
+        }
     }
 
     override fun createCenterPanel(): JComponent = JPanel(BorderLayout(6, 6)).apply {
         preferredSize = Dimension(1050, 600)
-        val recognized = discovery.files.count { it.recognized }
         add(JPanel(BorderLayout(6, 4)).apply {
             add(JPanel(BorderLayout(6, 0)).apply {
                 add(JBLabel(message("folder.discovery.name")), BorderLayout.WEST)
                 add(schemeName, BorderLayout.CENTER)
+                add(addFolderButton, BorderLayout.EAST)
             }, BorderLayout.NORTH)
-            add(JBLabel(buildString {
-                append(message("folder.discovery.summary", recognized, discovery.files.size))
-                if (discovery.truncated) append(message("folder.discovery.truncated"))
-            }), BorderLayout.SOUTH)
+            add(summaryLabel, BorderLayout.SOUTH)
         }, BorderLayout.NORTH)
         table.autoCreateRowSorter = true
         table.autoResizeMode = JTable.AUTO_RESIZE_OFF
@@ -493,12 +640,28 @@ private class FolderSchemeDialog(
     }
 
     override fun getPreferredFocusedComponent(): JComponent = schemeName
+
+    private fun suggestSchemeName(paths: List<String>): String {
+        val folders = paths.map(Path::of)
+        if (folders.size == 1) return folders.first().fileName?.toString().orEmpty()
+        val commonParent = folders.mapNotNull { it.parent }.distinct().singleOrNull()
+        return commonParent?.fileName?.toString() ?: folders.firstOrNull()?.fileName?.toString().orEmpty()
+    }
 }
 
 private data class FolderCandidateRow(val candidate: LanguageFileCandidateDto, var selected: Boolean)
 
 private class FolderCandidateTableModel(candidates: List<LanguageFileCandidateDto>) : AbstractTableModel() {
     val rows = candidates.map { FolderCandidateRow(it, it.recognized) }.toMutableList()
+
+    fun replaceCandidates(candidates: List<LanguageFileCandidateDto>) {
+        val previousSelection = rows.associate { it.candidate.filePath to it.selected }
+        rows.clear()
+        rows += candidates.map { candidate ->
+            FolderCandidateRow(candidate, previousSelection[candidate.filePath] ?: candidate.recognized)
+        }
+        fireTableDataChanged()
+    }
 
     override fun getRowCount() = rows.size
     override fun getColumnCount() = 7
@@ -537,6 +700,19 @@ private class FolderCandidateTableModel(candidates: List<LanguageFileCandidateDt
         if (!isCellEditable(rowIndex, columnIndex)) return
         rows[rowIndex].selected = value == true
         fireTableCellUpdated(rowIndex, columnIndex)
+    }
+}
+
+/** Keeps cell selection semantics while making every selected row visually obvious. */
+private class RowHighlightTable(model: javax.swing.table.TableModel) : JBTable(model) {
+    override fun prepareRenderer(renderer: TableCellRenderer, row: Int, column: Int): java.awt.Component {
+        val component = super.prepareRenderer(renderer, row, column)
+        if (selectionModel.isSelectedIndex(row)) {
+            component.background = selectionBackground
+            component.foreground = selectionForeground
+            if (component is JComponent) component.isOpaque = true
+        }
+        return component
     }
 }
 
