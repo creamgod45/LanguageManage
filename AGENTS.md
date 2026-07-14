@@ -10,11 +10,12 @@
 
 - 插件只管理使用者在方案中明確選取的語言檔，不得自動納管檔案。
 - 每個方案必須彼此隔離；任何 mutation 都只能寫入該方案的檔案。
-- 支援 JSON、YAML/YML 與 Laravel PHP 靜態 `return` array。
+- 支援 JSON、YAML/YML、Laravel PHP 靜態 `return` array 與 JetBrains/Java ResourceBundle Properties。
 - PHP 內容只能 parse，禁止 eval、include、執行函式或外部程序。
 - 翻譯表以 `namespace + key` JOIN，多語言各為獨立欄位，每頁上限 100 列。
 - 選取單一 cell 時，row action 必須映射到該 cell 所屬 row；複製單一 cell 不得輸出整列。
 - 低頻或數量較多的操作集中於 dropdown，避免工具列按鈕過長。
+- 使用率掃描設定以方案隔離，支援安全 base path、Regex key 擷取與可編輯排除清單；舊方案需保留預設值相容性。
 - 問題表必須提供單列與批量操作；可自動修改的操作需先提供 Diff 預覽。
 - 修復、正規化與問題自動處理在寫入前必須顯示 before/after，並以 SHA-256 防止預覽後覆蓋衝突。
 
@@ -33,7 +34,7 @@
 - 所有來源檔讀取都要捕捉 parser／IO 例外，單檔失敗不得拖垮整個方案。
 - 僅接受一般本機檔案；拒絕 URI、LDAP、`file:`、Windows device path、`GLOBALROOT` 與控制字元。
 - 維持副檔名、檔案大小、輸入長度、locale、namespace 與 key 白名單驗證。
-- 所有輸出依 JSON、YAML、PHP 格式正確跳脫。
+- 所有輸出依 JSON、YAML、PHP、Properties 格式正確跳脫。
 - 寫檔使用 temporary file + atomic move，不直接覆寫半成品。
 - 錯誤訊息顯示前移除危險控制字元並限制長度。
 

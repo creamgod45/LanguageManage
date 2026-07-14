@@ -99,6 +99,7 @@ LanguageManagerBundle_zh_TW.properties  -> locale: zh_TW, namespace: LanguageMan
 - **模糊搜尋**：key、value、namespace、locale 或檔案路徑包含輸入文字即可命中。
 - **精準搜尋**：key、value、namespace 或完整 `namespace.key` 必須相等，不區分大小寫。
 - **語言篩選**：只用指定 locale 判斷哪些 key 命中，但表格仍保留同一 key 的其他語言欄位供比較。
+- **翻譯狀態篩選**：預設「全部顯示」；可切換為「缺少任一語言翻譯」（語言不存在或 value 為空），或「使用次數為 0（可能未使用）」。
 
 ### 分頁
 
@@ -141,6 +142,7 @@ LanguageManagerBundle_zh_TW.properties  -> locale: zh_TW, namespace: LanguageMan
 2. 點擊「操作 ▾」→「編輯所選」。
 3. 若點擊 locale value 欄，插件會直接編輯該語言，不再額外顯示語言選擇 Popup；若點擊 Namespace 或 Key 欄，則使用該列第一個既有語言。
 4. 編輯 Form 以「標題｜輸入框」雙欄排列；在視窗切換檔案時，locale、namespace 與 value 會更新為該檔案中相同 key 的內容，若尚無相同 key，value 會清空。
+5. key 可直接使用含空格、Unicode 與標點的原文句子，例如 `Not powered on or not detected`；僅空白、控制字元或超過 256 字元會被拒絕。
 5. 修改 key 或 value 後確認；儲存目標是目前選取的檔案。
 
 ### 批量刪除
@@ -235,7 +237,64 @@ LanguageManagerBundle_zh_TW.properties  -> locale: zh_TW, namespace: LanguageMan
 - 編輯或正規化後使用 UTF-8 輸出；註解與原始排版不保留，因此套用前請檢查 Diff。
 - 新增語言版本時，`Bundle.properties` 可產生 `Bundle_es.properties`；既有 `Bundle_zh_TW.properties` 也會保留 `Bundle` namespace。
 
-## 10. 快取與重新讀取
+## 10. 使用率掃描設定
+
+在 LanguageManager Tool Window 上方先選擇方案，再點擊「方案設定」。Popup 會直接使用 Tool Window 已載入的目前方案，顯示列管語言檔案與獨立掃描設定，不會再從 IDE Settings 頁動態讀取方案。
+
+**Settings → Tools → LanguageManager** 不會動態載入既有方案，管理插件顯示語言、問題與建議顯示偏好，以及新建方案預設值。也可以從 Tool Window 標題列的 JetBrains「更多選項」點擊「在地化管理器設定」前往該頁。
+
+勾選「隱藏重複值建議」或「隱藏可能未使用建議」後，對應類型不會顯示在問題表、底部建議數量或「處理全部可修復項目」中；其他錯誤與建議不受影響。
+
+此設定頁同時保存「新建方案預設值」：base path 可使用目前專案目錄，或輸入向上 1–10 層；預設 Regex 與排除清單會在之後以檔案或資料夾建立方案時複製到新方案，不會覆蓋既有方案。
+
+此快捷入口直接依插件設定元件定位，不依賴 IDE 顯示語言；英文、繁體中文、簡體中文、日文或韓文介面都會開啟同一個設定頁。
+
+### 掃描基準路徑
+
+- 留白時使用目前開啟專案的根目錄。
+- 可按「瀏覽」指定另一個安全的本機或 WSL 資料夾，例如 monorepo 的 frontend 根目錄。
+- 這個路徑只影響使用次數計算，不會把該資料夾中的語言檔自動加入方案。
+
+### 使用率判斷正規表示式
+
+每個 Regex match 會依下列順序擷取候選 key：
+
+1. 命名群組 `(?<key>…)`。
+2. 第一個 capture group。
+3. 如果沒有群組，使用完整 match。
+
+候選值最後仍需與方案中的 `key` 或 `namespace.key` 完全相同才會計數。Laravel helper 可加入例如：
+
+```regex
+(?:__|trans)\(\s*["'](?<key>[^"']+)["']
+```
+
+Vue／JavaScript `$t()` 可加入例如：
+
+```regex
+\$t\(\s*["'](?<key>[^"']+)["']
+```
+
+同一個 key 在同一行出現多次仍計為一次。動態串接的 key 通常無法可靠識別。
+
+### 排除資料夾
+
+預設清單包含：
+
+- 專案／依賴：`.git`、`.github`、`docs`、`vendor`、`node_modules`。
+- Laravel／Gradle／建置：`storage`、`database`、`gradle`、`.gradle`、`build`、`out`、`dist`、`target`。
+- IDE：`.idea`、`.run`、`.vscode`、`.fleet`、`.vs`、`.settings`、`.metadata`、`nbproject`。
+- AI／環境：`.env`、`.claude`、`.codex`、`.gemini`、`.agents`、`.ai`。
+
+升級時，若清單仍是舊版原廠預設，插件會自動補上新項目；已自訂的清單不會被取代。
+
+- 單一名稱（例如 `vendor`）會排除掃描樹中所有同名資料夾。
+- 相對路徑（例如 `tests/fixtures`）只排除基準路徑下的指定分支。
+- 可使用「新增／編輯／刪除」調整清單，避免測試資料、fixture 或產生碼造成誤算。
+
+按「套用」後，插件會儲存所有已修改方案、使對應 cache 失效，並在背景重新計算目前方案。Regex 最多 20 個、每個最多 512 字元；排除項目最多 100 個。
+
+## 11. 快取與重新讀取
 
 方案與快取存放於：
 
@@ -250,7 +309,7 @@ LanguageManagerBundle_zh_TW.properties  -> locale: zh_TW, namespace: LanguageMan
 - 來源檔變更、cache format 升級或 fingerprint 不符時會重建 cache。
 - 不建議手動編輯 cache；刪除 cache 不會刪除來源語言檔。
 
-## 11. 疑難排解
+## 12. 疑難排解
 
 ### 建立方案後沒有反應
 
@@ -276,10 +335,11 @@ LanguageManagerBundle_zh_TW.properties  -> locale: zh_TW, namespace: LanguageMan
 ### 使用次數顯示 0
 
 - 動態組合 key、模板 helper 或非文字引用可能無法辨識。
-- 掃描會跳過 vendor、node_modules、build、storage 等目錄。
+- 在 Tool Window 選擇方案後點擊「方案設定」，確認 base path、Regex 與排除清單。
+- 掃描會跳過方案排除清單中的資料夾；新方案預設會排除 `.git`、`.github`、`docs`、`vendor` 與常見 AI／IDE 設定目錄。
 - 「0」代表掃描未找到，不等同確定未使用。
 
-## 12. 回報問題
+## 13. 回報問題
 
 工具視窗上方提供「回報問題」連結，會開啟：
 

@@ -1,5 +1,24 @@
 # Language Manager Changelog
 
+## 1.4.0
+
+- `Settings → Tools → LanguageManager` 保留穩定的插件顯示語言選項；方案設定改由 Tool Window 目前選取方案直接開啟。
+- 每個方案可指定獨立的使用率掃描 base path；留白時仍使用目前 IDE 專案根目錄。
+- 使用率判斷改為可編輯的 Regex 清單，支援 `(?<key>…)` 命名群組、第一個 capture group 或完整 match。
+- 排除資料夾改為可編輯清單，保留 `.git`、`.idea`、`vendor`、`node_modules` 等預設項目，也可加入相對路徑。
+- 儲存方案掃描設定後會淘汰該方案 cache 並在背景重新計算；舊 `schemes.json` 自動套用預設值。
+- 移除 `SimpleListCellRenderer.create(...)`，避免 Plugin Verifier 的 scheduled-for-removal API 警告。
+- Tool Window 原生「更多選項」保留單一「在地化管理器設定」入口，直接跳轉插件顯示語言設定頁。
+- 設定快捷入口改為直接依 `Configurable` 類別定位，不再把 extension ID 當作顯示名稱搜尋；不同 IDE 顯示語言都能精準開啟插件頁面。
+- Tool Window 新增「方案設定」按鈕，使用既有即時方案 state 顯示列管檔案、base path、Regex 與排除清單，不再由 Settings configurable 動態載入專案資料。
+- 插件設定新增「新方案預設值」：可選目前專案或向上 1–10 層作為 base path，並持久化預設 Regex 與排除清單；檔案／資料夾兩種建立方案流程都會套用。
+- 預設 Regex 改為辨識括號內引號包覆的 Unicode key；預設排除清單包含 Git、文件、依賴、Laravel storage/database、Gradle、建置產物、IDE 與 AI 設定目錄。
+- 排除清單新增 `database`、`gradle`、`.gradle`、`build`、`out`、`dist`、`target`、`node_modules`、`.idea`、`.fleet`、`.vs`、`.settings`、`.metadata`、`nbproject`；舊版原廠預設自動遷移，不覆蓋自訂清單。
+- 翻譯 key 不再限制為識別字格式，可使用含空格、Unicode 與標點的句子（例如 `Not powered on or not detected`）；仍禁止空白、控制字元與超過 256 字元。
+- 預設使用率 Regex 同步支援含空格與標點的句子型 key。
+- 翻譯表新增狀態篩選：全部顯示、缺少任一語言翻譯、使用次數為 0（可能未使用），並與搜尋、語言篩選及分頁共同作用。
+- 進階設定新增隱藏「重複值」與「可能未使用」建議；隱藏後同步從問題表、狀態數量與全部批量處理中排除。
+
 ## 1.3.4
 
 - 新增 JetBrains／Java ResourceBundle `.properties` 語言檔支援，可安全解析、編輯、正規化寫回及資料夾探索。

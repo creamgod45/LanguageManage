@@ -11,9 +11,12 @@ import kotlinx.coroutines.withContext
 class BackendLocalizationManagerRpcApi : LocalizationManagerRpcApi {
     private fun ProjectId.service() = findProjectOrNull()?.let(LocalizationManagerService::getInstance)
     override suspend fun state(projectId: ProjectId): Flow<LocalizationStateDto> = projectId.service()?.state ?: emptyFlow()
-    override suspend fun createScheme(projectId: ProjectId, name: String, files: List<String>) = withContext(Dispatchers.IO) { projectId.service()?.createScheme(name, files); Unit }
+    override suspend fun createScheme(projectId: ProjectId, name: String, files: List<String>, usageSettings: UsageScanSettingsDto) =
+        withContext(Dispatchers.IO) { projectId.service()?.createScheme(name, files, usageSettings); Unit }
     override suspend fun deleteScheme(projectId: ProjectId, schemeId: String) = withContext(Dispatchers.IO) { projectId.service()?.deleteScheme(schemeId); Unit }
     override suspend fun activateScheme(projectId: ProjectId, schemeId: String) = withContext(Dispatchers.IO) { projectId.service()?.activateScheme(schemeId); Unit }
+    override suspend fun updateSchemeUsageSettings(projectId: ProjectId, schemeId: String, settings: UsageScanSettingsDto) =
+        withContext(Dispatchers.IO) { projectId.service()?.updateSchemeUsageSettings(schemeId, settings); Unit }
     override suspend fun reload(projectId: ProjectId, schemeId: String, force: Boolean) = withContext(Dispatchers.IO) { projectId.service()?.reload(schemeId, force); Unit }
     override suspend fun discoverLanguageFiles(projectId: ProjectId, folderPaths: List<String>): FolderDiscoveryDto =
         withContext(Dispatchers.IO) {

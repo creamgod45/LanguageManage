@@ -15,9 +15,10 @@ interface LocalizationManagerRpcApi : RemoteApi<Unit> {
     }
 
     suspend fun state(projectId: ProjectId): Flow<LocalizationStateDto>
-    suspend fun createScheme(projectId: ProjectId, name: String, files: List<String>)
+    suspend fun createScheme(projectId: ProjectId, name: String, files: List<String>, usageSettings: UsageScanSettingsDto)
     suspend fun deleteScheme(projectId: ProjectId, schemeId: String)
     suspend fun activateScheme(projectId: ProjectId, schemeId: String)
+    suspend fun updateSchemeUsageSettings(projectId: ProjectId, schemeId: String, settings: UsageScanSettingsDto)
     suspend fun reload(projectId: ProjectId, schemeId: String, force: Boolean)
     suspend fun discoverLanguageFiles(projectId: ProjectId, folderPaths: List<String>): FolderDiscoveryDto
     suspend fun saveEntry(projectId: ProjectId, schemeId: String, mutation: EntryMutationDto)

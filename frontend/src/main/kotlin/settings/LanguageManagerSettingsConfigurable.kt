@@ -1,48 +1,217 @@
 package cg.creamgod45.settings
 
 import cg.creamgod45.LanguageManagerBundle.message
+import cg.creamgod45.localization.DEFAULT_USAGE_EXCLUDED_DIRECTORIES
+import cg.creamgod45.localization.DEFAULT_USAGE_REGEX_PATTERNS
 import cg.creamgod45.toolWindow.LanguageManagerToolWindowFactory
 import com.intellij.openapi.options.Configurable
+import com.intellij.openapi.options.ConfigurationException
+import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.ComboBox
-import com.intellij.ui.SimpleListCellRenderer
+import com.intellij.openapi.ui.Messages
+import com.intellij.ui.components.JBList
+import com.intellij.ui.components.JBCheckBox
+import com.intellij.ui.components.JBScrollPane
 import com.intellij.util.ui.FormBuilder
+import com.intellij.util.ui.JBUI
+import java.awt.BorderLayout
+import java.awt.Dimension
+import java.awt.FlowLayout
+import javax.swing.DefaultListCellRenderer
+import javax.swing.DefaultListModel
+import javax.swing.JButton
 import javax.swing.JComponent
+import javax.swing.JList
+import javax.swing.JPanel
+import javax.swing.JSpinner
+import javax.swing.SpinnerNumberModel
 
-class LanguageManagerSettingsConfigurable : Configurable {
+class LanguageManagerSettingsConfigurable(
+    private val project: Project,
+) : Configurable {
     private var languageBox: ComboBox<DisplayLanguage>? = null
+    private var basePathModeBox: ComboBox<DefaultBasePathMode>? = null
+    private var parentLevelsSpinner: JSpinner? = null
+    private var regexModel: DefaultListModel<String>? = null
+    private var exclusionModel: DefaultListModel<String>? = null
+    private var ignoreDuplicateValueIssuesBox: JBCheckBox? = null
+    private var ignoreUnusedKeyIssuesBox: JBCheckBox? = null
 
     override fun getDisplayName(): String = message("settings.display.name")
 
     override fun createComponent(): JComponent {
         languageBox = ComboBox(DisplayLanguage.entries.toTypedArray()).apply {
-            renderer = SimpleListCellRenderer.create { label, value, _ ->
-                label.text = message(value.messageKey())
-            }
+            renderer = localizedRenderer { value -> (value as? DisplayLanguage)?.let { message(it.messageKey()) } }
         }
-        reset()
-        return FormBuilder.createFormBuilder()
+        basePathModeBox = ComboBox(DefaultBasePathMode.entries.toTypedArray()).apply {
+            renderer = localizedRenderer { value -> (value as? DefaultBasePathMode)?.let { message(it.messageKey()) } }
+            addActionListener { updateParentLevelsEnabled() }
+        }
+        parentLevelsSpinner = JSpinner(SpinnerNumberModel(1, 1, LanguageManagerSettings.MAX_PARENT_LEVELS, 1))
+        regexModel = DefaultListModel()
+        exclusionModel = DefaultListModel()
+        ignoreDuplicateValueIssuesBox = JBCheckBox(message("settings.issues.ignore.duplicate.values"))
+        ignoreUnusedKeyIssuesBox = JBCheckBox(message("settings.issues.ignore.unused.keys"))
+
+        val form = FormBuilder.createFormBuilder()
             .addLabeledComponent(message("settings.language.label"), languageBox!!)
-            .addComponentFillVertically(javax.swing.JPanel(), 0)
+            .addSeparator()
+            .addComponent(javax.swing.JLabel(message("settings.issues.title")))
+            .addComponent(ignoreDuplicateValueIssuesBox!!)
+            .addComponent(ignoreUnusedKeyIssuesBox!!)
+            .addSeparator()
+            .addComponent(javax.swing.JLabel(message("settings.defaults.title")))
+            .addLabeledComponent(message("settings.default.base.mode"), basePathModeBox!!)
+            .addLabeledComponent(message("settings.default.parent.levels"), parentLevelsSpinner!!)
+            .addTooltip(message("settings.default.parent.levels.help", LanguageManagerSettings.MAX_PARENT_LEVELS))
+            .addLabeledComponent(
+                message("settings.default.regex"),
+                listEditor(regexModel!!, message("settings.regex.add.prompt"), message("settings.regex.edit.prompt"), DEFAULT_USAGE_REGEX_PATTERNS),
+            )
+            .addTooltip(message("settings.usage.regex.help"))
+            .addLabeledComponent(
+                message("settings.default.exclusions"),
+                listEditor(
+                    exclusionModel!!,
+                    message("settings.exclusion.add.prompt"),
+                    message("settings.exclusion.edit.prompt"),
+                    DEFAULT_USAGE_EXCLUDED_DIRECTORIES,
+                ),
+            )
+            .addTooltip(message("settings.usage.exclusions.help"))
+            .addComponentFillVertically(JPanel(), 0)
             .panel
+
+        reset()
+        return JBScrollPane(form).apply { border = JBUI.Borders.empty() }
     }
 
-    override fun isModified(): Boolean =
-        languageBox?.selectedItem != LanguageManagerSettings.getInstance().displayLanguage
+    override fun isModified(): Boolean {
+        val settings = LanguageManagerSettings.getInstance()
+        return languageBox?.selectedItem != settings.displayLanguage ||
+            basePathModeBox?.selectedItem != settings.defaultBasePathMode ||
+            (parentLevelsSpinner?.value as? Int) != settings.defaultParentLevels ||
+            regexModel.values() != settings.defaultRegexPatterns ||
+            exclusionModel.values() != settings.defaultExcludedDirectories ||
+            ignoreDuplicateValueIssuesBox?.isSelected != settings.ignoreDuplicateValueIssues ||
+            ignoreUnusedKeyIssuesBox?.isSelected != settings.ignoreUnusedKeyIssues
+    }
 
     override fun apply() {
-        val selected = languageBox?.selectedItem as? DisplayLanguage ?: DisplayLanguage.AUTO
-        if (selected == LanguageManagerSettings.getInstance().displayLanguage) return
-        LanguageManagerSettings.getInstance().displayLanguage = selected
-        LanguageManagerToolWindowFactory.refreshOpenToolWindows()
+        val regexPatterns = regexModel.values()
+        val exclusions = exclusionModel.values()
+        validateDefaults(regexPatterns, exclusions)
+
+        val settings = LanguageManagerSettings.getInstance()
+        val selectedLanguage = languageBox?.selectedItem as? DisplayLanguage ?: DisplayLanguage.AUTO
+        val languageChanged = selectedLanguage != settings.displayLanguage
+        val issueVisibilityChanged = ignoreDuplicateValueIssuesBox?.isSelected != settings.ignoreDuplicateValueIssues ||
+            ignoreUnusedKeyIssuesBox?.isSelected != settings.ignoreUnusedKeyIssues
+        settings.displayLanguage = selectedLanguage
+        settings.defaultBasePathMode = basePathModeBox?.selectedItem as? DefaultBasePathMode
+            ?: DefaultBasePathMode.PROJECT_DIRECTORY
+        settings.defaultParentLevels = parentLevelsSpinner?.value as? Int ?: 1
+        settings.defaultRegexPatterns = regexPatterns
+        settings.defaultExcludedDirectories = exclusions
+        settings.ignoreDuplicateValueIssues = ignoreDuplicateValueIssuesBox?.isSelected ?: false
+        settings.ignoreUnusedKeyIssues = ignoreUnusedKeyIssuesBox?.isSelected ?: false
+        if (languageChanged || issueVisibilityChanged) LanguageManagerToolWindowFactory.refreshOpenToolWindows()
     }
 
     override fun reset() {
-        languageBox?.selectedItem = LanguageManagerSettings.getInstance().displayLanguage
+        val settings = LanguageManagerSettings.getInstance()
+        languageBox?.selectedItem = settings.displayLanguage
+        basePathModeBox?.selectedItem = settings.defaultBasePathMode
+        parentLevelsSpinner?.value = settings.defaultParentLevels
+        regexModel?.replaceWith(settings.defaultRegexPatterns)
+        exclusionModel?.replaceWith(settings.defaultExcludedDirectories)
+        ignoreDuplicateValueIssuesBox?.isSelected = settings.ignoreDuplicateValueIssues
+        ignoreUnusedKeyIssuesBox?.isSelected = settings.ignoreUnusedKeyIssues
+        updateParentLevelsEnabled()
     }
 
     override fun disposeUIResources() {
         languageBox = null
+        basePathModeBox = null
+        parentLevelsSpinner = null
+        regexModel = null
+        exclusionModel = null
+        ignoreDuplicateValueIssuesBox = null
+        ignoreUnusedKeyIssuesBox = null
     }
+
+    private fun updateParentLevelsEnabled() {
+        parentLevelsSpinner?.isEnabled = basePathModeBox?.selectedItem == DefaultBasePathMode.PARENT_LEVELS
+    }
+
+    private fun validateDefaults(regexPatterns: List<String>, exclusions: List<String>) {
+        if (regexPatterns.isEmpty() || regexPatterns.size > 20) {
+            throw ConfigurationException(message("settings.default.regex.count"))
+        }
+        regexPatterns.forEach { pattern ->
+            if (pattern.length > 512 || pattern.any(Char::isISOControl) || runCatching { Regex(pattern) }.isFailure) {
+                throw ConfigurationException(message("settings.default.regex.invalid", pattern.take(120)))
+            }
+        }
+        if (exclusions.size > 100 || exclusions.any(::unsafeExclusion)) {
+            throw ConfigurationException(message("settings.default.exclusion.invalid"))
+        }
+    }
+
+    private fun unsafeExclusion(value: String): Boolean {
+        val normalized = value.trim().replace('\\', '/').trim('/')
+        return normalized.isEmpty() || normalized.length > 200 || normalized.any(Char::isISOControl) ||
+            "://" in normalized || ':' in normalized ||
+            normalized.split('/').any { it.isBlank() || it == "." || it == ".." }
+    }
+
+    private fun listEditor(
+        model: DefaultListModel<String>,
+        addPrompt: String,
+        editPrompt: String,
+        defaultValues: List<String>,
+    ): JComponent {
+        val list = JBList(model).apply { visibleRowCount = 5 }
+        return JPanel(BorderLayout(0, JBUI.scale(4))).apply {
+            add(JBScrollPane(list).apply { preferredSize = Dimension(JBUI.scale(620), JBUI.scale(110)) }, BorderLayout.CENTER)
+            add(JPanel(FlowLayout(FlowLayout.LEADING, JBUI.scale(4), 0)).apply {
+                add(JButton(message("settings.list.add")).apply {
+                    addActionListener {
+                        Messages.showInputDialog(project, addPrompt, message("settings.display.name"), null)
+                            ?.trim()?.takeIf(String::isNotEmpty)?.let { if (it !in model.values()) model.addElement(it) }
+                    }
+                })
+                add(JButton(message("settings.list.edit")).apply {
+                    addActionListener {
+                        val index = list.selectedIndex
+                        if (index < 0) return@addActionListener
+                        Messages.showInputDialog(project, editPrompt, message("settings.display.name"), null, model[index], null)
+                            ?.trim()?.takeIf(String::isNotEmpty)?.let { model[index] = it }
+                    }
+                })
+                add(JButton(message("settings.list.remove")).apply {
+                    addActionListener { list.selectedIndices.sortedDescending().forEach(model::remove) }
+                })
+                add(JButton(message("settings.list.restore.defaults")).apply {
+                    addActionListener { model.replaceWith(defaultValues) }
+                })
+            }, BorderLayout.SOUTH)
+        }
+    }
+}
+
+private fun localizedRenderer(label: (Any?) -> String?): DefaultListCellRenderer = object : DefaultListCellRenderer() {
+    override fun getListCellRendererComponent(
+        list: JList<*>?, value: Any?, index: Int, selected: Boolean, focus: Boolean,
+    ) = super.getListCellRendererComponent(list, label(value) ?: value, index, selected, focus)
+}
+
+private fun DefaultListModel<String>?.values(): List<String> =
+    this?.let { model -> (0 until model.size()).map(model::getElementAt) }.orEmpty()
+
+private fun DefaultListModel<String>.replaceWith(values: List<String>) {
+    clear()
+    values.forEach(::addElement)
 }
 
 private fun DisplayLanguage.messageKey(): String = when (this) {
@@ -52,4 +221,9 @@ private fun DisplayLanguage.messageKey(): String = when (this) {
     DisplayLanguage.SIMPLIFIED_CHINESE -> "settings.language.simplified.chinese"
     DisplayLanguage.JAPANESE -> "settings.language.japanese"
     DisplayLanguage.KOREAN -> "settings.language.korean"
+}
+
+private fun DefaultBasePathMode.messageKey(): String = when (this) {
+    DefaultBasePathMode.PROJECT_DIRECTORY -> "settings.default.base.project"
+    DefaultBasePathMode.PARENT_LEVELS -> "settings.default.base.parents"
 }

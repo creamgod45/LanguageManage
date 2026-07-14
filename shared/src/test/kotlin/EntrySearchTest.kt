@@ -4,6 +4,27 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 
 class EntrySearchTest {
+    private fun entry(locale: String, namespace: String, key: String, value: String, usageCount: Int = 0) =
+        LanguageEntryDto("$locale.$namespace.$key", "s", "$locale.json", locale, namespace, key, value, usageCount)
+
+    @Test
+    fun `filters joined rows by missing translations and zero usage`() {
+        val complete = listOf(
+            entry("en", "auth", "ready", "Ready", usageCount = 2),
+            entry("zh_TW", "auth", "ready", "就緒", usageCount = 2),
+        )
+        val missingLocale = listOf(entry("en", "auth", "failed", "Failed", usageCount = 1))
+        val blankValue = listOf(
+            entry("en", "auth", "offline", "Offline"),
+            entry("zh_TW", "auth", "offline", ""),
+        )
+        val rows = EntrySearch.join(complete + missingLocale + blankValue)
+        val locales = setOf("en", "zh_TW")
+
+        assertEquals(setOf("failed", "offline"), EntrySearch.filterRows(rows, locales, TranslationRowFilter.MISSING_TRANSLATION).map { it.key }.toSet())
+        assertEquals(listOf("offline"), EntrySearch.filterRows(rows, locales, TranslationRowFilter.ZERO_USAGE).map { it.key })
+        assertEquals(rows, EntrySearch.filterRows(rows, locales, TranslationRowFilter.ALL))
+    }
     private val entries = listOf(
         LanguageEntryDto("1", "s", "en.json", "en", "auth", "failed", "Login failed"),
         LanguageEntryDto("2", "s", "zh.json", "zh", "auth", "failed", "登入失敗"),

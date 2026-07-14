@@ -3,6 +3,7 @@ package cg.creamgod45.localization.ui
 import cg.creamgod45.CoroutineScopeHolder
 import cg.creamgod45.LanguageManagerBundle.message
 import cg.creamgod45.localization.*
+import cg.creamgod45.settings.LanguageManagerSettings
 import com.intellij.diff.DiffContentFactory
 import com.intellij.diff.DiffManager
 import com.intellij.diff.DiffRequestPanel
@@ -54,6 +55,7 @@ internal class LocalizationManagerPanel(private val project: Project) : JPanel(B
     private val searchField = JBTextField()
     private val searchMode = ComboBox(SearchMode.entries.toTypedArray())
     private val localeBox = ComboBox<String>()
+    private val rowFilterBox = ComboBox(TranslationRowFilter.entries.toTypedArray())
     private val entryModel = EntryTableModel()
     private val entryTable = RowHighlightTable(entryModel)
     private val issueModel = IssueTableModel()
@@ -86,7 +88,7 @@ internal class LocalizationManagerPanel(private val project: Project) : JPanel(B
         val schemeRow = ResponsiveGridPanel(JBUI.scale(5), JBUI.scale(4)).apply {
             alignmentX = Component.LEFT_ALIGNMENT
             add(JBLabel(message("label.scheme"))); schemeBox.preferredSize = Dimension(220, schemeBox.preferredSize.height); add(schemeBox)
-            add(schemeCreationDropdown()); add(button(message("button.scheme.delete"), ::deleteScheme)); add(button(message("button.reload")) { runAction { repository.reload(activeId()) } })
+            add(schemeCreationDropdown()); add(button(message("button.scheme.delete"), ::deleteScheme)); add(button(message("button.scheme.settings"), ::editSchemeSettings)); add(button(message("button.reload")) { runAction { repository.reload(activeId()) } })
             add(button(message("button.repair.normalize")) { previewAndApply(ChangePreviewRequestDto(normalizeAll = true), message("summary.repair.normalize")) })
             add(ActionLink(message("action.report.issue")) { BrowserUtil.browse(ISSUE_REPORT_URL) }.apply { setExternalLinkIcon() })
         }
@@ -99,6 +101,11 @@ internal class LocalizationManagerPanel(private val project: Project) : JPanel(B
             }
             add(searchMode)
             add(JBLabel(message("label.language"))); localeBox.preferredSize = Dimension(110, localeBox.preferredSize.height); add(localeBox)
+            rowFilterBox.renderer = object : DefaultListCellRenderer() {
+                override fun getListCellRendererComponent(list: JList<*>?, value: Any?, index: Int, selected: Boolean, focus: Boolean) =
+                    super.getListCellRendererComponent(list, message((value as? TranslationRowFilter ?: TranslationRowFilter.ALL).messageKey()), index, selected, focus)
+            }
+            add(JBLabel(message("label.translation.filter"))); rowFilterBox.preferredSize = Dimension(190, rowFilterBox.preferredSize.height); add(rowFilterBox)
             add(actionDropdown())
         }
         add(schemeRow)
@@ -147,7 +154,7 @@ internal class LocalizationManagerPanel(private val project: Project) : JPanel(B
 
     private fun wireEvents() {
         schemeBox.addActionListener { if (!updatingSchemes) (schemeBox.selectedItem as? LanguageSchemeDto)?.takeIf { it.id != current.activeSchemeId }?.let { scheme -> runAction { repository.activateScheme(scheme.id) } } }
-        searchMode.addActionListener { applyFilter() }; localeBox.addActionListener { applyFilter() }
+        searchMode.addActionListener { applyFilter() }; localeBox.addActionListener { applyFilter() }; rowFilterBox.addActionListener { applyFilter() }
         searchField.document.addDocumentListener(object : DocumentListener { override fun insertUpdate(e: DocumentEvent?) = applyFilter(); override fun removeUpdate(e: DocumentEvent?) = applyFilter(); override fun changedUpdate(e: DocumentEvent?) = applyFilter() })
         previousPageButton.addActionListener { if (currentPage > 0) { currentPage--; applyFilter(resetPage = false) } }
         nextPageButton.addActionListener { currentPage++; applyFilter(resetPage = false) }
@@ -164,10 +171,11 @@ internal class LocalizationManagerPanel(private val project: Project) : JPanel(B
         val locales = listOf(allLocales) + state.entries.map { it.locale }.distinct().sorted()
         val previousLocale = localeBox.selectedItem?.toString()
         localeBox.model = DefaultComboBoxModel(locales.toTypedArray()); localeBox.selectedItem = previousLocale?.takeIf { it in locales } ?: allLocales
-        issueModel.items = state.issues
+        val displayedIssues = displayedIssues(state.issues)
+        issueModel.items = displayedIssues
         applyFilter()
-        val errors = state.issues.count { it.severity == IssueSeverity.ERROR }
-        status.text = state.errorMessage ?: when { state.busy -> message("status.loading"); state.activeSchemeId == null -> message("status.no.scheme"); else -> message("status.summary", state.entries.size, state.issues.size, errors) }
+        val errors = displayedIssues.count { it.severity == IssueSeverity.ERROR }
+        status.text = state.errorMessage ?: when { state.busy -> message("status.loading"); state.activeSchemeId == null -> message("status.no.scheme"); else -> message("status.summary", state.entries.size, displayedIssues.size, errors) }
     }
 
     private fun applyFilter(resetPage: Boolean = true) {
@@ -175,10 +183,14 @@ internal class LocalizationManagerPanel(private val project: Project) : JPanel(B
         val locale = localeBox.selectedItem?.toString()?.takeUnless { it == message("filter.locale.all") }
         val matches = EntrySearch.filter(current.entries, searchField.text, searchMode.selectedItem as? SearchMode ?: SearchMode.FUZZY, locale)
         val matchingKeys = matches.map { it.namespace to it.key }.toSet()
-        val joinedRows = EntrySearch.join(current.entries.filter { (it.namespace to it.key) in matchingKeys })
+        val locales = current.entries.map { it.locale }.distinct().sorted()
+        val joinedRows = EntrySearch.filterRows(
+            EntrySearch.join(current.entries.filter { (it.namespace to it.key) in matchingKeys }),
+            locales.toSet(),
+            rowFilterBox.selectedItem as? TranslationRowFilter ?: TranslationRowFilter.ALL,
+        )
         val page = EntrySearch.paginate(joinedRows, currentPage, PAGE_SIZE)
         currentPage = page.page
-        val locales = current.entries.map { it.locale }.distinct().sorted()
         entryModel.setData(page.rows, locales)
         pageLabel.text = message("pagination.page", currentPage + 1, page.pageCount, page.totalRows)
         previousPageButton.isEnabled = currentPage > 0
@@ -197,7 +209,9 @@ internal class LocalizationManagerPanel(private val project: Project) : JPanel(B
         val descriptor = FileChooserDescriptor(true, false, false, false, false, true).withTitle(message("chooser.language.files")).withFileFilter { it.extension?.lowercase() in setOf("json", "yaml", "yml", "php", "properties") }
         FileChooserFactory.getInstance().createFileChooser(descriptor, project, this).choose(project).takeIf { it.isNotEmpty() }?.let { files ->
             val name = Messages.showInputDialog(project, message("dialog.scheme.name.prompt"), message("dialog.scheme.add.title"), null)?.trim().orEmpty()
-            if (name.isNotEmpty()) runAction { repository.createScheme(name, files.map { it.path }) }
+            if (name.isNotEmpty()) runAction {
+                repository.createScheme(name, files.map { it.path }, LanguageManagerSettings.getInstance().defaultUsageSettings(project.basePath))
+            }
         }
     }
 
@@ -224,10 +238,17 @@ internal class LocalizationManagerPanel(private val project: Project) : JPanel(B
                     }
                 }
             }
-            if (selection != null) repository.createScheme(selection.name, selection.files)
+            if (selection != null) {
+                repository.createScheme(selection.name, selection.files, LanguageManagerSettings.getInstance().defaultUsageSettings(project.basePath))
+            }
         }
     }
     private fun deleteScheme() { val scheme = current.schemes.firstOrNull { it.id == current.activeSchemeId } ?: return; confirm(message("confirm.scheme.delete", scheme.name)) { runAction { repository.deleteScheme(scheme.id) } } }
+    private fun editSchemeSettings() {
+        val scheme = activeScheme() ?: return showError(message("error.no.active.scheme"))
+        val dialog = SchemeUsageSettingsDialog(project, scheme)
+        if (dialog.showAndGet()) runAction { repository.updateSchemeUsageSettings(scheme.id, dialog.result()) }
+    }
     private fun addEntry() { val scheme = activeScheme() ?: return; showEntryDialog(null, scheme) }
     private fun addLocaleVersion() {
         val scheme = activeScheme() ?: return showError(message("error.no.active.scheme"))
@@ -390,7 +411,7 @@ internal class LocalizationManagerPanel(private val project: Project) : JPanel(B
     }
 
     private fun handleAllRepairableIssues() {
-        val issues = current.issues.filter { it.repairable || it.code == "UNUSED_KEY" }
+        val issues = displayedIssues(current.issues).filter { it.repairable || it.code == "UNUSED_KEY" }
         if (issues.isEmpty()) return showError(message("error.no.bulk.issues"))
         handleIssuesBulk(issues)
     }
@@ -406,6 +427,11 @@ internal class LocalizationManagerPanel(private val project: Project) : JPanel(B
             if (manualCount > 0) append(message("summary.bulk.manual", manualCount))
         }
         previewAndApply(ChangePreviewRequestDto(repairEntryIds = missingIds, deleteEntryIds = unusedIds), summary)
+    }
+
+    private fun displayedIssues(issues: List<LanguageIssueDto>): List<LanguageIssueDto> {
+        val settings = LanguageManagerSettings.getInstance()
+        return visibleIssues(issues, settings.ignoreDuplicateValueIssues, settings.ignoreUnusedKeyIssues)
     }
 
     private fun previewAndApply(request: ChangePreviewRequestDto, summary: String) {
@@ -826,6 +852,12 @@ private fun severityText(severity: IssueSeverity): String = when (severity) {
     IssueSeverity.INFO -> message("issue.severity.info")
     IssueSeverity.WARNING -> message("issue.severity.warning")
     IssueSeverity.ERROR -> message("issue.severity.error")
+}
+
+private fun TranslationRowFilter.messageKey(): String = when (this) {
+    TranslationRowFilter.ALL -> "filter.translation.all"
+    TranslationRowFilter.MISSING_TRANSLATION -> "filter.translation.missing"
+    TranslationRowFilter.ZERO_USAGE -> "filter.translation.zero.usage"
 }
 
 private fun issueTypeText(code: String): String = when (code) {

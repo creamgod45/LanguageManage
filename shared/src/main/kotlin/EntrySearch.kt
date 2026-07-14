@@ -19,6 +19,18 @@ object EntrySearch {
         }
         .sortedWith(compareBy<JoinedTranslationRow> { it.namespace }.thenBy { it.key })
 
+    fun filterRows(
+        rows: List<JoinedTranslationRow>,
+        locales: Set<String>,
+        filter: TranslationRowFilter,
+    ): List<JoinedTranslationRow> = when (filter) {
+        TranslationRowFilter.ALL -> rows
+        TranslationRowFilter.MISSING_TRANSLATION -> rows.filter { row ->
+            locales.any { locale -> row.translations.none { it.locale == locale && it.value.isNotBlank() } }
+        }
+        TranslationRowFilter.ZERO_USAGE -> rows.filter { it.usageCount == 0 }
+    }
+
     fun paginate(rows: List<JoinedTranslationRow>, requestedPage: Int, pageSize: Int = 100): JoinedTranslationPage {
         require(pageSize in 1..100) { "每頁筆數必須介於 1 到 100" }
         val pageCount = maxOf(1, (rows.size + pageSize - 1) / pageSize)

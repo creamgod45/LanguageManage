@@ -11,9 +11,12 @@ internal class LocalizationFrontendRepository(private val project: Project) {
     val state: Flow<LocalizationStateDto> = flow {
         durable { LocalizationManagerRpcApi.getInstance().state(project.projectId()).collect { emit(it) } }
     }
-    suspend fun createScheme(name: String, files: List<String>) = LocalizationManagerRpcApi.getInstance().createScheme(project.projectId(), name, files)
+    suspend fun createScheme(name: String, files: List<String>, usageSettings: UsageScanSettingsDto) =
+        LocalizationManagerRpcApi.getInstance().createScheme(project.projectId(), name, files, usageSettings)
     suspend fun deleteScheme(id: String) = LocalizationManagerRpcApi.getInstance().deleteScheme(project.projectId(), id)
     suspend fun activateScheme(id: String) = LocalizationManagerRpcApi.getInstance().activateScheme(project.projectId(), id)
+    suspend fun updateSchemeUsageSettings(id: String, settings: UsageScanSettingsDto) =
+        LocalizationManagerRpcApi.getInstance().updateSchemeUsageSettings(project.projectId(), id, settings)
     suspend fun reload(id: String) = LocalizationManagerRpcApi.getInstance().reload(project.projectId(), id, true)
     suspend fun discoverLanguageFiles(folderPaths: List<String>) = LocalizationManagerRpcApi.getInstance().discoverLanguageFiles(project.projectId(), folderPaths)
     suspend fun save(id: String, mutation: EntryMutationDto) = LocalizationManagerRpcApi.getInstance().saveEntry(project.projectId(), id, mutation)

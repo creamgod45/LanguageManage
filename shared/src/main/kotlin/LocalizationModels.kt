@@ -5,8 +5,28 @@ import kotlinx.serialization.Serializable
 @Serializable
 enum class SearchMode { FUZZY, EXACT }
 
+enum class TranslationRowFilter { ALL, MISSING_TRANSLATION, ZERO_USAGE }
+
 @Serializable
 enum class IssueSeverity { INFO, WARNING, ERROR }
+
+val DEFAULT_USAGE_REGEX_PATTERNS: List<String> = listOf(
+    """\(\s*(?<quote>["'])(?<key>[^\r\n]{1,256}?)\k<quote>\s*\)""",
+)
+
+val DEFAULT_USAGE_EXCLUDED_DIRECTORIES: List<String> = listOf(
+    ".git", ".github", "docs", "vendor", "storage", "database",
+    "gradle", ".gradle", "build", "out", "dist", "target", "node_modules",
+    ".idea", ".run", ".vscode", ".fleet", ".vs", ".settings", ".metadata", "nbproject",
+    ".env", ".claude", ".codex", ".gemini", ".agents", ".ai",
+)
+
+@Serializable
+data class UsageScanSettingsDto(
+    val basePath: String = "",
+    val regexPatterns: List<String> = DEFAULT_USAGE_REGEX_PATTERNS,
+    val excludedDirectories: List<String> = DEFAULT_USAGE_EXCLUDED_DIRECTORIES,
+)
 
 @Serializable
 data class LanguageSchemeDto(
@@ -14,6 +34,7 @@ data class LanguageSchemeDto(
     val name: String,
     val files: List<String>,
     val updatedAtEpochMs: Long,
+    val usageScanSettings: UsageScanSettingsDto = UsageScanSettingsDto(),
 )
 
 @Serializable
