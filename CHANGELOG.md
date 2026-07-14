@@ -1,5 +1,11 @@
 # Language Manager Changelog
 
+## 1.3.3
+
+- 新增 `Settings → Tools → LanguageManager` 全域進階設定，可保留自動跟隨 IDE，或指定英文、繁中、簡中、日文、韓文；套用後會立即重建已開啟的插件工具視窗。
+- 將所有模組的 JVM toolchain 與 bytecode target 從 Java 25 降為 IntelliJ Platform 261 要求的 Java 21，並使用 Gradle 官方 Foojay resolver 自動供應缺少的 JDK，避免 2026.1 最低執行環境無法載入插件 class。
+- 移除 Kotlin 為 `ToolWindowFactory` 產生的相容橋接，排除 Plugin Verifier 回報的 4 次 deprecated API 與 6 次 experimental API 使用；並加入位元碼回歸測試。
+
 ## 1.3.2
 
 - 修正 Marketplace 描述檔驗證：插件名稱改用合法的拉丁字元，並讓說明以前 40 字元以上的英文內容起首；IDE 內的多國語言名稱與操作介面不受影響。

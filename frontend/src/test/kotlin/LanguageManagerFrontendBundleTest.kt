@@ -1,6 +1,7 @@
 package cg.creamgod45
 
 import java.util.Properties
+import cg.creamgod45.settings.DisplayLanguage
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotEquals
@@ -19,5 +20,17 @@ class LanguageManagerFrontendBundleTest {
             assertNotEquals(english.getProperty("tab.issues"), localized.getProperty("tab.issues"), locale)
             assertNotEquals(english.getProperty("action.dropdown"), localized.getProperty("action.dropdown"), locale)
         }
+    }
+
+    @Test
+    fun `explicit display language overrides automatic IDE locale`() {
+        val english = LanguageManagerBundle.messageForLanguage(DisplayLanguage.ENGLISH, "tab.issues")
+        val traditionalChinese = LanguageManagerBundle.messageForLanguage(DisplayLanguage.TRADITIONAL_CHINESE, "tab.issues")
+        val japanese = LanguageManagerBundle.messageForLanguage(DisplayLanguage.JAPANESE, "tab.issues")
+
+        assertEquals("Issues and Suggestions", english)
+        assertNotEquals(english, traditionalChinese)
+        assertNotEquals(english, japanese)
+        assertNotEquals(traditionalChinese, japanese)
     }
 }
