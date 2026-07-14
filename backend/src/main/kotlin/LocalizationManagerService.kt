@@ -106,6 +106,8 @@ class LocalizationManagerService(
         loadScheme(scheme, force)
     }
 
+    fun discoverLanguageFiles(folderPath: String): FolderDiscoveryDto = LanguageFolderDiscovery.discover(folderPath)
+
     suspend fun saveEntry(schemeId: String, mutation: EntryMutationDto) = mutex.withLock {
         val scheme = requireScheme(schemeId)
         validateMutation(scheme, mutation)

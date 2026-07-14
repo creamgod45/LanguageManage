@@ -19,6 +19,7 @@ interface LocalizationManagerRpcApi : RemoteApi<Unit> {
     suspend fun deleteScheme(projectId: ProjectId, schemeId: String)
     suspend fun activateScheme(projectId: ProjectId, schemeId: String)
     suspend fun reload(projectId: ProjectId, schemeId: String, force: Boolean)
+    suspend fun discoverLanguageFiles(projectId: ProjectId, folderPath: String): FolderDiscoveryDto
     suspend fun saveEntry(projectId: ProjectId, schemeId: String, mutation: EntryMutationDto)
     suspend fun deleteEntries(projectId: ProjectId, schemeId: String, entryIds: List<String>)
     suspend fun renameKey(projectId: ProjectId, schemeId: String, oldKey: String, newKey: String)

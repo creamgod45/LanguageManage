@@ -78,3 +78,21 @@ data class FileChangePreviewDto(
 data class ChangePreviewDto(
     val files: List<FileChangePreviewDto> = emptyList(),
 )
+
+@Serializable
+data class LanguageFileCandidateDto(
+    val filePath: String,
+    val format: String,
+    val locale: String = "",
+    val namespace: String = "",
+    val entryCount: Int = 0,
+    val recognized: Boolean = false,
+    val errorMessage: String? = null,
+)
+
+@Serializable
+data class FolderDiscoveryDto(
+    val folderPath: String,
+    val files: List<LanguageFileCandidateDto> = emptyList(),
+    val truncated: Boolean = false,
+)

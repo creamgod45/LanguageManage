@@ -142,4 +142,24 @@ class LanguageFileSupportTest {
         val text = temp.resolve("test.txt").apply { writeText("x") }
         assertFailsWith<IllegalArgumentException> { SafeLanguageFileAccess.validate(text.toString()) }
     }
+
+    @Test
+    fun `folder discovery parses supported files and skips generated directories`() {
+        temp.resolve("en.json").writeText("""{"hello":"Hello","bye":"Bye"}""")
+        temp.resolve("bad.yaml").writeText("root:\n\tkey: invalid indentation")
+        temp.resolve("notes.txt").writeText("not a language file")
+        temp.resolve("zh_TW").createDirectories().resolve("messages.php")
+            .writeText("<?php return ['hello' => '哈囉'];")
+        temp.resolve("vendor").createDirectories().resolve("ignored.json")
+            .writeText("""{"ignored":"value"}""")
+
+        val result = LanguageFolderDiscovery.discover(temp.toString())
+
+        assertFalse(result.truncated)
+        assertEquals(3, result.files.size)
+        assertTrue(result.files.single { it.filePath.endsWith("en.json") }.let { it.recognized && it.entryCount == 2 && it.locale == "en" })
+        assertTrue(result.files.single { it.filePath.endsWith("messages.php") }.let { it.recognized && it.locale == "zh_TW" && it.namespace == "messages" })
+        assertFalse(result.files.single { it.filePath.endsWith("bad.yaml") }.recognized)
+        assertTrue(result.files.none { it.filePath.endsWith("notes.txt") || it.filePath.contains("vendor") })
+    }
 }

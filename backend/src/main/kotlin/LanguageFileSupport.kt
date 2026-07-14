@@ -1,13 +1,18 @@
 package cg.creamgod45
 
 import cg.creamgod45.localization.IssueSeverity
+import cg.creamgod45.localization.FolderDiscoveryDto
+import cg.creamgod45.localization.LanguageFileCandidateDto
 import cg.creamgod45.localization.LanguageIssueDto
 import cg.creamgod45.LanguageManagerBackendBundle.message as backendMessage
 import kotlinx.serialization.json.*
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
+import java.nio.file.FileVisitResult
 import java.nio.file.Path
 import java.nio.file.Paths
+import java.nio.file.SimpleFileVisitor
+import java.nio.file.attribute.BasicFileAttributes
 import kotlin.io.path.extension
 import kotlin.io.path.nameWithoutExtension
 
@@ -25,7 +30,7 @@ internal object SafeLanguageFileAccess {
     private const val MAX_FILE_BYTES = 10L * 1024 * 1024
     private val extensions = setOf("json", "yaml", "yml", "php")
 
-    fun validate(raw: String): Path {
+    private fun safeNormalizedPath(raw: String): Path {
         require(raw.isNotBlank() && raw.length <= 4096) { backendMessage("path.empty") }
         require(raw.none { it == '\u0000' || (it.code < 32 && it != '\t') }) { backendMessage("path.control") }
         val lower = raw.lowercase()
@@ -33,10 +38,20 @@ internal object SafeLanguageFileAccess {
             backendMessage("path.uri")
         }
         require(!lower.startsWith("\\\\.\\") && !lower.contains("globalroot")) { backendMessage("path.device") }
-        val path = Paths.get(raw).toAbsolutePath().normalize()
+        return Paths.get(raw).toAbsolutePath().normalize()
+    }
+
+    fun validate(raw: String): Path {
+        val path = safeNormalizedPath(raw)
         require(path.extension.lowercase() in extensions) { backendMessage("path.extension") }
         require(Files.isRegularFile(path)) { backendMessage("path.not.file", path) }
         require(Files.size(path) <= MAX_FILE_BYTES) { backendMessage("path.too.large", path) }
+        return path.toRealPath()
+    }
+
+    fun validateDirectory(raw: String): Path {
+        val path = safeNormalizedPath(raw)
+        require(Files.isDirectory(path)) { backendMessage("path.not.directory", path) }
         return path.toRealPath()
     }
 
@@ -55,6 +70,61 @@ internal object SafeLanguageFileAccess {
         } finally {
             Files.deleteIfExists(temp)
         }
+    }
+}
+
+internal object LanguageFolderDiscovery {
+    private const val MAX_FILES = 500
+    private const val MAX_DEPTH = 16
+    private val extensions = setOf("json", "yaml", "yml", "php")
+    private val ignoredDirectories = setOf(".git", ".idea", ".gradle", "build", "dist", "vendor", "node_modules", "storage", "cache", "coverage")
+
+    fun discover(rawFolder: String): FolderDiscoveryDto {
+        val root = SafeLanguageFileAccess.validateDirectory(rawFolder)
+        val candidates = mutableListOf<LanguageFileCandidateDto>()
+        var truncated = false
+        Files.walkFileTree(root, emptySet(), MAX_DEPTH, object : SimpleFileVisitor<Path>() {
+            override fun preVisitDirectory(dir: Path, attrs: BasicFileAttributes): FileVisitResult =
+                if (dir != root && dir.fileName.toString().lowercase() in ignoredDirectories) FileVisitResult.SKIP_SUBTREE else FileVisitResult.CONTINUE
+
+            override fun visitFile(file: Path, attrs: BasicFileAttributes): FileVisitResult {
+                val extension = file.extension.lowercase()
+                if (extension !in extensions) return FileVisitResult.CONTINUE
+                if (candidates.size >= MAX_FILES) {
+                    truncated = true
+                    return FileVisitResult.TERMINATE
+                }
+                candidates += inspect(file, extension)
+                return FileVisitResult.CONTINUE
+            }
+        })
+        return FolderDiscoveryDto(
+            root.toString(),
+            candidates.sortedBy { it.filePath.lowercase() },
+            truncated,
+        )
+    }
+
+    private fun inspect(file: Path, extension: String): LanguageFileCandidateDto = try {
+        val safePath = SafeLanguageFileAccess.validate(file.toString())
+        val parsed = LanguageFileCodec.parse(safePath, "folder-discovery")
+        val errors = parsed.issues.filter { it.severity == IssueSeverity.ERROR }
+        LanguageFileCandidateDto(
+            filePath = safePath.toString(),
+            format = extension.uppercase(),
+            locale = parsed.locale,
+            namespace = parsed.namespace,
+            entryCount = parsed.values.size,
+            recognized = errors.isEmpty(),
+            errorMessage = errors.joinToString("; ") { it.message }.take(500).ifBlank { null },
+        )
+    } catch (error: Exception) {
+        LanguageFileCandidateDto(
+            filePath = file.toAbsolutePath().normalize().toString(),
+            format = extension.uppercase(),
+            recognized = false,
+            errorMessage = (error.message ?: error.javaClass.simpleName).take(500),
+        )
     }
 }
 
