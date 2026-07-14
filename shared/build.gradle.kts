@@ -1,1 +1,3 @@
-
+dependencies {
+    testImplementation(kotlin("test"))
+}

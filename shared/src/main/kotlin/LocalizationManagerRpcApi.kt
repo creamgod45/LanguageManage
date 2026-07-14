@@ -23,4 +23,12 @@ interface LocalizationManagerRpcApi : RemoteApi<Unit> {
     suspend fun deleteEntries(projectId: ProjectId, schemeId: String, entryIds: List<String>)
     suspend fun renameKey(projectId: ProjectId, schemeId: String, oldKey: String, newKey: String)
     suspend fun repair(projectId: ProjectId, schemeId: String)
+    suspend fun repairEntries(projectId: ProjectId, schemeId: String, entryIds: List<String>)
+    suspend fun previewChanges(projectId: ProjectId, schemeId: String, request: ChangePreviewRequestDto): ChangePreviewDto
+    suspend fun applyPreviewedChanges(
+        projectId: ProjectId,
+        schemeId: String,
+        request: ChangePreviewRequestDto,
+        expectedBeforeHashes: Map<String, String>,
+    )
 }

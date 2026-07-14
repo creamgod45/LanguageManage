@@ -1,5 +1,6 @@
 package cg.creamgod45.toolWindow
 
+import cg.creamgod45.LanguageManagerBundle.message
 import cg.creamgod45.localization.ui.LocalizationManagerPanel
 import com.intellij.openapi.project.DumbAware
 import com.intellij.openapi.project.Project
@@ -12,7 +13,9 @@ class LanguageManagerToolWindowFactory : ToolWindowFactory, DumbAware {
 
     override fun createToolWindowContent(project: Project, toolWindow: ToolWindow) {
         val panel = LocalizationManagerPanel(project)
-        val content = ContentFactory.getInstance().createContent(panel, "語言方案", false)
+        toolWindow.title = message("app.title")
+        toolWindow.stripeTitle = message("app.title")
+        val content = ContentFactory.getInstance().createContent(panel, message("toolwindow.content.title"), false)
         content.setDisposer(panel)
         toolWindow.contentManager.addContent(content)
     }

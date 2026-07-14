@@ -9,11 +9,19 @@ plugins {
     id("org.jetbrains.kotlin.plugin.serialization") apply false
 }
 
+kotlin {
+    jvmToolchain(25)
+}
+
 subprojects {
     apply(plugin = "org.jetbrains.intellij.platform.module")
     apply(plugin = "rpc")
     apply(plugin = "org.jetbrains.kotlin.jvm")
     apply(plugin = "org.jetbrains.kotlin.plugin.serialization")
+
+    kotlin {
+        jvmToolchain(25)
+    }
 }
 
 // Read more: https://plugins.jetbrains.com/docs/intellij/tools-intellij-platform-gradle-plugin.html

@@ -6,8 +6,9 @@
 
     <extensions defaultExtensionNs="com.intellij">
         <toolWindow
-                id="ModularPlugin"
-                factoryClass="cg.creamgod45.toolWindow.ModularPluginToolWindowFactory"
-                icon="cg.creamgod45.ModularPluginIcons.ToolWindow"/>
+                id="Language Manager"
+                anchor="right"
+                factoryClass="cg.creamgod45.toolWindow.LanguageManagerToolWindowFactory"
+                icon="cg.creamgod45.LanguageManagerIcons.ToolWindow"/>
     </extensions>
 </idea-plugin>

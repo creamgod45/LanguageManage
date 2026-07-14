@@ -58,3 +58,23 @@ data class EntryMutationDto(
     val key: String,
     val value: String,
 )
+
+@Serializable
+data class ChangePreviewRequestDto(
+    val normalizeAll: Boolean = false,
+    val repairEntryIds: List<String> = emptyList(),
+    val deleteEntryIds: List<String> = emptyList(),
+)
+
+@Serializable
+data class FileChangePreviewDto(
+    val filePath: String,
+    val beforeContent: String,
+    val afterContent: String,
+    val beforeSha256: String,
+)
+
+@Serializable
+data class ChangePreviewDto(
+    val files: List<FileChangePreviewDto> = emptyList(),
+)

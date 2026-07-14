@@ -1,11 +1,24 @@
 package cg.creamgod45.localization.ui
 
 import cg.creamgod45.CoroutineScopeHolder
+import cg.creamgod45.LanguageManagerBundle.message
 import cg.creamgod45.localization.*
+import com.intellij.diff.DiffContentFactory
+import com.intellij.diff.DiffManager
+import com.intellij.diff.DiffRequestPanel
+import com.intellij.diff.requests.SimpleDiffRequest
+import com.intellij.find.FindManager
+import com.intellij.find.findInProject.FindInProjectManager
+import com.intellij.ide.DataManager
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.EDT
 import com.intellij.openapi.fileChooser.FileChooserDescriptor
 import com.intellij.openapi.fileChooser.FileChooserFactory
+import com.intellij.openapi.fileEditor.FileEditorManager
+import com.intellij.openapi.fileTypes.FileTypeManager
+import com.intellij.openapi.ui.DialogWrapper
+import com.intellij.openapi.util.Disposer
+import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.ComboBox
 import com.intellij.openapi.ui.Messages
@@ -16,11 +29,17 @@ import kotlinx.coroutines.*
 import java.awt.BorderLayout
 import java.awt.Dimension
 import java.awt.FlowLayout
+import java.awt.Toolkit
+import java.awt.datatransfer.DataFlavor
+import java.awt.datatransfer.StringSelection
+import java.awt.event.ActionEvent
 import java.nio.file.Path
 import javax.swing.*
 import javax.swing.event.DocumentEvent
 import javax.swing.event.DocumentListener
 import javax.swing.table.AbstractTableModel
+import javax.swing.table.TableCellEditor
+import javax.swing.table.TableCellRenderer
 
 internal class LocalizationManagerPanel(private val project: Project) : JPanel(BorderLayout()), Disposable {
     private val scope = CoroutineScopeHolder.getInstance(project).createScope("LocalizationManagerPanel")
@@ -33,10 +52,11 @@ internal class LocalizationManagerPanel(private val project: Project) : JPanel(B
     private val entryTable = JBTable(entryModel)
     private val issueModel = IssueTableModel()
     private val issueTable = JBTable(issueModel)
-    private val previousPageButton = JButton("上一頁")
-    private val nextPageButton = JButton("下一頁")
+    private val tabs = JTabbedPane()
+    private val previousPageButton = JButton(message("button.previous"))
+    private val nextPageButton = JButton(message("button.next"))
     private val pageLabel = JBLabel()
-    private val status = JBLabel("請建立方案並明確選擇語言檔案")
+    private val status = JBLabel(message("status.initial"))
     private var current = LocalizationStateDto()
     private var updatingSchemes = false
     private var currentPage = 0
@@ -56,34 +76,60 @@ internal class LocalizationManagerPanel(private val project: Project) : JPanel(B
 
     private fun createHeader() = JPanel(BorderLayout(6, 6)).apply {
         val schemeRow = JPanel(FlowLayout(FlowLayout.LEFT, 5, 0)).apply {
-            add(JBLabel("方案")); schemeBox.preferredSize = Dimension(220, schemeBox.preferredSize.height); add(schemeBox)
-            add(button("新增方案", ::createScheme)); add(button("刪除方案", ::deleteScheme)); add(button("重新讀取") { runAction { repository.reload(activeId()) } })
-            add(button("修復/正規化") { confirm("將空值補為 key，並用標準格式重寫可解析檔案。要繼續嗎？") { runAction { repository.repair(activeId()) } } })
+            add(JBLabel(message("label.scheme"))); schemeBox.preferredSize = Dimension(220, schemeBox.preferredSize.height); add(schemeBox)
+            add(button(message("button.scheme.add"), ::createScheme)); add(button(message("button.scheme.delete"), ::deleteScheme)); add(button(message("button.reload")) { runAction { repository.reload(activeId()) } })
+            add(button(message("button.repair.normalize")) { previewAndApply(ChangePreviewRequestDto(normalizeAll = true), message("summary.repair.normalize")) })
         }
         val searchRow = JPanel(FlowLayout(FlowLayout.LEFT, 5, 0)).apply {
-            add(JBLabel("搜尋")); searchField.columns = 25; add(searchField); add(searchMode)
-            add(JBLabel("語言")); localeBox.preferredSize = Dimension(110, localeBox.preferredSize.height); add(localeBox)
-            add(button("新增", ::addEntry)); add(button("編輯", ::editEntry)); add(button("批量刪除", ::deleteSelected)); add(button("Key 改名", ::renameKey))
+            add(JBLabel(message("label.search"))); searchField.columns = 25; add(searchField)
+            searchMode.renderer = object : DefaultListCellRenderer() {
+                override fun getListCellRendererComponent(list: JList<*>?, value: Any?, index: Int, selected: Boolean, focus: Boolean) =
+                    super.getListCellRendererComponent(list, when (value) { SearchMode.EXACT -> message("search.mode.exact"); else -> message("search.mode.fuzzy") }, index, selected, focus)
+            }
+            add(searchMode)
+            add(JBLabel(message("label.language"))); localeBox.preferredSize = Dimension(110, localeBox.preferredSize.height); add(localeBox)
+            add(actionDropdown())
         }
         add(schemeRow, BorderLayout.NORTH); add(searchRow, BorderLayout.SOUTH)
     }
 
-    private fun createTabs() = JTabbedPane().apply {
+    private fun createTabs() = tabs.apply {
         entryTable.autoCreateRowSorter = true
         entryTable.autoResizeMode = JTable.AUTO_RESIZE_OFF
+        entryTable.cellSelectionEnabled = true
+        entryTable.rowSelectionAllowed = true
+        entryTable.columnSelectionAllowed = true
         entryTable.selectionModel.selectionMode = ListSelectionModel.MULTIPLE_INTERVAL_SELECTION
+        installClipboardActions(entryTable, allowPaste = true)
         val translationPanel = JPanel(BorderLayout()).apply {
             add(JBScrollPane(entryTable), BorderLayout.CENTER)
             add(JPanel(FlowLayout(FlowLayout.RIGHT, 8, 3)).apply {
-                add(JBLabel("每頁最多 $PAGE_SIZE 筆"))
+                add(JBLabel(message("pagination.limit", PAGE_SIZE)))
                 add(previousPageButton)
                 add(pageLabel)
                 add(nextPageButton)
             }, BorderLayout.SOUTH)
         }
-        addTab("翻譯表", translationPanel)
+        addTab(message("tab.translations"), translationPanel)
         issueTable.autoCreateRowSorter = true
-        addTab("問題與建議", JBScrollPane(issueTable))
+        issueTable.cellSelectionEnabled = true
+        issueTable.rowSelectionAllowed = true
+        issueTable.columnSelectionAllowed = true
+        issueTable.selectionModel.selectionMode = ListSelectionModel.MULTIPLE_INTERVAL_SELECTION
+        installClipboardActions(issueTable, allowPaste = false)
+        val issuesPanel = JPanel(BorderLayout()).apply {
+            add(JBScrollPane(issueTable), BorderLayout.CENTER)
+            add(JPanel(FlowLayout(FlowLayout.RIGHT, 8, 3)).apply {
+                add(button(message("button.issues.selected"), ::handleSelectedIssues))
+                add(button(message("button.issues.all"), ::handleAllRepairableIssues))
+            }, BorderLayout.SOUTH)
+        }
+        addTab(message("tab.issues"), issuesPanel)
+        issueTable.columnModel.getColumn(issueModel.columnCount - 1).apply {
+            preferredWidth = 80
+            cellRenderer = IssueActionButtonRenderer()
+            cellEditor = IssueActionButtonEditor(issueTable) { issue -> handleIssue(issue) }
+        }
     }
 
     private fun wireEvents() {
@@ -101,18 +147,19 @@ internal class LocalizationManagerPanel(private val project: Project) : JPanel(B
         schemeBox.renderer = object : DefaultListCellRenderer() { override fun getListCellRendererComponent(list: JList<*>?, value: Any?, index: Int, selected: Boolean, focus: Boolean) = super.getListCellRendererComponent(list, (value as? LanguageSchemeDto)?.name ?: value, index, selected, focus) }
         schemeBox.selectedItem = state.schemes.firstOrNull { it.id == state.activeSchemeId }
         updatingSchemes = false
-        val locales = listOf("全部") + state.entries.map { it.locale }.distinct().sorted()
+        val allLocales = message("filter.locale.all")
+        val locales = listOf(allLocales) + state.entries.map { it.locale }.distinct().sorted()
         val previousLocale = localeBox.selectedItem?.toString()
-        localeBox.model = DefaultComboBoxModel(locales.toTypedArray()); localeBox.selectedItem = previousLocale?.takeIf { it in locales } ?: "全部"
+        localeBox.model = DefaultComboBoxModel(locales.toTypedArray()); localeBox.selectedItem = previousLocale?.takeIf { it in locales } ?: allLocales
         issueModel.items = state.issues
         applyFilter()
         val errors = state.issues.count { it.severity == IssueSeverity.ERROR }
-        status.text = state.errorMessage ?: when { state.busy -> "讀取中…"; state.activeSchemeId == null -> "尚未建立方案；插件不會自動選擇任何檔案"; else -> "${state.entries.size} 筆翻譯，${state.issues.size} 項建議，其中 $errors 項錯誤" }
+        status.text = state.errorMessage ?: when { state.busy -> message("status.loading"); state.activeSchemeId == null -> message("status.no.scheme"); else -> message("status.summary", state.entries.size, state.issues.size, errors) }
     }
 
     private fun applyFilter(resetPage: Boolean = true) {
         if (resetPage) currentPage = 0
-        val locale = localeBox.selectedItem?.toString()?.takeUnless { it == "全部" }
+        val locale = localeBox.selectedItem?.toString()?.takeUnless { it == message("filter.locale.all") }
         val matches = EntrySearch.filter(current.entries, searchField.text, searchMode.selectedItem as? SearchMode ?: SearchMode.FUZZY, locale)
         val matchingKeys = matches.map { it.namespace to it.key }.toSet()
         val joinedRows = EntrySearch.join(current.entries.filter { (it.namespace to it.key) in matchingKeys })
@@ -120,7 +167,7 @@ internal class LocalizationManagerPanel(private val project: Project) : JPanel(B
         currentPage = page.page
         val locales = current.entries.map { it.locale }.distinct().sorted()
         entryModel.setData(page.rows, locales)
-        pageLabel.text = "第 ${currentPage + 1} / ${page.pageCount} 頁，共 ${page.totalRows} 筆"
+        pageLabel.text = message("pagination.page", currentPage + 1, page.pageCount, page.totalRows)
         previousPageButton.isEnabled = currentPage > 0
         nextPageButton.isEnabled = currentPage + 1 < page.pageCount
         for (index in 0 until entryTable.columnModel.columnCount) {
@@ -134,19 +181,19 @@ internal class LocalizationManagerPanel(private val project: Project) : JPanel(B
     }
 
     private fun createScheme() {
-        val descriptor = FileChooserDescriptor(true, false, false, false, false, true).withTitle("選擇語言檔案（JSON / YAML / PHP）").withFileFilter { it.extension?.lowercase() in setOf("json", "yaml", "yml", "php") }
+        val descriptor = FileChooserDescriptor(true, false, false, false, false, true).withTitle(message("chooser.language.files")).withFileFilter { it.extension?.lowercase() in setOf("json", "yaml", "yml", "php") }
         FileChooserFactory.getInstance().createFileChooser(descriptor, project, this).choose(project).takeIf { it.isNotEmpty() }?.let { files ->
-            val name = Messages.showInputDialog(project, "方案名稱", "新增語言管理方案", null)?.trim().orEmpty()
+            val name = Messages.showInputDialog(project, message("dialog.scheme.name.prompt"), message("dialog.scheme.add.title"), null)?.trim().orEmpty()
             if (name.isNotEmpty()) runAction { repository.createScheme(name, files.map { it.path }) }
         }
     }
-    private fun deleteScheme() { val scheme = current.schemes.firstOrNull { it.id == current.activeSchemeId } ?: return; confirm("刪除方案「${scheme.name}」？語言檔案本身不會被刪除。") { runAction { repository.deleteScheme(scheme.id) } } }
+    private fun deleteScheme() { val scheme = current.schemes.firstOrNull { it.id == current.activeSchemeId } ?: return; confirm(message("confirm.scheme.delete", scheme.name)) { runAction { repository.deleteScheme(scheme.id) } } }
     private fun addEntry() { val scheme = activeScheme() ?: return; showEntryDialog(null, scheme) }
     private fun editEntry() {
-        val row = selectedRows().singleOrNull() ?: return showError("請選擇一個翻譯鍵進行編輯")
+        val row = selectedRows().singleOrNull() ?: return showError(message("error.select.translation.key"))
         val choices = row.translations.map { "${it.locale} — ${it.filePath}" }
         val selected = if (choices.size == 1) choices.first() else JOptionPane.showInputDialog(
-            this, "選擇要編輯的語言", "編輯翻譯", JOptionPane.PLAIN_MESSAGE, null, choices.toTypedArray(), choices.first()
+            this, message("dialog.edit.language.prompt"), message("dialog.edit.translation.title"), JOptionPane.PLAIN_MESSAGE, null, choices.toTypedArray(), choices.first()
         ) as? String ?: return
         val entry = row.translations[choices.indexOf(selected)]
         showEntryDialog(entry, activeScheme() ?: return)
@@ -162,22 +209,195 @@ internal class LocalizationManagerPanel(private val project: Project) : JPanel(B
             namespace.text = known?.namespace ?: if (path.fileName.toString().endsWith(".php", true)) path.fileName.toString().substringBeforeLast('.') else ""
         }
         file.addActionListener { updateMetadata() }; updateMetadata()
-        val panel = JPanel().apply { layout = BoxLayout(this, BoxLayout.Y_AXIS); listOf("檔案" to file, "語言" to locale, "Namespace" to namespace, "Key" to key, "Value" to JBScrollPane(value)).forEach { (label, component) -> add(JBLabel(label)); add(component as java.awt.Component); add(Box.createVerticalStrut(4)) } }
-        if (JOptionPane.showConfirmDialog(this, panel, if (entry == null) "新增翻譯" else "編輯翻譯", JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE) == JOptionPane.OK_OPTION) {
+        val panel = JPanel().apply { layout = BoxLayout(this, BoxLayout.Y_AXIS); listOf(message("field.file") to file, message("field.language") to locale, message("field.namespace") to namespace, message("field.key") to key, message("field.value") to JBScrollPane(value)).forEach { (label, component) -> add(JBLabel(label)); add(component as java.awt.Component); add(Box.createVerticalStrut(4)) } }
+        if (JOptionPane.showConfirmDialog(this, panel, if (entry == null) message("dialog.add.translation.title") else message("dialog.edit.translation.title"), JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE) == JOptionPane.OK_OPTION) {
             runAction { repository.save(scheme.id, EntryMutationDto(entry?.id, file.selectedItem.toString(), locale.text, namespace.text, key.text, value.text)) }
         }
     }
-    private fun deleteSelected() { val entries = selectedEntries(); if (entries.isEmpty()) return showError("請至少選擇一筆資料"); confirm("確定刪除 ${entries.size} 筆翻譯？此操作會寫回語言檔案。") { runAction { repository.delete(activeId(), entries.map { it.id }) } } }
-    private fun renameKey() { val row = selectedRows().singleOrNull() ?: return showError("請選擇一個翻譯鍵作為改名來源"); val value = Messages.showInputDialog(project, "將所有語言中的 key「${row.key}」改為：", "Key 改名", null, row.key, null)?.trim() ?: return; runAction { repository.rename(activeId(), row.key, value) } }
+    private fun deleteSelected() { val entries = selectedEntries(); if (entries.isEmpty()) return showError(message("error.select.entry")); confirm(message("confirm.entries.delete", entries.size)) { runAction { repository.delete(activeId(), entries.map { it.id }) } } }
+    private fun renameKey() { val row = selectedRows().singleOrNull() ?: return showError(message("error.select.rename.source")); val value = Messages.showInputDialog(project, message("dialog.rename.prompt", row.key), message("dialog.rename.title"), null, row.key, null)?.trim() ?: return; runAction { repository.rename(activeId(), row.key, value) } }
+
+    private fun findSelectedKeyInProject() {
+        val row = selectedRows().singleOrNull() ?: return showError(message("error.select.translation.cell"))
+        val fullKey = listOf(row.namespace, row.key).filter { it.isNotBlank() }.joinToString(".")
+        val model = FindManager.getInstance(project).findInProjectModel.clone().apply {
+            stringToFind = fullKey
+            isReplaceState = false
+            isRegularExpressions = false
+            isMultipleFiles = true
+        }
+        val dataContext = DataManager.getInstance().getDataContext(entryTable)
+        FindInProjectManager.getInstance(project).findInProject(dataContext, model)
+    }
+
+    private fun handleIssue(issue: LanguageIssueDto) {
+        when (issue.code) {
+            "MISSING_VALUE" -> entryFor(issue)?.let { entry ->
+                previewAndApply(ChangePreviewRequestDto(repairEntryIds = listOf(entry.id)), message("summary.repair.empty", entry.locale, entry.key))
+            }
+                ?: showError(message("error.issue.entry.not.found"))
+            "UNUSED_KEY" -> entryFor(issue)?.let { entry ->
+                previewAndApply(ChangePreviewRequestDto(deleteEntryIds = listOf(entry.id)), message("summary.delete.unused", entry.locale, entry.namespace, entry.key))
+            } ?: showError(message("error.issue.entry.not.found.short"))
+            "PARSE_ERROR", "READ_ERROR" -> openIssueFile(issue)
+            else -> locateIssue(issue)
+        }
+    }
+
+    private fun handleSelectedIssues() {
+        val issues = selectedIssues()
+        if (issues.isEmpty()) return showError(message("error.select.issue"))
+        handleIssuesBulk(issues)
+    }
+
+    private fun handleAllRepairableIssues() {
+        val issues = current.issues.filter { it.repairable || it.code == "UNUSED_KEY" }
+        if (issues.isEmpty()) return showError(message("error.no.bulk.issues"))
+        handleIssuesBulk(issues)
+    }
+
+    private fun handleIssuesBulk(issues: List<LanguageIssueDto>) {
+        val missingIds = issues.filter { it.code == "MISSING_VALUE" }.mapNotNull(::entryFor).map { it.id }.distinct()
+        val unusedIds = issues.filter { it.code == "UNUSED_KEY" }.mapNotNull(::entryFor).map { it.id }.distinct()
+        val manualCount = issues.size - issues.count { it.code == "MISSING_VALUE" || it.code == "UNUSED_KEY" }
+        if (missingIds.isEmpty() && unusedIds.isEmpty()) return showError(message("error.manual.only"))
+        val summary = buildString {
+            append(message("summary.bulk.repair", missingIds.size))
+            if (unusedIds.isNotEmpty()) append(message("summary.bulk.delete", unusedIds.size))
+            if (manualCount > 0) append(message("summary.bulk.manual", manualCount))
+        }
+        previewAndApply(ChangePreviewRequestDto(repairEntryIds = missingIds, deleteEntryIds = unusedIds), summary)
+    }
+
+    private fun previewAndApply(request: ChangePreviewRequestDto, summary: String) {
+        val schemeId = current.activeSchemeId ?: return showError(message("error.no.active.scheme"))
+        runAction {
+            val preview = repository.previewChanges(schemeId, request)
+            if (preview.files.isEmpty()) {
+                withContext(Dispatchers.EDT) { Messages.showInfoMessage(project, message("info.no.changes"), message("info.no.changes.title")) }
+                return@runAction
+            }
+            val accepted = withContext(Dispatchers.EDT) {
+                val disposable = Disposer.newDisposable("Language Manager change preview")
+                try {
+                    ChangePreviewDialog(project, preview, summary, disposable).showAndGet()
+                } finally {
+                    Disposer.dispose(disposable)
+                }
+            }
+            if (accepted) {
+                repository.applyPreviewedChanges(schemeId, request, preview.files.associate { it.filePath to it.beforeSha256 })
+            }
+        }
+    }
+
+    private fun entryFor(issue: LanguageIssueDto): LanguageEntryDto? = current.entries.firstOrNull {
+        it.filePath == issue.filePath && it.key == issue.key
+    }
+
+    private fun selectedIssues(): List<LanguageIssueDto> = issueTable.selectedRows.toList().mapNotNull { row ->
+        issueModel.items.getOrNull(issueTable.convertRowIndexToModel(row))
+    }
+
+    private fun locateIssue(issue: LanguageIssueDto) {
+        if (issue.key.isBlank()) return openIssueFile(issue)
+        localeBox.selectedItem = message("filter.locale.all")
+        searchMode.selectedItem = SearchMode.EXACT
+        searchField.text = issue.key
+        tabs.selectedIndex = 0
+    }
+
+    private fun openIssueFile(issue: LanguageIssueDto) {
+        if (issue.filePath.isBlank()) return showError(message("error.issue.no.file"))
+        val file = LocalFileSystem.getInstance().refreshAndFindFileByPath(issue.filePath.replace('\\', '/'))
+            ?: return showError(message("error.file.not.found", issue.filePath))
+        FileEditorManager.getInstance(project).openFile(file, true)
+    }
+
+    private fun installClipboardActions(table: JTable, allowPaste: Boolean) {
+        table.inputMap.put(KeyStroke.getKeyStroke("ctrl C"), "languageManager.copyCells")
+        table.actionMap.put("languageManager.copyCells", object : AbstractAction() {
+            override fun actionPerformed(event: ActionEvent?) = copySelectedCells(table)
+        })
+        if (allowPaste) {
+            table.inputMap.put(KeyStroke.getKeyStroke("ctrl V"), "languageManager.pasteCell")
+            table.actionMap.put("languageManager.pasteCell", object : AbstractAction() {
+                override fun actionPerformed(event: ActionEvent?) = pasteIntoSelectedTranslationCell()
+            })
+        }
+    }
+
+    private fun copySelectedCells(table: JTable) {
+        val viewRows = table.selectedRows.sorted()
+        val viewColumns = table.selectedColumns.sorted()
+        if (viewRows.isEmpty() || viewColumns.isEmpty()) return
+        val text = if (viewRows.size == 1 && viewColumns.size == 1) {
+            table.getValueAt(viewRows.first(), viewColumns.first())?.toString().orEmpty()
+        } else {
+            viewRows.joinToString("\n") { row ->
+                viewColumns.joinToString("\t") { column -> clipboardEscape(table.getValueAt(row, column)?.toString().orEmpty()) }
+            }
+        }
+        Toolkit.getDefaultToolkit().systemClipboard.setContents(StringSelection(text), null)
+        status.text = message("status.copied", viewRows.size * viewColumns.size)
+    }
+
+    private fun clipboardEscape(value: String): String = if (value.any { it == '\t' || it == '\n' || it == '\r' || it == '"' }) {
+        "\"${value.replace("\"", "\"\"")}\""
+    } else value
+
+    private fun pasteIntoSelectedTranslationCell() {
+        if (entryTable.selectedRowCount != 1 || entryTable.selectedColumnCount != 1) {
+            return showError(message("error.paste.single.cell"))
+        }
+        val modelRow = entryTable.convertRowIndexToModel(entryTable.selectedRow)
+        val modelColumn = entryTable.convertColumnIndexToModel(entryTable.selectedColumn)
+        val row = entryModel.items.getOrNull(modelRow) ?: return
+        val locale = entryModel.localeAt(modelColumn) ?: return showError(message("error.paste.value.only"))
+        val clipboard = Toolkit.getDefaultToolkit().systemClipboard
+        if (!clipboard.isDataFlavorAvailable(DataFlavor.stringFlavor)) return showError(message("error.clipboard.no.text"))
+        val value = clipboard.getData(DataFlavor.stringFlavor) as? String ?: return showError(message("error.clipboard.no.text"))
+        val existing = row.translations.firstOrNull { it.locale == locale }
+        val targetFile = existing?.filePath
+            ?: current.entries.firstOrNull { it.locale == locale && it.namespace == row.namespace }?.filePath
+            ?: current.entries.firstOrNull { it.locale == locale }?.filePath
+            ?: return showError(message("error.locale.file.not.found", locale))
+        val mutation = EntryMutationDto(existing?.id, targetFile, locale, row.namespace, row.key, value)
+        runAction { repository.save(activeId(), mutation) }
+    }
 
     private fun selectedRows(): List<JoinedTranslationRow> = entryTable.selectedRows.toList().mapNotNull { row -> entryModel.items.getOrNull(entryTable.convertRowIndexToModel(row)) }
     private fun selectedEntries(): List<LanguageEntryDto> = selectedRows().flatMap { it.translations }.distinctBy { it.id }
     private fun activeScheme() = current.schemes.firstOrNull { it.id == current.activeSchemeId }
-    private fun activeId() = current.activeSchemeId ?: error("請先建立或選擇方案")
+    private fun activeId() = current.activeSchemeId ?: error(message("error.no.active.scheme"))
     private fun button(text: String, action: () -> Unit) = JButton(text).apply { addActionListener { action() } }
-    private fun confirm(message: String, action: () -> Unit) { if (Messages.showYesNoDialog(project, message, "Language Manager", Messages.getQuestionIcon()) == Messages.YES) action() }
-    private fun showError(message: String) { Messages.showErrorDialog(project, message.take(500), "Language Manager") }
-    private fun runAction(action: suspend () -> Unit) { scope.launch { try { action() } catch (e: Exception) { if (e is CancellationException) throw e; withContext(Dispatchers.EDT) { showError(e.message ?: "操作失敗") } } } }
+    private fun actionDropdown(): JButton {
+        val menu = JPopupMenu().apply {
+            listOf(
+                message("action.add") to ::addEntry,
+                message("action.edit") to ::editEntry,
+                message("action.delete.bulk") to ::deleteSelected,
+                message("action.rename") to ::renameKey,
+                message("action.find.in.ide") to ::findSelectedKeyInProject,
+            ).forEach { (label, action) -> add(JMenuItem(label).apply { addActionListener { action() } }) }
+        }
+        return JButton(message("action.dropdown")).apply {
+            toolTipText = message("action.dropdown.tooltip")
+            addActionListener { menu.show(this, 0, height) }
+        }
+    }
+    private fun confirm(text: String, action: () -> Unit) { if (Messages.showYesNoDialog(project, text, message("dialog.confirm.title"), Messages.getQuestionIcon()) == Messages.YES) action() }
+    private fun showError(text: String) { Messages.showErrorDialog(project, text.take(500), message("dialog.confirm.title")) }
+    private fun runAction(action: suspend () -> Unit) {
+        status.text = message("status.processing")
+        scope.launch {
+            try { action() }
+            catch (e: Exception) {
+                if (e is CancellationException) throw e
+                withContext(Dispatchers.EDT) { showError(e.message ?: message("error.action.failed")); status.text = message("error.action.failed") }
+            }
+        }
+    }
     override fun dispose() { scope.cancel() }
 }
 
@@ -193,12 +413,14 @@ private class EntryTableModel : AbstractTableModel() {
         if (structureChanged) fireTableStructureChanged() else fireTableDataChanged()
     }
 
+    fun localeAt(column: Int): String? = locales.getOrNull(column - 2)
+
     override fun getRowCount() = items.size
     override fun getColumnCount() = locales.size + 3
     override fun getColumnName(column: Int) = when {
-        column == 0 -> "Namespace"
-        column == 1 -> "Key"
-        column == columnCount - 1 -> "使用次數"
+        column == 0 -> message("table.namespace")
+        column == 1 -> message("table.key")
+        column == columnCount - 1 -> message("table.usage")
         else -> locales[column - 2]
     }
     override fun getValueAt(row: Int, col: Int): Any = items[row].let { item -> when {
@@ -211,7 +433,104 @@ private class EntryTableModel : AbstractTableModel() {
 }
 private class IssueTableModel : AbstractTableModel() {
     var items: List<LanguageIssueDto> = emptyList(); set(value) { field = value; fireTableDataChanged() }
-    private val columns = arrayOf("等級", "類型", "Key", "訊息", "檔案")
-    override fun getRowCount() = items.size; override fun getColumnCount() = columns.size; override fun getColumnName(column: Int) = columns[column]
-    override fun getValueAt(row: Int, col: Int): Any = items[row].let { when (col) { 0 -> it.severity; 1 -> it.code; 2 -> it.key; 3 -> it.message; else -> it.filePath } }
+    private val columns get() = arrayOf(message("table.issue.severity"), message("table.issue.type"), message("table.key"), message("table.issue.message"), message("table.issue.file"), message("table.issue.action"))
+    override fun getRowCount() = items.size; override fun getColumnCount() = 6; override fun getColumnName(column: Int) = columns[column]
+    override fun getValueAt(row: Int, col: Int): Any = items[row].let { when (col) { 0 -> severityText(it.severity); 1 -> issueTypeText(it.code); 2 -> it.key; 3 -> it.message; 4 -> it.filePath; else -> message("action.process") } }
+    override fun isCellEditable(rowIndex: Int, columnIndex: Int): Boolean = columnIndex == columnCount - 1
+}
+
+private fun severityText(severity: IssueSeverity): String = when (severity) {
+    IssueSeverity.INFO -> message("issue.severity.info")
+    IssueSeverity.WARNING -> message("issue.severity.warning")
+    IssueSeverity.ERROR -> message("issue.severity.error")
+}
+
+private fun issueTypeText(code: String): String = when (code) {
+    "MISSING_VALUE" -> message("issue.type.MISSING_VALUE")
+    "DUPLICATE_KEY" -> message("issue.type.DUPLICATE_KEY")
+    "DUPLICATE_VALUE" -> message("issue.type.DUPLICATE_VALUE")
+    "MISSING_TRANSLATION" -> message("issue.type.MISSING_TRANSLATION")
+    "UNUSED_KEY" -> message("issue.type.UNUSED_KEY")
+    "PARSE_ERROR" -> message("issue.type.PARSE_ERROR")
+    "READ_ERROR" -> message("issue.type.READ_ERROR")
+    else -> code
+}
+
+private class IssueActionButtonRenderer : JButton(message("action.process")), TableCellRenderer {
+    override fun getTableCellRendererComponent(
+        table: JTable?, value: Any?, isSelected: Boolean, hasFocus: Boolean, row: Int, column: Int,
+    ): java.awt.Component = this
+}
+
+private class IssueActionButtonEditor(
+    private val table: JTable,
+    private val action: (LanguageIssueDto) -> Unit,
+) : AbstractCellEditor(), TableCellEditor {
+    private val button = JButton(message("action.process"))
+    private var issue: LanguageIssueDto? = null
+
+    init {
+        button.addActionListener {
+            val selectedIssue = issue
+            fireEditingStopped()
+            if (selectedIssue != null) SwingUtilities.invokeLater { action(selectedIssue) }
+        }
+    }
+
+    override fun getCellEditorValue(): Any = message("action.process")
+
+    override fun getTableCellEditorComponent(
+        table: JTable, value: Any?, isSelected: Boolean, row: Int, column: Int,
+    ): java.awt.Component {
+        val model = table.model as IssueTableModel
+        issue = model.items.getOrNull(table.convertRowIndexToModel(row))
+        return button
+    }
+}
+
+private class ChangePreviewDialog(
+    private val project: Project,
+    private val preview: ChangePreviewDto,
+    private val summary: String,
+    disposable: Disposable,
+) : DialogWrapper(project, true) {
+    private val fileSelector = ComboBox(preview.files.toTypedArray())
+    private val diffPanel: DiffRequestPanel = DiffManager.getInstance().createRequestPanel(project, disposable, null)
+
+    init {
+        title = message("diff.title")
+        setOKButtonText(message("diff.apply"))
+        setCancelButtonText(message("button.cancel"))
+        fileSelector.renderer = object : DefaultListCellRenderer() {
+            override fun getListCellRendererComponent(list: JList<*>?, value: Any?, index: Int, selected: Boolean, focus: Boolean) =
+                super.getListCellRendererComponent(list, (value as? FileChangePreviewDto)?.filePath ?: value, index, selected, focus)
+        }
+        fileSelector.addActionListener { updateDiff() }
+        updateDiff()
+        init()
+    }
+
+    private fun updateDiff() {
+        val change = fileSelector.selectedItem as? FileChangePreviewDto ?: return
+        val fileType = FileTypeManager.getInstance().getFileTypeByFileName(change.filePath)
+        val factory = DiffContentFactory.getInstance()
+        diffPanel.setRequest(SimpleDiffRequest(
+            change.filePath,
+            factory.create(project, change.beforeContent, fileType),
+            factory.create(project, change.afterContent, fileType),
+            message("diff.before"),
+            message("diff.after"),
+        ))
+    }
+
+    override fun createCenterPanel(): JComponent = JPanel(BorderLayout(6, 6)).apply {
+        preferredSize = Dimension(1050, 680)
+        add(JPanel(BorderLayout(6, 4)).apply {
+            add(JBLabel(message("diff.header", summary, preview.files.size)), BorderLayout.NORTH)
+            add(fileSelector, BorderLayout.CENTER)
+        }, BorderLayout.NORTH)
+        add(diffPanel.component, BorderLayout.CENTER)
+    }
+
+    override fun getPreferredFocusedComponent(): JComponent? = diffPanel.preferredFocusedComponent
 }

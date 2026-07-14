@@ -7,4 +7,5 @@ dependencies {
     }
 
     implementation(project(":shared"))
+    testImplementation(kotlin("test"))
 }

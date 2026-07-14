@@ -19,4 +19,8 @@ internal class LocalizationFrontendRepository(private val project: Project) {
     suspend fun delete(id: String, entryIds: List<String>) = LocalizationManagerRpcApi.getInstance().deleteEntries(project.projectId(), id, entryIds)
     suspend fun rename(id: String, oldKey: String, newKey: String) = LocalizationManagerRpcApi.getInstance().renameKey(project.projectId(), id, oldKey, newKey)
     suspend fun repair(id: String) = LocalizationManagerRpcApi.getInstance().repair(project.projectId(), id)
+    suspend fun repairEntries(id: String, entryIds: List<String>) = LocalizationManagerRpcApi.getInstance().repairEntries(project.projectId(), id, entryIds)
+    suspend fun previewChanges(id: String, request: ChangePreviewRequestDto) = LocalizationManagerRpcApi.getInstance().previewChanges(project.projectId(), id, request)
+    suspend fun applyPreviewedChanges(id: String, request: ChangePreviewRequestDto, expectedBeforeHashes: Map<String, String>) =
+        LocalizationManagerRpcApi.getInstance().applyPreviewedChanges(project.projectId(), id, request, expectedBeforeHashes)
 }
