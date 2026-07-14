@@ -1,12 +1,11 @@
 <idea-plugin>
     <id>cg.creamgod45.LanguageManage</id>
-    <name>在地化管理器 (LanguageManager)</name>
+    <name>LanguageManager</name>
     <vendor url="https://github.com/creamgod45">creamgod45</vendor>
-    <description><![CDATA[
-        <h3>中文說明</h3>
+    <description><![CDATA[LanguageManager helps you manage JSON, YAML, and Laravel PHP localization files in JetBrains IDEs.
+        <p>Create isolated file schemes, search and edit translations in a joined table, detect malformed files, and review missing values, duplicates, missing locales, and usage suggestions.</p>
+        <h3>繁體中文說明</h3>
         <p>管理專案中的 JSON、YAML 與 Laravel PHP 在地化語言檔。可建立彼此獨立的檔案方案，使用表格搜尋與編輯翻譯，檢查格式錯誤、缺失值、重複翻譯、缺少語言及使用率建議。</p>
-        <h3>English Description</h3>
-        <p>Manage JSON, YAML, and Laravel PHP localization files. Create isolated file schemes, search and edit translations in a joined table, detect malformed files, and review missing values, duplicates, missing locales, and usage suggestions.</p>
     ]]></description>
     <resource-bundle>messages.LanguageManagerBundle</resource-bundle>
     <content>

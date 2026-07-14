@@ -2,6 +2,7 @@
 
 ## 1.3.2
 
+- 修正 Marketplace 描述檔驗證：插件名稱改用合法的拉丁字元，並讓說明以前 40 字元以上的英文內容起首；IDE 內的多國語言名稱與操作介面不受影響。
 - 修正翻譯表直接修改共用 renderer 顏色，造成滑鼠移動重繪時 Hover Row 誤沿用選取反色的問題。
 - 整列高亮改由 JTable 原生 selection 狀態與 IDE Look & Feel 繪製，保留單一儲存格複製／貼上及 Light/Dark 主題支援。
 - 翻譯編輯 Form 的 Value TextArea 起始高度調整為三行／72 px，超出內容仍可使用 ScrollPane 捲動。
