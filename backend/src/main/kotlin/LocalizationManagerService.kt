@@ -1,17 +1,16 @@
 package cg.creamgod45
 
 import cg.creamgod45.localization.*
-import cg.creamgod45.LanguageManagerBackendBundle.message as backendMessage
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.project.Project
 import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.Serializable
@@ -24,6 +23,7 @@ import java.security.MessageDigest
 import java.util.UUID
 import kotlin.io.path.createDirectories
 import kotlin.io.path.exists
+import cg.creamgod45.LanguageManagerBackendBundle.message as backendMessage
 
 @Service(Service.Level.PROJECT)
 class LocalizationManagerService(
@@ -33,11 +33,15 @@ class LocalizationManagerService(
     companion object {
         private const val CACHE_FORMAT_VERSION = 4
         private val LOG = Logger.getInstance(LocalizationManagerService::class.java)
+
         fun getInstance(project: Project): LocalizationManagerService = project.getService(LocalizationManagerService::class.java)
     }
 
     @Serializable
-    private data class SchemeStore(val schemes: List<LanguageSchemeDto> = emptyList(), val activeSchemeId: String? = null)
+    private data class SchemeStore(
+        val schemes: List<LanguageSchemeDto> = emptyList(),
+        val activeSchemeId: String? = null,
+    )
 
     @Serializable
     private data class CacheStore(
@@ -47,7 +51,11 @@ class LocalizationManagerService(
         val issues: List<LanguageIssueDto>,
     )
 
-    private val json = Json { prettyPrint = true; ignoreUnknownKeys = true }
+    private val json =
+        Json {
+            prettyPrint = true
+            ignoreUnknownKeys = true
+        }
     private val mutex = Mutex()
     private val storageDir: Path = Path.of(project.basePath ?: System.getProperty("java.io.tmpdir"), ".idea", "language-manager")
     private val schemeFile = storageDir.resolve("schemes.json")
@@ -70,41 +78,59 @@ class LocalizationManagerService(
         }
     }
 
-    suspend fun createScheme(name: String, rawFiles: List<String>, rawUsageSettings: UsageScanSettingsDto) = mutex.withLock {
+    suspend fun createScheme(
+        name: String,
+        rawFiles: List<String>,
+        rawUsageSettings: UsageScanSettingsDto,
+    ) = mutex.withLock {
         LOG.info("Creating localization scheme '$name' with ${rawFiles.size} explicitly selected files")
         require(name.trim().length in 1..80) { backendMessage("scheme.name.length") }
         require(rawFiles.isNotEmpty()) { backendMessage("scheme.files.required") }
         val files = rawFiles.map(SafeLanguageFileAccess::validate).distinct().map(Path::toString)
-        val scheme = LanguageSchemeDto(
-            UUID.randomUUID().toString(),
-            sanitizeText(name, 80),
-            files,
-            System.currentTimeMillis(),
-            UsageScanSupport.normalize(rawUsageSettings),
-        )
+        val scheme =
+            LanguageSchemeDto(
+                UUID.randomUUID().toString(),
+                sanitizeText(name, 80),
+                files,
+                System.currentTimeMillis(),
+                UsageScanSupport.normalize(rawUsageSettings),
+            )
         val schemes = mutableState.value.schemes + scheme
         mutableState.value = mutableState.value.copy(schemes = schemes, activeSchemeId = scheme.id, errorMessage = null)
         persistSchemes()
         loadScheme(scheme, true)
     }
 
-    suspend fun deleteScheme(id: String) = mutex.withLock {
-        val schemes = mutableState.value.schemes.filterNot { it.id == id }
-        val active = if (mutableState.value.activeSchemeId == id) schemes.firstOrNull()?.id else mutableState.value.activeSchemeId
-        Files.deleteIfExists(cacheFile(id))
-        mutableState.value = mutableState.value.copy(schemes = schemes, activeSchemeId = active, entries = emptyList(), issues = emptyList(), errorMessage = null)
-        persistSchemes()
-        active?.let { next -> schemes.firstOrNull { it.id == next }?.let { loadScheme(it, false) } }
-    }
+    suspend fun deleteScheme(id: String) =
+        mutex.withLock {
+            val schemes = mutableState.value.schemes.filterNot { it.id == id }
+            val active = if (mutableState.value.activeSchemeId == id) schemes.firstOrNull()?.id else mutableState.value.activeSchemeId
+            Files.deleteIfExists(cacheFile(id))
+            mutableState.value =
+                mutableState.value.copy(
+                    schemes = schemes,
+                    activeSchemeId = active,
+                    entries = emptyList(),
+                    issues = emptyList(),
+                    errorMessage = null,
+                )
+            persistSchemes()
+            active?.let { next -> schemes.firstOrNull { it.id == next }?.let { loadScheme(it, false) } }
+        }
 
-    suspend fun activateScheme(id: String) = mutex.withLock {
-        val scheme = mutableState.value.schemes.firstOrNull { it.id == id } ?: error(backendMessage("scheme.not.found"))
-        mutableState.value = mutableState.value.copy(activeSchemeId = id, entries = emptyList(), issues = emptyList(), errorMessage = null)
-        persistSchemes()
-        loadScheme(scheme, false)
-    }
+    suspend fun activateScheme(id: String) =
+        mutex.withLock {
+            val scheme = mutableState.value.schemes.firstOrNull { it.id == id } ?: error(backendMessage("scheme.not.found"))
+            mutableState.value =
+                mutableState.value.copy(activeSchemeId = id, entries = emptyList(), issues = emptyList(), errorMessage = null)
+            persistSchemes()
+            loadScheme(scheme, false)
+        }
 
-    suspend fun updateSchemeUsageSettings(id: String, rawSettings: UsageScanSettingsDto) = mutex.withLock {
+    suspend fun updateSchemeUsageSettings(
+        id: String,
+        rawSettings: UsageScanSettingsDto,
+    ) = mutex.withLock {
         val scheme = requireScheme(id)
         val settings = UsageScanSupport.normalize(rawSettings)
         val updated = scheme.copy(usageScanSettings = settings, updatedAtEpochMs = System.currentTimeMillis())
@@ -115,51 +141,69 @@ class LocalizationManagerService(
         if (mutableState.value.activeSchemeId == id) {
             coroutineScope.launch(Dispatchers.IO + CoroutineName("Language Manager usage settings reload")) {
                 mutex.withLock {
-                    mutableState.value.schemes.firstOrNull { it.id == id }?.let { loadScheme(it, true) }
+                    mutableState.value.schemes
+                        .firstOrNull { it.id == id }
+                        ?.let { loadScheme(it, true) }
                 }
             }
         }
     }
 
-    suspend fun reload(id: String, force: Boolean) = mutex.withLock {
+    suspend fun reload(
+        id: String,
+        force: Boolean,
+    ) = mutex.withLock {
         val scheme = requireScheme(id)
         loadScheme(scheme, force)
     }
 
     fun discoverLanguageFiles(folderPaths: List<String>): FolderDiscoveryDto = LanguageFolderDiscovery.discover(folderPaths)
 
-    suspend fun exportSchemeSettings(): String = mutex.withLock {
-        SchemeSettingsTransferSupport.export(mutableState.value.schemes, project.basePath)
-    }
+    suspend fun exportSchemeSettings(): String =
+        mutex.withLock {
+            SchemeSettingsTransferSupport.export(mutableState.value.schemes, project.basePath)
+        }
 
     fun previewSchemeSettingsImport(content: String): SchemeImportPreviewDto =
         SchemeSettingsTransferSupport.preview(content, project.basePath)
 
-    suspend fun importSchemeSettings(content: String) = mutex.withLock {
-        val imported = SchemeSettingsTransferSupport.resolve(content, project.basePath)
-        val now = System.currentTimeMillis()
-        val newSchemes = imported.mapIndexed { index, scheme ->
-            LanguageSchemeDto(
-                id = UUID.randomUUID().toString(),
-                name = sanitizeText(scheme.name, 80),
-                files = scheme.files,
-                updatedAtEpochMs = now + index,
-                usageScanSettings = scheme.usageScanSettings,
-            )
+    suspend fun importSchemeSettings(content: String) =
+        mutex.withLock {
+            val imported = SchemeSettingsTransferSupport.resolve(content, project.basePath)
+            val now = System.currentTimeMillis()
+            val newSchemes =
+                imported.mapIndexed { index, scheme ->
+                    LanguageSchemeDto(
+                        id = UUID.randomUUID().toString(),
+                        name = sanitizeText(scheme.name, 80),
+                        files = scheme.files,
+                        updatedAtEpochMs = now + index,
+                        usageScanSettings = scheme.usageScanSettings,
+                    )
+                }
+            val schemes = mutableState.value.schemes + newSchemes
+            val active = newSchemes.last().id
+            mutableState.value = mutableState.value.copy(schemes = schemes, activeSchemeId = active, errorMessage = null)
+            persistSchemes()
+            loadScheme(newSchemes.last(), true)
         }
-        val schemes = mutableState.value.schemes + newSchemes
-        val active = newSchemes.last().id
-        mutableState.value = mutableState.value.copy(schemes = schemes, activeSchemeId = active, errorMessage = null)
-        persistSchemes()
-        loadScheme(newSchemes.last(), true)
-    }
 
-    suspend fun saveEntry(schemeId: String, mutation: EntryMutationDto) = mutex.withLock {
+    suspend fun saveEntry(
+        schemeId: String,
+        mutation: EntryMutationDto,
+    ) = mutex.withLock {
         val scheme = requireScheme(schemeId)
         validateMutation(scheme, mutation)
         val targetPath = SafeLanguageFileAccess.validate(mutation.filePath)
         val documents = parseDocuments(scheme)
-        if (documents.any { it.issues.any { issue -> issue.severity == IssueSeverity.ERROR } }) error(backendMessage("edit.fix.parse.first"))
+        if (documents.any {
+                it.issues.any { issue ->
+                    issue.severity == IssueSeverity.ERROR
+                }
+            }
+        ) {
+            error(backendMessage("edit.fix.parse.first"))
+        }
         var structuredValue = false
         var originalKey: String? = null
         var originalKeyPath: List<String>? = null
@@ -177,37 +221,51 @@ class LocalizationManagerService(
         if (mutation.id == null && mutation.key in document.values) error(backendMessage("entry.key.exists", mutation.key))
         document.values[mutation.key] = sanitizeText(mutation.value, 100_000)
         if (structuredValue) document.structuredValueKeys += mutation.key
-        document.keyPaths[mutation.key] = when {
-            originalKeyPath != null && mutation.key == originalKey -> originalKeyPath
-            originalKeyPath?.size == 1 -> listOf(mutation.key)
-            mutation.key.any(Char::isWhitespace) -> listOf(mutation.key)
-            else -> mutation.key.split('.').filter(String::isNotBlank)
-        }
+        document.keyPaths[mutation.key] =
+            when {
+                originalKeyPath != null && mutation.key == originalKey -> originalKeyPath
+                originalKeyPath?.size == 1 -> listOf(mutation.key)
+                mutation.key.any(Char::isWhitespace) -> listOf(mutation.key)
+                else -> mutation.key.split('.').filter(String::isNotBlank)
+            }
         documents.filter { it.path == targetPath || mutation.id != null && it.values !== document.values }.forEach(LanguageFileCodec::write)
         loadScheme(scheme, true)
     }
 
-    suspend fun deleteEntries(schemeId: String, ids: List<String>) = mutex.withLock {
+    suspend fun deleteEntries(
+        schemeId: String,
+        ids: List<String>,
+    ) = mutex.withLock {
         require(ids.isNotEmpty()) { backendMessage("entry.selection.required") }
         val scheme = requireScheme(schemeId)
         val selected = mutableState.value.entries.filter { it.id in ids }
         val documents = parseDocuments(scheme)
         selected.groupBy { it.filePath }.forEach { (path, entries) ->
             val document = documents.firstOrNull { it.path.toString() == path } ?: return@forEach
-            entries.forEach { document.values.remove(it.key); document.structuredValueKeys.remove(it.key); document.keyPaths.remove(it.key) }
+            entries.forEach {
+                document.values.remove(it.key)
+                document.structuredValueKeys.remove(it.key)
+                document.keyPaths.remove(it.key)
+            }
             LanguageFileCodec.write(document)
         }
         loadScheme(scheme, true)
     }
 
-    suspend fun renameKey(schemeId: String, oldKey: String, newKeyRaw: String) = mutex.withLock {
+    suspend fun renameKey(
+        schemeId: String,
+        oldKey: String,
+        newKeyRaw: String,
+    ) = mutex.withLock {
         val scheme = requireScheme(schemeId)
         val newKey = validateKey(newKeyRaw)
         val documents = parseDocuments(scheme)
         var changed = false
         documents.forEach { document ->
             if (oldKey in document.values) {
-                require(newKey !in document.values || newKey == oldKey) { backendMessage("entry.key.exists.file", document.path.fileName, newKey) }
+                require(
+                    newKey !in document.values || newKey == oldKey,
+                ) { backendMessage("entry.key.exists.file", document.path.fileName, newKey) }
                 val rebuilt = linkedMapOf<String, String>()
                 document.values.forEach { (key, value) -> rebuilt[if (key == oldKey) newKey else key] = value }
                 if (oldKey in document.structuredValueKeys) {
@@ -217,27 +275,33 @@ class LocalizationManagerService(
                 document.keyPaths.remove(oldKey)?.let { oldPath ->
                     document.keyPaths[newKey] = if (oldPath.size == 1) listOf(newKey) else newKey.split('.').filter(String::isNotBlank)
                 }
-                document.values.clear(); document.values.putAll(rebuilt)
-                LanguageFileCodec.write(document); changed = true
+                document.values.clear()
+                document.values.putAll(rebuilt)
+                LanguageFileCodec.write(document)
+                changed = true
             }
         }
         require(changed) { backendMessage("entry.key.not.found", oldKey) }
         loadScheme(scheme, true)
     }
 
-    suspend fun repair(schemeId: String) = mutex.withLock {
-        val scheme = requireScheme(schemeId)
-        val documents = parseDocuments(scheme)
-        val errors = documents.flatMap { it.issues }.filter { it.severity == IssueSeverity.ERROR }
-        require(errors.isEmpty()) { backendMessage("repair.syntax") }
-        documents.forEach { document ->
-            document.values.replaceAll { key, value -> sanitizeText(value.ifBlank { key }, 100_000) }
-            LanguageFileCodec.write(document)
+    suspend fun repair(schemeId: String) =
+        mutex.withLock {
+            val scheme = requireScheme(schemeId)
+            val documents = parseDocuments(scheme)
+            val errors = documents.flatMap { it.issues }.filter { it.severity == IssueSeverity.ERROR }
+            require(errors.isEmpty()) { backendMessage("repair.syntax") }
+            documents.forEach { document ->
+                document.values.replaceAll { key, value -> sanitizeText(value.ifBlank { key }, 100_000) }
+                LanguageFileCodec.write(document)
+            }
+            loadScheme(scheme, true)
         }
-        loadScheme(scheme, true)
-    }
 
-    suspend fun repairEntries(schemeId: String, ids: List<String>) = mutex.withLock {
+    suspend fun repairEntries(
+        schemeId: String,
+        ids: List<String>,
+    ) = mutex.withLock {
         require(ids.isNotEmpty()) { backendMessage("repair.selection.required") }
         val scheme = requireScheme(schemeId)
         val selected = mutableState.value.entries.filter { it.id in ids && it.value.isBlank() }
@@ -253,9 +317,13 @@ class LocalizationManagerService(
         loadScheme(scheme, true)
     }
 
-    suspend fun previewLocaleVersion(schemeId: String, request: LocaleVersionRequestDto): ChangePreviewDto = mutex.withLock {
-        buildLocaleVersionPreview(requireScheme(schemeId), request)
-    }
+    suspend fun previewLocaleVersion(
+        schemeId: String,
+        request: LocaleVersionRequestDto,
+    ): ChangePreviewDto =
+        mutex.withLock {
+            buildLocaleVersionPreview(requireScheme(schemeId), request)
+        }
 
     suspend fun createLocaleVersion(
         schemeId: String,
@@ -280,15 +348,17 @@ class LocalizationManagerService(
                 createdFiles.add(path)
                 SafeLanguageFileAccess.atomicWrite(path, change.afterContent)
             }
-            val updatedScheme = scheme.copy(
-                files = (scheme.files + createdFiles.map(Path::toString)).distinct(),
-                updatedAtEpochMs = System.currentTimeMillis(),
-            )
-            mutableState.value = previousState.copy(
-                schemes = previousState.schemes.map { if (it.id == scheme.id) updatedScheme else it },
-                activeSchemeId = scheme.id,
-                errorMessage = null,
-            )
+            val updatedScheme =
+                scheme.copy(
+                    files = (scheme.files + createdFiles.map(Path::toString)).distinct(),
+                    updatedAtEpochMs = System.currentTimeMillis(),
+                )
+            mutableState.value =
+                previousState.copy(
+                    schemes = previousState.schemes.map { if (it.id == scheme.id) updatedScheme else it },
+                    activeSchemeId = scheme.id,
+                    errorMessage = null,
+                )
             persistSchemes()
             loadScheme(updatedScheme, true)
         } catch (error: Exception) {
@@ -299,9 +369,13 @@ class LocalizationManagerService(
         }
     }
 
-    suspend fun previewChanges(schemeId: String, request: ChangePreviewRequestDto): ChangePreviewDto = mutex.withLock {
-        buildChangePreview(requireScheme(schemeId), request)
-    }
+    suspend fun previewChanges(
+        schemeId: String,
+        request: ChangePreviewRequestDto,
+    ): ChangePreviewDto =
+        mutex.withLock {
+            buildChangePreview(requireScheme(schemeId), request)
+        }
 
     suspend fun applyPreviewedChanges(
         schemeId: String,
@@ -324,8 +398,13 @@ class LocalizationManagerService(
         loadScheme(scheme, true)
     }
 
-    private fun buildChangePreview(scheme: LanguageSchemeDto, request: ChangePreviewRequestDto): ChangePreviewDto {
-        require(request.normalizeAll || request.repairEntryIds.isNotEmpty() || request.deleteEntryIds.isNotEmpty()) { backendMessage("preview.no.request") }
+    private fun buildChangePreview(
+        scheme: LanguageSchemeDto,
+        request: ChangePreviewRequestDto,
+    ): ChangePreviewDto {
+        require(request.normalizeAll || request.repairEntryIds.isNotEmpty() || request.deleteEntryIds.isNotEmpty()) {
+            backendMessage("preview.no.request")
+        }
         val documents = parseDocuments(scheme)
         val errors = documents.flatMap { it.issues }.filter { it.severity == IssueSeverity.ERROR }
         require(errors.isEmpty()) { backendMessage("preview.parse.blocked") }
@@ -356,61 +435,93 @@ class LocalizationManagerService(
             }
         }
 
-        return ChangePreviewDto(documents.filter { it.path.toString() in affectedPaths }.mapNotNull { document ->
-            val before = SafeLanguageFileAccess.read(document.path)
-            val after = LanguageFileCodec.render(document)
-            if (before == after) null else FileChangePreviewDto(document.path.toString(), before, after, contentSha256(before))
-        })
+        return ChangePreviewDto(
+            documents.filter { it.path.toString() in affectedPaths }.mapNotNull { document ->
+                val before = SafeLanguageFileAccess.read(document.path)
+                val after = LanguageFileCodec.render(document)
+                if (before == after) null else FileChangePreviewDto(document.path.toString(), before, after, contentSha256(before))
+            },
+        )
     }
 
-    private fun buildLocaleVersionPreview(scheme: LanguageSchemeDto, request: LocaleVersionRequestDto): ChangePreviewDto {
+    private fun buildLocaleVersionPreview(
+        scheme: LanguageSchemeDto,
+        request: LocaleVersionRequestDto,
+    ): ChangePreviewDto {
         val targets = LanguageLocaleVersionSupport.buildTargets(parseDocuments(scheme), request.sourceLocale, request.targetLocale)
         val emptyHash = contentSha256("")
-        return ChangePreviewDto(targets.map { target ->
-            FileChangePreviewDto(
-                filePath = target.path.toString(),
-                beforeContent = "",
-                afterContent = target.content,
-                beforeSha256 = emptyHash,
-            )
-        })
+        return ChangePreviewDto(
+            targets.map { target ->
+                FileChangePreviewDto(
+                    filePath = target.path.toString(),
+                    beforeContent = "",
+                    afterContent = target.content,
+                    beforeSha256 = emptyHash,
+                )
+            },
+        )
     }
 
-    private fun contentSha256(content: String): String = MessageDigest.getInstance("SHA-256")
-        .digest(content.toByteArray(StandardCharsets.UTF_8)).joinToString("") { "%02x".format(it) }
+    private fun contentSha256(content: String): String =
+        MessageDigest
+            .getInstance("SHA-256")
+            .digest(content.toByteArray(StandardCharsets.UTF_8))
+            .joinToString("") { "%02x".format(it) }
 
-    private fun loadScheme(scheme: LanguageSchemeDto, force: Boolean) {
+    private fun loadScheme(
+        scheme: LanguageSchemeDto,
+        force: Boolean,
+    ) {
         mutableState.value = mutableState.value.copy(busy = true, errorMessage = null)
         try {
             val fingerprints = fingerprints(scheme)
-            if (!force) readCache(scheme.id)?.takeIf { it.formatVersion == CACHE_FORMAT_VERSION && it.fingerprints == fingerprints }?.let { cache ->
-                LOG.info("Loaded localization scheme '${scheme.name}' from cache (${cache.entries.size} entries)")
-                mutableState.value = mutableState.value.copy(activeSchemeId = scheme.id, entries = cache.entries, issues = cache.issues, busy = false)
-                return
-            }
-            val documents = parseDocuments(scheme)
-            val entriesWithoutUsage = documents.flatMap { document ->
-                document.values.map { (key, value) ->
-                    val namespace = document.namespace
-                    LanguageEntryDto(entryId(document.path, key), scheme.id, document.path.toString(), document.locale, namespace, key, value)
+            if (!force) {
+                readCache(scheme.id)?.takeIf { it.formatVersion == CACHE_FORMAT_VERSION && it.fingerprints == fingerprints }?.let { cache ->
+                    LOG.info("Loaded localization scheme '${scheme.name}' from cache (${cache.entries.size} entries)")
+                    mutableState.value =
+                        mutableState.value.copy(activeSchemeId = scheme.id, entries = cache.entries, issues = cache.issues, busy = false)
+                    return
                 }
             }
+            val documents = parseDocuments(scheme)
+            val entriesWithoutUsage =
+                documents.flatMap { document ->
+                    document.values.map { (key, value) ->
+                        val namespace = document.namespace
+                        LanguageEntryDto(
+                            entryId(document.path, key),
+                            scheme.id,
+                            document.path.toString(),
+                            document.locale,
+                            namespace,
+                            key,
+                            value,
+                        )
+                    }
+                }
             // Publish parsed rows before the optional project-wide usage scan so
             // large/remote projects never leave the tool window looking idle.
-            mutableState.value = mutableState.value.copy(
-                activeSchemeId = scheme.id,
-                entries = entriesWithoutUsage,
-                issues = documents.flatMap { it.issues },
-                busy = true,
-            )
-            val usageRoot = if (scheme.usageScanSettings.basePath.isBlank()) {
-                project.basePath?.let(Path::of)?.toAbsolutePath()?.normalize()
-            } else {
-                SafeLanguageFileAccess.validateDirectory(scheme.usageScanSettings.basePath)
-            }
-            val usages = usageRoot?.let {
-                UsageScanSupport.counts(it, entriesWithoutUsage, scheme.files, scheme.usageScanSettings)
-            }.orEmpty()
+            mutableState.value =
+                mutableState.value.copy(
+                    activeSchemeId = scheme.id,
+                    entries = entriesWithoutUsage,
+                    issues = documents.flatMap { it.issues },
+                    busy = true,
+                )
+            val usageRoot =
+                if (scheme.usageScanSettings.basePath.isBlank()) {
+                    project.basePath
+                        ?.let(Path::of)
+                        ?.toAbsolutePath()
+                        ?.normalize()
+                } else {
+                    SafeLanguageFileAccess.validateDirectory(scheme.usageScanSettings.basePath)
+                }
+            val usages =
+                usageRoot
+                    ?.let {
+                        UsageScanSupport.counts(it, entriesWithoutUsage, scheme.files, scheme.usageScanSettings)
+                    }.orEmpty()
             val entries = entriesWithoutUsage.map { it.copy(usageCount = usages[it.id] ?: 0) }
             val issues = documents.flatMap { it.issues } + LocalizationAnalysis.analyze(scheme.id, entries)
             val cache = CacheStore(CACHE_FORMAT_VERSION, fingerprints, entries, issues)
@@ -423,27 +534,98 @@ class LocalizationManagerService(
         }
     }
 
-    private fun parseDocuments(scheme: LanguageSchemeDto): List<ParsedLanguageFile> = scheme.files.map { raw ->
-        try { LanguageFileCodec.parse(SafeLanguageFileAccess.validate(raw), scheme.id) }
-        catch (e: Exception) { ParsedLanguageFile(Path.of(raw), "", "", linkedMapOf(), issues = mutableListOf(LanguageIssueDto(scheme.id, raw, severity = IssueSeverity.ERROR, code = "READ_ERROR", message = safeMessage(e)))) }
-    }
+    private fun parseDocuments(scheme: LanguageSchemeDto): List<ParsedLanguageFile> =
+        scheme.files.map { raw ->
+            try {
+                LanguageFileCodec.parse(SafeLanguageFileAccess.validate(raw), scheme.id)
+            } catch (
+                e: Exception,
+            ) {
+                ParsedLanguageFile(
+                    Path.of(raw),
+                    "",
+                    "",
+                    linkedMapOf(),
+                    issues =
+                        mutableListOf(
+                            LanguageIssueDto(scheme.id, raw, severity = IssueSeverity.ERROR, code = "READ_ERROR", message = safeMessage(e)),
+                        ),
+                )
+            }
+        }
 
-    private fun validateMutation(scheme: LanguageSchemeDto, mutation: EntryMutationDto) {
-        require(mutation.filePath in scheme.files || runCatching { SafeLanguageFileAccess.validate(mutation.filePath).toString() in scheme.files }.getOrDefault(false)) { backendMessage("entry.outside.scheme") }
+    private fun validateMutation(
+        scheme: LanguageSchemeDto,
+        mutation: EntryMutationDto,
+    ) {
+        require(
+            mutation.filePath in scheme.files ||
+                runCatching { SafeLanguageFileAccess.validate(mutation.filePath).toString() in scheme.files }.getOrDefault(false),
+        ) { backendMessage("entry.outside.scheme") }
         validateKey(mutation.key)
         require(mutation.locale.matches(Regex("[A-Za-z0-9_-]{1,32}"))) { backendMessage("locale.invalid") }
-        require(mutation.namespace.isEmpty() || mutation.namespace.matches(Regex("[A-Za-z0-9_.-]{1,128}"))) { backendMessage("namespace.invalid") }
+        require(
+            mutation.namespace.isEmpty() || mutation.namespace.matches(Regex("[A-Za-z0-9_.-]{1,128}")),
+        ) { backendMessage("namespace.invalid") }
         sanitizeText(mutation.value, 100_000)
     }
+
     private fun validateKey(raw: String): String = TranslationInputValidation.key(raw)
-    private fun sanitizeText(raw: String, max: Int): String { require(raw.length <= max) { backendMessage("input.too.long") }; require(raw.none { it == '\u0000' || (it.code < 32 && it !in "\n\r\t") }) { backendMessage("input.control") }; return raw.trim() }
-    private fun requireScheme(id: String) = mutableState.value.schemes.firstOrNull { it.id == id } ?: error(backendMessage("scheme.not.found"))
-    private fun fingerprints(scheme: LanguageSchemeDto) = scheme.files.associateWith { raw -> runCatching { Files.getLastModifiedTime(SafeLanguageFileAccess.validate(raw)).toMillis() xor Files.size(SafeLanguageFileAccess.validate(raw)) }.getOrDefault(-1L) }
-    private fun entryId(path: Path, key: String) = MessageDigest.getInstance("SHA-256").digest("$path\u0000$key".toByteArray()).take(16).joinToString("") { "%02x".format(it) }
+
+    private fun sanitizeText(
+        raw: String,
+        max: Int,
+    ): String {
+        require(raw.length <= max) { backendMessage("input.too.long") }
+        require(
+            raw.none {
+                it ==
+                    '\u0000' ||
+                    (it.code < 32 && it !in "\n\r\t")
+            },
+        ) { backendMessage("input.control") }
+        return raw.trim()
+    }
+
+    private fun requireScheme(id: String) =
+        mutableState.value.schemes.firstOrNull { it.id == id } ?: error(backendMessage("scheme.not.found"))
+
+    private fun fingerprints(scheme: LanguageSchemeDto) =
+        scheme.files.associateWith { raw ->
+            runCatching {
+                Files.getLastModifiedTime(SafeLanguageFileAccess.validate(raw)).toMillis() xor
+                    Files.size(SafeLanguageFileAccess.validate(raw))
+            }.getOrDefault(-1L)
+        }
+
+    private fun entryId(
+        path: Path,
+        key: String,
+    ) = MessageDigest.getInstance("SHA-256").digest("$path\u0000$key".toByteArray()).take(16).joinToString("") {
+        "%02x".format(it)
+    }
+
     private fun cacheFile(id: String) = storageDir.resolve("cache-$id.json")
-    private fun readCache(id: String): CacheStore? = runCatching { json.decodeFromString<CacheStore>(Files.readString(cacheFile(id))) }.getOrNull()
-    private fun readSchemeStore(): SchemeStore = if (schemeFile.exists()) json.decodeFromString(Files.readString(schemeFile)) else SchemeStore()
-    private fun persistSchemes() = writeJson(schemeFile, json.encodeToString(SchemeStore(mutableState.value.schemes, mutableState.value.activeSchemeId)))
-    private fun writeJson(path: Path, content: String) { path.parent.createDirectories(); SafeLanguageFileAccess.atomicWrite(path, content) }
-    private fun safeMessage(error: Throwable) = (error.message ?: error.javaClass.simpleName).replace(Regex("[\u0000-\u0008\u000B\u000C\u000E-\u001F]"), "?").take(500)
+
+    private fun readCache(id: String): CacheStore? =
+        runCatching {
+            json.decodeFromString<CacheStore>(Files.readString(cacheFile(id)))
+        }.getOrNull()
+
+    private fun readSchemeStore(): SchemeStore =
+        if (schemeFile.exists()) json.decodeFromString(Files.readString(schemeFile)) else SchemeStore()
+
+    private fun persistSchemes() =
+        writeJson(schemeFile, json.encodeToString(SchemeStore(mutableState.value.schemes, mutableState.value.activeSchemeId)))
+
+    private fun writeJson(
+        path: Path,
+        content: String,
+    ) {
+        path.parent.createDirectories()
+        SafeLanguageFileAccess.atomicWrite(path, content)
+    }
+
+    private fun safeMessage(error: Throwable) =
+        (error.message ?: error.javaClass.simpleName).replace(Regex("[\u0000-\u0008\u000B\u000C\u000E-\u001F]"), "?").take(500)
 }

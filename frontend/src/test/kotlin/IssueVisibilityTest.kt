@@ -6,11 +6,12 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 
 class IssueVisibilityTest {
-    private val issues = listOf(
-        issue("DUPLICATE_VALUE"),
-        issue("UNUSED_KEY"),
-        issue("MISSING_TRANSLATION"),
-    )
+    private val issues =
+        listOf(
+            issue("DUPLICATE_VALUE"),
+            issue("UNUSED_KEY"),
+            issue("MISSING_TRANSLATION"),
+        )
 
     @Test
     fun `issue preferences hide only requested suggestions`() {

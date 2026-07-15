@@ -1,20 +1,20 @@
 package cg.creamgod45
 
-import cg.creamgod45.localization.IssueSeverity
 import cg.creamgod45.localization.FolderDiscoveryDto
+import cg.creamgod45.localization.IssueSeverity
 import cg.creamgod45.localization.LanguageFileCandidateDto
 import cg.creamgod45.localization.LanguageIssueDto
-import cg.creamgod45.LanguageManagerBackendBundle.message as backendMessage
 import kotlinx.serialization.json.*
 import java.nio.charset.StandardCharsets
-import java.nio.file.Files
 import java.nio.file.FileVisitResult
+import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
 import java.nio.file.SimpleFileVisitor
 import java.nio.file.attribute.BasicFileAttributes
 import kotlin.io.path.extension
 import kotlin.io.path.nameWithoutExtension
+import cg.creamgod45.LanguageManagerBackendBundle.message as backendMessage
 
 internal data class ParsedLanguageFile(
     val path: Path,
@@ -65,7 +65,10 @@ internal object SafeLanguageFileAccess {
 
     fun read(path: Path): String = Files.newBufferedReader(path, StandardCharsets.UTF_8).use { it.readText() }
 
-    fun atomicWrite(path: Path, content: String) {
+    fun atomicWrite(
+        path: Path,
+        content: String,
+    ) {
         require(content.toByteArray(StandardCharsets.UTF_8).size <= MAX_FILE_BYTES)
         val temp = Files.createTempFile(path.parent, ".language-manager-", ".tmp")
         try {
@@ -85,7 +88,8 @@ internal object LanguageFolderDiscovery {
     private const val MAX_FILES = 500
     private const val MAX_DEPTH = 16
     private val extensions = setOf("json", "yaml", "yml", "php", "properties")
-    private val ignoredDirectories = setOf(".git", ".idea", ".gradle", "build", "dist", "vendor", "node_modules", "storage", "cache", "coverage")
+    private val ignoredDirectories =
+        setOf(".git", ".idea", ".gradle", "build", "dist", "vendor", "node_modules", "storage", "cache", "coverage")
 
     fun discover(rawFolder: String): FolderDiscoveryDto = discover(listOf(rawFolder))
 
@@ -96,23 +100,40 @@ internal object LanguageFolderDiscovery {
         var truncated = false
         roots.forEach { root ->
             if (truncated) return@forEach
-            Files.walkFileTree(root, emptySet(), MAX_DEPTH, object : SimpleFileVisitor<Path>() {
-                override fun preVisitDirectory(dir: Path, attrs: BasicFileAttributes): FileVisitResult =
-                    if (dir != root && dir.fileName.toString().lowercase() in ignoredDirectories) FileVisitResult.SKIP_SUBTREE else FileVisitResult.CONTINUE
+            Files.walkFileTree(
+                root,
+                emptySet(),
+                MAX_DEPTH,
+                object : SimpleFileVisitor<Path>() {
+                    override fun preVisitDirectory(
+                        dir: Path,
+                        attrs: BasicFileAttributes,
+                    ): FileVisitResult =
+                        if (dir != root &&
+                            dir.fileName.toString().lowercase() in ignoredDirectories
+                        ) {
+                            FileVisitResult.SKIP_SUBTREE
+                        } else {
+                            FileVisitResult.CONTINUE
+                        }
 
-                override fun visitFile(file: Path, attrs: BasicFileAttributes): FileVisitResult {
-                    val extension = file.extension.lowercase()
-                    if (extension !in extensions) return FileVisitResult.CONTINUE
-                    val normalizedPath = file.toAbsolutePath().normalize().toString()
-                    if (normalizedPath in candidates) return FileVisitResult.CONTINUE
-                    if (candidates.size >= MAX_FILES) {
-                        truncated = true
-                        return FileVisitResult.TERMINATE
+                    override fun visitFile(
+                        file: Path,
+                        attrs: BasicFileAttributes,
+                    ): FileVisitResult {
+                        val extension = file.extension.lowercase()
+                        if (extension !in extensions) return FileVisitResult.CONTINUE
+                        val normalizedPath = file.toAbsolutePath().normalize().toString()
+                        if (normalizedPath in candidates) return FileVisitResult.CONTINUE
+                        if (candidates.size >= MAX_FILES) {
+                            truncated = true
+                            return FileVisitResult.TERMINATE
+                        }
+                        candidates[normalizedPath] = inspect(file, extension)
+                        return FileVisitResult.CONTINUE
                     }
-                    candidates[normalizedPath] = inspect(file, extension)
-                    return FileVisitResult.CONTINUE
-                }
-            })
+                },
+            )
         }
         return FolderDiscoveryDto(
             folderPath = roots.first().toString(),
@@ -122,37 +143,48 @@ internal object LanguageFolderDiscovery {
         )
     }
 
-    private fun inspect(file: Path, extension: String): LanguageFileCandidateDto = try {
-        val safePath = SafeLanguageFileAccess.validate(file.toString())
-        val parsed = LanguageFileCodec.parse(safePath, "folder-discovery")
-        val errors = parsed.issues.filter { it.severity == IssueSeverity.ERROR }
-        LanguageFileCandidateDto(
-            filePath = safePath.toString(),
-            format = extension.uppercase(),
-            locale = parsed.locale,
-            namespace = parsed.namespace,
-            entryCount = parsed.values.size,
-            recognized = errors.isEmpty(),
-            errorMessage = errors.joinToString("; ") { it.message }.take(500).ifBlank { null },
-        )
-    } catch (error: Exception) {
-        LanguageFileCandidateDto(
-            filePath = file.toAbsolutePath().normalize().toString(),
-            format = extension.uppercase(),
-            recognized = false,
-            errorMessage = (error.message ?: error.javaClass.simpleName).take(500),
-        )
-    }
+    private fun inspect(
+        file: Path,
+        extension: String,
+    ): LanguageFileCandidateDto =
+        try {
+            val safePath = SafeLanguageFileAccess.validate(file.toString())
+            val parsed = LanguageFileCodec.parse(safePath, "folder-discovery")
+            val errors = parsed.issues.filter { it.severity == IssueSeverity.ERROR }
+            LanguageFileCandidateDto(
+                filePath = safePath.toString(),
+                format = extension.uppercase(),
+                locale = parsed.locale,
+                namespace = parsed.namespace,
+                entryCount = parsed.values.size,
+                recognized = errors.isEmpty(),
+                errorMessage = errors.joinToString("; ") { it.message }.take(500).ifBlank { null },
+            )
+        } catch (error: Exception) {
+            LanguageFileCandidateDto(
+                filePath = file.toAbsolutePath().normalize().toString(),
+                format = extension.uppercase(),
+                recognized = false,
+                errorMessage = (error.message ?: error.javaClass.simpleName).take(500),
+            )
+        }
 }
 
-internal data class LocaleVersionTarget(val path: Path, val content: String)
+internal data class LocaleVersionTarget(
+    val path: Path,
+    val content: String,
+)
 
 internal object LanguageLocaleVersionSupport {
     private val localePattern = Regex("[A-Za-z][A-Za-z0-9_-]{0,31}")
-    private val windowsDevices = buildSet {
-        addAll(listOf("CON", "PRN", "AUX", "NUL"))
-        (1..9).forEach { index -> add("COM$index"); add("LPT$index") }
-    }
+    private val windowsDevices =
+        buildSet {
+            addAll(listOf("CON", "PRN", "AUX", "NUL"))
+            (1..9).forEach { index ->
+                add("COM$index")
+                add("LPT$index")
+            }
+        }
 
     fun buildTargets(
         documents: List<ParsedLanguageFile>,
@@ -162,44 +194,70 @@ internal object LanguageLocaleVersionSupport {
         require(sourceLocale.matches(localePattern)) { backendMessage("locale.invalid") }
         require(targetLocale.matches(localePattern) && targetLocale.uppercase() !in windowsDevices) { backendMessage("locale.invalid") }
         require(!sourceLocale.equals(targetLocale, ignoreCase = true)) { backendMessage("locale.version.same") }
-        require(documents.none { it.locale.equals(targetLocale, ignoreCase = true) }) { backendMessage("locale.version.exists", targetLocale) }
+        require(
+            documents.none { it.locale.equals(targetLocale, ignoreCase = true) },
+        ) { backendMessage("locale.version.exists", targetLocale) }
         val sources = documents.filter { it.locale == sourceLocale }
         require(sources.isNotEmpty()) { backendMessage("locale.version.source.missing", sourceLocale) }
         require(sources.none { document -> document.issues.any { it.severity == IssueSeverity.ERROR } }) {
             backendMessage("locale.version.parse.blocked")
         }
 
-        val targets = sources.map { source ->
-            val targetPath = when (source.path.extension.lowercase()) {
-                "php" -> {
-                    val localeRoot = source.path.parent?.parent ?: error(backendMessage("locale.version.path.invalid"))
-                    localeRoot.resolve(targetLocale).resolve(source.path.fileName).toAbsolutePath().normalize()
-                }
-                "json", "yaml", "yml" -> source.path.resolveSibling("$targetLocale.${source.path.extension.lowercase()}")
-                    .toAbsolutePath().normalize()
-                "properties" -> source.path.resolveSibling(propertiesTargetName(source.path, targetLocale))
-                    .toAbsolutePath().normalize()
-                else -> error(backendMessage("format.unsupported"))
+        val targets =
+            sources.map { source ->
+                val targetPath =
+                    when (source.path.extension.lowercase()) {
+                        "php" -> {
+                            val localeRoot = source.path.parent?.parent ?: error(backendMessage("locale.version.path.invalid"))
+                            localeRoot
+                                .resolve(targetLocale)
+                                .resolve(source.path.fileName)
+                                .toAbsolutePath()
+                                .normalize()
+                        }
+
+                        "json", "yaml", "yml" -> {
+                            source.path
+                                .resolveSibling("$targetLocale.${source.path.extension.lowercase()}")
+                                .toAbsolutePath()
+                                .normalize()
+                        }
+
+                        "properties" -> {
+                            source.path
+                                .resolveSibling(propertiesTargetName(source.path, targetLocale))
+                                .toAbsolutePath()
+                                .normalize()
+                        }
+
+                        else -> {
+                            error(backendMessage("format.unsupported"))
+                        }
+                    }
+                require(!Files.exists(targetPath)) { backendMessage("locale.version.target.exists", targetPath) }
+                val values =
+                    linkedMapOf<String, String>().apply {
+                        source.values.forEach { (key, value) -> put(key, if (key in source.structuredValueKeys) value else "") }
+                    }
+                val targetDocument =
+                    ParsedLanguageFile(
+                        path = targetPath,
+                        locale = targetLocale,
+                        namespace = source.namespace,
+                        values = values,
+                        structuredValueKeys = source.structuredValueKeys.toMutableSet(),
+                        keyPaths = source.keyPaths.toMutableMap(),
+                    )
+                LocaleVersionTarget(targetPath, LanguageFileCodec.render(targetDocument))
             }
-            require(!Files.exists(targetPath)) { backendMessage("locale.version.target.exists", targetPath) }
-            val values = linkedMapOf<String, String>().apply {
-                source.values.forEach { (key, value) -> put(key, if (key in source.structuredValueKeys) value else "") }
-            }
-            val targetDocument = ParsedLanguageFile(
-                path = targetPath,
-                locale = targetLocale,
-                namespace = source.namespace,
-                values = values,
-                structuredValueKeys = source.structuredValueKeys.toMutableSet(),
-                keyPaths = source.keyPaths.toMutableMap(),
-            )
-            LocaleVersionTarget(targetPath, LanguageFileCodec.render(targetDocument))
-        }
         require(targets.map { it.path }.distinct().size == targets.size) { backendMessage("locale.version.path.conflict") }
         return targets
     }
 
-    private fun propertiesTargetName(path: Path, targetLocale: String): String {
+    private fun propertiesTargetName(
+        path: Path,
+        targetLocale: String,
+    ): String {
         val namespace = propertiesIdentity(path).first
         return "${namespace}_$targetLocale.properties"
     }
@@ -208,29 +266,57 @@ internal object LanguageLocaleVersionSupport {
 internal object LanguageFileCodec {
     private val json = Json { prettyPrint = true }
 
-    fun parse(path: Path, schemeId: String): ParsedLanguageFile {
-        val (locale, namespace) = when (path.extension.lowercase()) {
-            "php" -> path.parent?.fileName?.toString().orEmpty() to path.nameWithoutExtension
-            "properties" -> propertiesIdentity(path).let { (bundle, bundleLocale) -> bundleLocale to bundle }
-            else -> path.nameWithoutExtension to ""
-        }
+    fun parse(
+        path: Path,
+        schemeId: String,
+    ): ParsedLanguageFile {
+        val (locale, namespace) =
+            when (path.extension.lowercase()) {
+                "php" -> {
+                    path.parent
+                        ?.fileName
+                        ?.toString()
+                        .orEmpty() to path.nameWithoutExtension
+                }
+
+                "properties" -> {
+                    propertiesIdentity(path).let { (bundle, bundleLocale) -> bundleLocale to bundle }
+                }
+
+                else -> {
+                    path.nameWithoutExtension to ""
+                }
+            }
         return try {
             val text = SafeLanguageFileAccess.read(path)
             val structuredKeys = linkedSetOf<String>()
             val keyPaths = linkedMapOf<String, List<String>>()
-            val values = when (path.extension.lowercase()) {
-                "json" -> parseJson(text, structuredKeys, keyPaths)
-                "yaml", "yml" -> parseYaml(text, schemeId, path)
-                "php" -> PhpArrayParser(text).parse()
-                "properties" -> parseProperties(text, keyPaths)
-                else -> error(backendMessage("format.unsupported"))
-            }
+            val values =
+                when (path.extension.lowercase()) {
+                    "json" -> parseJson(text, structuredKeys, keyPaths)
+                    "yaml", "yml" -> parseYaml(text, schemeId, path)
+                    "php" -> PhpArrayParser(text).parse()
+                    "properties" -> parseProperties(text, keyPaths)
+                    else -> error(backendMessage("format.unsupported"))
+                }
             ParsedLanguageFile(path, locale, namespace, values, structuredKeys, keyPaths)
         } catch (e: Exception) {
-            ParsedLanguageFile(path, locale, namespace, linkedMapOf(), issues = mutableListOf(
-                LanguageIssueDto(schemeId, path.toString(), severity = IssueSeverity.ERROR,
-                    code = "PARSE_ERROR", message = "${path.fileName}: ${e.message ?: e.javaClass.simpleName}")
-            ))
+            ParsedLanguageFile(
+                path,
+                locale,
+                namespace,
+                linkedMapOf(),
+                issues =
+                    mutableListOf(
+                        LanguageIssueDto(
+                            schemeId,
+                            path.toString(),
+                            severity = IssueSeverity.ERROR,
+                            code = "PARSE_ERROR",
+                            message = "${path.fileName}: ${e.message ?: e.javaClass.simpleName}",
+                        ),
+                    ),
+            )
         }
     }
 
@@ -238,7 +324,8 @@ internal object LanguageFileCodec {
         SafeLanguageFileAccess.atomicWrite(document.path, render(document))
     }
 
-    fun render(document: ParsedLanguageFile): String = when (document.path.extension.lowercase()) {
+    fun render(document: ParsedLanguageFile): String =
+        when (document.path.extension.lowercase()) {
             "json" -> writeJson(document.values, document.structuredValueKeys, document.keyPaths)
             "yaml", "yml" -> writeYaml(document.values)
             "php" -> writePhp(document.values)
@@ -272,12 +359,17 @@ internal object LanguageFileCodec {
         text.lineSequence().forEachIndexed { index, physicalLine ->
             val lineNumber = index + 1
             val continuing = pending != null
-            val current = pending ?: StringBuilder().also { pending = it; startLine = lineNumber }
+            val current =
+                pending ?: StringBuilder().also {
+                    pending = it
+                    startLine = lineNumber
+                }
             val part = if (continuing) physicalLine.trimStart() else physicalLine
             current.append(part)
             val trailingSlashes = current.reversed().takeWhile { it == '\\' }.count()
-            if (trailingSlashes % 2 == 1) current.setLength(current.length - 1)
-            else {
+            if (trailingSlashes % 2 == 1) {
+                current.setLength(current.length - 1)
+            } else {
                 result += startLine to current.toString()
                 pending = null
             }
@@ -292,11 +384,25 @@ internal object LanguageFileCodec {
         var whitespaceSeparator = false
         for (index in line.indices) {
             val char = line[index]
-            if (escaped) escaped = false
-            else when {
-                char == '\\' -> escaped = true
-                char == '=' || char == ':' -> { separator = index; break }
-                char.isWhitespace() -> { separator = index; whitespaceSeparator = true; break }
+            if (escaped) {
+                escaped = false
+            } else {
+                when {
+                    char == '\\' -> {
+                        escaped = true
+                    }
+
+                    char == '=' || char == ':' -> {
+                        separator = index
+                        break
+                    }
+
+                    char.isWhitespace() -> {
+                        separator = index
+                        whitespaceSeparator = true
+                        break
+                    }
+                }
             }
         }
         if (separator < 0) return line to ""
@@ -304,57 +410,86 @@ internal object LanguageFileCodec {
         if (whitespaceSeparator) {
             while (valueStart < line.length && line[valueStart].isWhitespace()) valueStart++
             if (valueStart < line.length && line[valueStart] in charArrayOf('=', ':')) valueStart++
-        } else valueStart++
+        } else {
+            valueStart++
+        }
         while (valueStart < line.length && line[valueStart].isWhitespace()) valueStart++
         return line.substring(0, separator) to line.substring(valueStart)
     }
 
-    private fun decodePropertyEscapes(value: String, lineNumber: Int): String = buildString {
-        var index = 0
-        while (index < value.length) {
-            val char = value[index++]
-            if (char != '\\') { append(char); continue }
-            require(index < value.length) { backendMessage("properties.dangling.escape", lineNumber) }
-            when (val escaped = value[index++]) {
-                't' -> append('\t')
-                'n' -> append('\n')
-                'r' -> append('\r')
-                'f' -> append('\u000C')
-                'u' -> {
-                    require(index + 4 <= value.length) { backendMessage("properties.unicode.escape", lineNumber) }
-                    val hex = value.substring(index, index + 4)
-                    require(hex.all { it.isDigit() || it.lowercaseChar() in 'a'..'f' }) {
-                        backendMessage("properties.unicode.escape", lineNumber)
-                    }
-                    append(hex.toInt(16).toChar())
-                    index += 4
+    private fun decodePropertyEscapes(
+        value: String,
+        lineNumber: Int,
+    ): String =
+        buildString {
+            var index = 0
+            while (index < value.length) {
+                val char = value[index++]
+                if (char != '\\') {
+                    append(char)
+                    continue
                 }
-                else -> append(escaped)
+                require(index < value.length) { backendMessage("properties.dangling.escape", lineNumber) }
+                when (val escaped = value[index++]) {
+                    't' -> {
+                        append('\t')
+                    }
+
+                    'n' -> {
+                        append('\n')
+                    }
+
+                    'r' -> {
+                        append('\r')
+                    }
+
+                    'f' -> {
+                        append('\u000C')
+                    }
+
+                    'u' -> {
+                        require(index + 4 <= value.length) { backendMessage("properties.unicode.escape", lineNumber) }
+                        val hex = value.substring(index, index + 4)
+                        require(hex.all { it.isDigit() || it.lowercaseChar() in 'a'..'f' }) {
+                            backendMessage("properties.unicode.escape", lineNumber)
+                        }
+                        append(hex.toInt(16).toChar())
+                        index += 4
+                    }
+
+                    else -> {
+                        append(escaped)
+                    }
+                }
             }
         }
-    }
 
-    private fun writeProperties(values: Map<String, String>): String = buildString {
-        values.forEach { (key, value) ->
-            append(escapeProperty(key, key = true)).append('=').append(escapeProperty(value, key = false)).append('\n')
-        }
-    }
-
-    private fun escapeProperty(value: String, key: Boolean): String = buildString {
-        value.forEachIndexed { index, char ->
-            when (char) {
-                '\\' -> append("\\\\")
-                '\t' -> append("\\t")
-                '\n' -> append("\\n")
-                '\r' -> append("\\r")
-                '\u000C' -> append("\\f")
-                ' ' -> if (key || index == 0) append("\\ ") else append(char)
-                '=', ':' -> if (key) append('\\').append(char) else append(char)
-                '#', '!' -> if (key && index == 0) append('\\').append(char) else append(char)
-                else -> append(char)
+    private fun writeProperties(values: Map<String, String>): String =
+        buildString {
+            values.forEach { (key, value) ->
+                append(escapeProperty(key, key = true)).append('=').append(escapeProperty(value, key = false)).append('\n')
             }
         }
-    }
+
+    private fun escapeProperty(
+        value: String,
+        key: Boolean,
+    ): String =
+        buildString {
+            value.forEachIndexed { index, char ->
+                when (char) {
+                    '\\' -> append("\\\\")
+                    '\t' -> append("\\t")
+                    '\n' -> append("\\n")
+                    '\r' -> append("\\r")
+                    '\u000C' -> append("\\f")
+                    ' ' -> if (key || index == 0) append("\\ ") else append(char)
+                    '=', ':' -> if (key) append('\\').append(char) else append(char)
+                    '#', '!' -> if (key && index == 0) append('\\').append(char) else append(char)
+                    else -> append(char)
+                }
+            }
+        }
 
     private fun parseJson(
         text: String,
@@ -375,12 +510,20 @@ internal object LanguageFileCodec {
     ) {
         val displayKey = path.joinToString(".")
         when (element) {
-            is JsonObject -> element.forEach { (key, child) -> flattenJson(child, path + key, out, structuredKeys, keyPaths) }
-            is JsonPrimitive -> require(element.isString || element.booleanOrNull != null || element.doubleOrNull != null) { backendMessage("json.null.unsupported", displayKey) }.also {
-                require(displayKey !in out) { backendMessage("json.path.conflict", displayKey) }
-                out[displayKey] = element.content
-                keyPaths[displayKey] = path
+            is JsonObject -> {
+                element.forEach { (key, child) -> flattenJson(child, path + key, out, structuredKeys, keyPaths) }
             }
+
+            is JsonPrimitive -> {
+                require(element.isString || element.booleanOrNull != null || element.doubleOrNull != null) {
+                    backendMessage("json.null.unsupported", displayKey)
+                }.also {
+                    require(displayKey !in out) { backendMessage("json.path.conflict", displayKey) }
+                    out[displayKey] = element.content
+                    keyPaths[displayKey] = path
+                }
+            }
+
             is JsonArray -> {
                 require(displayKey !in out) { backendMessage("json.path.conflict", displayKey) }
                 structuredKeys += displayKey
@@ -395,16 +538,21 @@ internal object LanguageFileCodec {
         structuredKeys: Set<String>,
         keyPaths: Map<String, List<String>>,
     ): String {
-        val root = tree(values, keyPaths) { key, value ->
-            if (key in structuredKeys) {
-                json.parseToJsonElement(value).also { require(it is JsonArray) { backendMessage("json.array.invalid", key) } }
-            } else value
-        }
-        fun convert(value: Any): JsonElement = when (value) {
-            is Map<*, *> -> JsonObject(value.entries.associate { it.key.toString() to convert(it.value!!) })
-            is JsonElement -> value
-            else -> JsonPrimitive(value.toString())
-        }
+        val root =
+            tree(values, keyPaths) { key, value ->
+                if (key in structuredKeys) {
+                    json.parseToJsonElement(value).also { require(it is JsonArray) { backendMessage("json.array.invalid", key) } }
+                } else {
+                    value
+                }
+            }
+
+        fun convert(value: Any): JsonElement =
+            when (value) {
+                is Map<*, *> -> JsonObject(value.entries.associate { it.key.toString() to convert(it.value!!) })
+                is JsonElement -> value
+                else -> JsonPrimitive(value.toString())
+            }
         return json.encodeToString(JsonElement.serializer(), convert(root)) + "\n"
     }
 
@@ -428,36 +576,55 @@ internal object LanguageFileCodec {
         return root
     }
 
-    private fun writeYaml(values: Map<String, String>): String = buildString {
-        fun appendMap(map: Map<String, Any>, depth: Int) {
-            map.forEach { (key, value) ->
-                append("  ".repeat(depth)).append(yamlKey(key)).append(':')
-                if (value is Map<*, *>) {
-                    append('\n')
-                    @Suppress("UNCHECKED_CAST") appendMap(value as Map<String, Any>, depth + 1)
-                } else append(' ').append(yamlValue(value.toString())).append('\n')
+    private fun writeYaml(values: Map<String, String>): String =
+        buildString {
+            fun appendMap(
+                map: Map<String, Any>,
+                depth: Int,
+            ) {
+                map.forEach { (key, value) ->
+                    append("  ".repeat(depth)).append(yamlKey(key)).append(':')
+                    if (value is Map<*, *>) {
+                        append('\n')
+                        @Suppress("UNCHECKED_CAST")
+                        appendMap(value as Map<String, Any>, depth + 1)
+                    } else {
+                        append(' ').append(yamlValue(value.toString())).append('\n')
+                    }
+                }
             }
+            appendMap(tree(values), 0)
         }
-        appendMap(tree(values), 0)
-    }
 
-    private fun writePhp(values: Map<String, String>): String = buildString {
-        append("<?php\n\nreturn [\n")
-        fun appendMap(map: Map<String, Any>, depth: Int) {
-            map.forEach { (key, value) ->
-                append("    ".repeat(depth)).append('\'').append(phpEscape(key)).append("' => ")
-                if (value is Map<*, *>) {
-                    append("[\n")
-                    @Suppress("UNCHECKED_CAST") appendMap(value as Map<String, Any>, depth + 1)
-                    append("    ".repeat(depth)).append("],\n")
-                } else append('\'').append(phpEscape(value.toString())).append("',\n")
+    private fun writePhp(values: Map<String, String>): String =
+        buildString {
+            append("<?php\n\nreturn [\n")
+
+            fun appendMap(
+                map: Map<String, Any>,
+                depth: Int,
+            ) {
+                map.forEach { (key, value) ->
+                    append("    ".repeat(depth)).append('\'').append(phpEscape(key)).append("' => ")
+                    if (value is Map<*, *>) {
+                        append("[\n")
+                        @Suppress("UNCHECKED_CAST")
+                        appendMap(value as Map<String, Any>, depth + 1)
+                        append("    ".repeat(depth)).append("],\n")
+                    } else {
+                        append('\'').append(phpEscape(value.toString())).append("',\n")
+                    }
+                }
             }
+            appendMap(tree(values), 1)
+            append("];\n")
         }
-        appendMap(tree(values), 1)
-        append("];\n")
-    }
 
-    private fun parseYaml(text: String, schemeId: String, path: Path): LinkedHashMap<String, String> {
+    private fun parseYaml(
+        text: String,
+        schemeId: String,
+        path: Path,
+    ): LinkedHashMap<String, String> {
         val out = linkedMapOf<String, String>()
         val parents = mutableListOf<Pair<Int, String>>()
         text.lineSequence().forEachIndexed { index, raw ->
@@ -471,8 +638,9 @@ internal object LanguageFileCodec {
             require(key.isNotBlank()) { backendMessage("yaml.empty.key", index + 1) }
             while (parents.isNotEmpty() && parents.last().first >= indent) parents.removeLast()
             val rest = line.substring(colon + 1).trim()
-            if (rest.isEmpty()) parents += indent to key
-            else {
+            if (rest.isEmpty()) {
+                parents += indent to key
+            } else {
                 val full = (parents.map { it.second } + key).joinToString(".")
                 require(full !in out) { backendMessage("yaml.duplicate.key", index + 1, full) }
                 out[full] = unquote(stripYamlComment(rest))
@@ -483,24 +651,84 @@ internal object LanguageFileCodec {
 
     private fun findYamlColon(line: String): Int {
         var quote: Char? = null
-        line.forEachIndexed { i, c -> if (c == '\'' || c == '"') quote = if (quote == c) null else if (quote == null) c else quote; if (c == ':' && quote == null) return i }
+        line.forEachIndexed { i, c ->
+            if (c == '\'' ||
+                c == '"'
+            ) {
+                quote =
+                    if (quote == c) {
+                        null
+                    } else if (quote == null) {
+                        c
+                    } else {
+                        quote
+                    }
+            }
+            ; if (c == ':' && quote == null) return i
+        }
         return -1
     }
+
     private fun stripYamlComment(value: String): String {
         var quote: Char? = null
-        value.forEachIndexed { i, c -> if (c == '\'' || c == '"') quote = if (quote == c) null else if (quote == null) c else quote; if (c == '#' && quote == null && i > 0 && value[i - 1].isWhitespace()) return value.substring(0, i).trim() }
+        value.forEachIndexed { i, c ->
+            if (c == '\'' ||
+                c == '"'
+            ) {
+                quote =
+                    if (quote ==
+                        c
+                    ) {
+                        null
+                    } else if (quote ==
+                        null
+                    ) {
+                        c
+                    } else {
+                        quote
+                    }
+            }
+            ; if (c == '#' && quote == null && i > 0 &&
+                value[i - 1].isWhitespace()
+            ) {
+                return value.substring(0, i).trim()
+            }
+        }
         return value
     }
-    private fun unquote(value: String): String = if (value.length >= 2 && value.first() == value.last() && value.first() in charArrayOf('\'', '"')) {
-        if (value.first() == '"') value.substring(1, value.lastIndex).replace("\\n", "\n").replace("\\\"", "\"").replace("\\\\", "\\")
-        else value.substring(1, value.lastIndex).replace("''", "'")
-    } else value
+
+    private fun unquote(value: String): String =
+        if (value.length >= 2 && value.first() == value.last() &&
+            value.first() in charArrayOf('\'', '"')
+        ) {
+            if (value.first() == '"') {
+                value
+                    .substring(1, value.lastIndex)
+                    .replace("\\n", "\n")
+                    .replace("\\\"", "\"")
+                    .replace("\\\\", "\\")
+            } else {
+                value.substring(1, value.lastIndex).replace("''", "'")
+            }
+        } else {
+            value
+        }
+
     private fun yamlKey(value: String) = if (value.matches(Regex("[A-Za-z0-9_.-]+"))) value else yamlValue(value)
+
     private fun yamlValue(value: String) = "\"${value.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n")}\""
-    private fun phpEscape(value: String) = value.replace("\\", "\\\\").replace("'", "\\'").replace("\r", "\\r").replace("\n", "\\n")
+
+    private fun phpEscape(value: String) =
+        value
+            .replace("\\", "\\\\")
+            .replace("'", "\\'")
+            .replace("\r", "\\r")
+            .replace("\n", "\\n")
 }
 
-internal class PhpArrayParser(private val source: String) {
+internal class PhpArrayParser(
+    private val source: String,
+) {
     companion object {
         private val STRICT_TYPES_DECLARE = Regex("declare\\s*\\(\\s*strict_types\\s*=\\s*1\\s*\\)\\s*;")
     }
@@ -519,47 +747,147 @@ internal class PhpArrayParser(private val source: String) {
             index = declaration.range.last + 1
             skipTrivia()
         }
-        expectWord("return"); skipTrivia()
+        expectWord("return")
+        skipTrivia()
         parseMap("")
-        skipTrivia(); if (index < source.length && source[index] == ';') index++
-        skipTrivia(); require(index == source.length) { backendMessage("php.trailing.code") }
+        skipTrivia()
+        if (index < source.length && source[index] == ';') index++
+        skipTrivia()
+        require(index == source.length) { backendMessage("php.trailing.code") }
         return out
     }
 
     private fun parseMap(prefix: String) {
-        val closing = when { peek("[") -> { index++; ']' }; peekWord("array") -> { expectWord("array"); skipTrivia(); expect('('); ')' }; else -> error(backendMessage("php.return.array.only")) }
+        val closing =
+            when {
+                peek("[") -> {
+                    index++
+                    ']'
+                }
+
+                peekWord("array") -> {
+                    expectWord("array")
+                    skipTrivia()
+                    expect('(')
+                    ')'
+                }
+
+                else -> {
+                    error(backendMessage("php.return.array.only"))
+                }
+            }
         skipTrivia()
         while (index < source.length && source[index] != closing) {
-            val key = parseString(); skipTrivia(); require(peek("=>")) { backendMessage("php.missing.arrow") }; index += 2; skipTrivia()
+            val key = parseString()
+            skipTrivia()
+            require(peek("=>")) { backendMessage("php.missing.arrow") }
+            index += 2
+            skipTrivia()
             val full = if (prefix.isEmpty()) key else "$prefix.$key"
-            if (peek("[") || peekWord("array")) parseMap(full) else {
+            if (peek("[") || peekWord("array")) {
+                parseMap(full)
+            } else {
                 val value = parseScalar()
                 require(full !in out) { backendMessage("php.duplicate.key", full) }
                 out[full] = value
             }
-            skipTrivia(); if (index < source.length && source[index] == ',') { index++; skipTrivia() } else if (source[index] != closing) error(backendMessage("php.missing.comma"))
+            skipTrivia()
+            if (index < source.length &&
+                source[index] == ','
+            ) {
+                index++
+                skipTrivia()
+            } else if (source[index] !=
+                closing
+            ) {
+                error(backendMessage("php.missing.comma"))
+            }
         }
         expect(closing)
     }
 
-    private fun parseScalar(): String = if (index < source.length && source[index] in charArrayOf('\'', '"')) parseString() else {
-        val start = index
-        while (index < source.length && source[index] !in charArrayOf(',', ']', ')')) index++
-        source.substring(start, index).trim().also { require(it.matches(Regex("-?[0-9.]+|true|false", RegexOption.IGNORE_CASE))) { backendMessage("php.scalar.only") } }
-    }
+    private fun parseScalar(): String =
+        if (index < source.length && source[index] in charArrayOf('\'', '"')) {
+            parseString()
+        } else {
+            val start = index
+            while (index < source.length && source[index] !in charArrayOf(',', ']', ')')) index++
+            source.substring(start, index).trim().also {
+                require(it.matches(Regex("-?[0-9.]+|true|false", RegexOption.IGNORE_CASE))) { backendMessage("php.scalar.only") }
+            }
+        }
+
     private fun parseString(): String {
         require(index < source.length && source[index] in charArrayOf('\'', '"')) { backendMessage("php.quoted.key.value") }
-        val quote = source[index++]; val result = StringBuilder()
+        val quote = source[index++]
+        val result = StringBuilder()
         while (index < source.length) {
             val c = source[index++]
             if (c == quote) return result.toString()
-            if (c == '\\') { require(index < source.length); val next = source[index++]; result.append(when (next) { 'n' -> '\n'; 'r' -> '\r'; 't' -> '\t'; else -> next }) } else result.append(c)
+            if (c ==
+                '\\'
+            ) {
+                require(index < source.length)
+                val next = source[index++]
+                result.append(
+                    when (next) {
+                        'n' -> '\n'
+                        'r' -> '\r'
+                        't' -> '\t'
+                        else -> next
+                    },
+                )
+            } else {
+                result.append(c)
+            }
         }
         error(backendMessage("php.unclosed.string"))
     }
-    private fun skipTrivia() { while (index < source.length) { when { source[index].isWhitespace() -> index++; peek("//") || peek("#") -> { while (index < source.length && source[index] != '\n') index++ }; peek("/*") -> { val end = source.indexOf("*/", index + 2); require(end >= 0) { backendMessage("php.unclosed.comment") }; index = end + 2 }; else -> return } } }
-    private fun expect(c: Char) { require(index < source.length && source[index] == c) { backendMessage("parser.expected.character", c) }; index++ }
-    private fun expectWord(word: String) { require(peekWord(word)) { backendMessage("parser.expected.word", word) }; index += word.length }
+
+    private fun skipTrivia() {
+        while (index <
+            source.length
+        ) {
+            when {
+                source[index].isWhitespace() -> {
+                    index++
+                }
+
+                peek("//") || peek("#") -> {
+                    while (index < source.length &&
+                        source[index] != '\n'
+                    ) {
+                        index++
+                    }
+                }
+
+                peek("/*") -> {
+                    val end = source.indexOf("*/", index + 2)
+                    require(end >= 0) { backendMessage("php.unclosed.comment") }
+                    index =
+                        end + 2
+                }
+
+                else -> {
+                    return
+                }
+            }
+        }
+    }
+
+    private fun expect(c: Char) {
+        require(index < source.length && source[index] == c) { backendMessage("parser.expected.character", c) }
+        index++
+    }
+
+    private fun expectWord(word: String) {
+        require(peekWord(word)) { backendMessage("parser.expected.word", word) }
+        index += word.length
+    }
+
     private fun peek(value: String) = source.regionMatches(index, value, 0, value.length)
-    private fun peekWord(value: String) = source.regionMatches(index, value, 0, value.length, ignoreCase = true) && (index + value.length >= source.length || !source[index + value.length].isLetterOrDigit())
+
+    private fun peekWord(value: String) =
+        source.regionMatches(index, value, 0, value.length, ignoreCase = true) &&
+            (index + value.length >= source.length || !source[index + value.length].isLetterOrDigit())
 }

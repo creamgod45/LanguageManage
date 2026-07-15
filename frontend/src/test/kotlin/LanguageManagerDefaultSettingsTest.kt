@@ -37,9 +37,10 @@ class LanguageManagerDefaultSettingsTest {
     @Test
     fun `legacy default exclusions gain newly supplied common directories`() {
         listOf(LEGACY_DEFAULT_EXCLUSIONS, LEGACY_DEFAULT_EXCLUSIONS + "storage").forEach { previousDefaults ->
-            val legacy = LanguageManagerSettings.SettingsState().apply {
-                defaultExcludedDirectories = previousDefaults.toMutableList()
-            }
+            val legacy =
+                LanguageManagerSettings.SettingsState().apply {
+                    defaultExcludedDirectories = previousDefaults.toMutableList()
+                }
             val settings = LanguageManagerSettings()
 
             settings.loadState(legacy)

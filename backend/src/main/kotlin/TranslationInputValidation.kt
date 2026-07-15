@@ -12,6 +12,5 @@ internal object TranslationInputValidation {
         return raw.trim().also { require(it.isNotEmpty()) { backendMessage("key.invalid") } }
     }
 
-    private fun isUnsafeControlCharacter(char: Char): Boolean =
-        char == '\u0000' || char.code < 32 || char.code in 127..159
+    private fun isUnsafeControlCharacter(char: Char): Boolean = char == '\u0000' || char.code < 32 || char.code in 127..159
 }

@@ -20,14 +20,17 @@ class UsageScanSupportTest {
 
     @Test
     fun `custom regex counts matching lines and respects relative exclusions`() {
-        val source = temp.resolve("src/app.php").apply {
-            parent.createDirectories()
-            writeText("""
-                tr("auth.failed"); tr("auth.failed");
-                tr("auth.failed");
-                tr("status.ready");
-            """.trimIndent())
-        }
+        val source =
+            temp.resolve("src/app.php").apply {
+                parent.createDirectories()
+                writeText(
+                    """
+                    tr("auth.failed"); tr("auth.failed");
+                    tr("auth.failed");
+                    tr("status.ready");
+                    """.trimIndent(),
+                )
+            }
         temp.resolve("vendor/package.php").apply {
             parent.createDirectories()
             writeText("tr(\"auth.failed\");")
@@ -36,19 +39,22 @@ class UsageScanSupportTest {
             parent.createDirectories()
             writeText("tr(\"auth.failed\");")
         }
-        val languageFile = temp.resolve("lang/messages.php").apply {
-            parent.createDirectories()
-            writeText("tr(\"auth.failed\");")
-        }
-        val entries = listOf(
-            entry("auth", "failed"),
-            entry("status", "ready"),
-        )
-        val settings = UsageScanSettingsDto(
-            basePath = temp.toString(),
-            regexPatterns = listOf("""tr\("(?<key>[^"]+)"\)"""),
-            excludedDirectories = listOf("vendor", "tests/fixtures"),
-        )
+        val languageFile =
+            temp.resolve("lang/messages.php").apply {
+                parent.createDirectories()
+                writeText("tr(\"auth.failed\");")
+            }
+        val entries =
+            listOf(
+                entry("auth", "failed"),
+                entry("status", "ready"),
+            )
+        val settings =
+            UsageScanSettingsDto(
+                basePath = temp.toString(),
+                regexPatterns = listOf("""tr\("(?<key>[^"]+)"\)"""),
+                excludedDirectories = listOf("vendor", "tests/fixtures"),
+            )
 
         val counts = UsageScanSupport.counts(temp, entries, listOf(languageFile.toString()), settings)
 
@@ -58,13 +64,14 @@ class UsageScanSupportTest {
 
     @Test
     fun `normalizes settings and rejects unsafe values`() {
-        val normalized = UsageScanSupport.normalize(
-            UsageScanSettingsDto(
-                basePath = "  $temp  ",
-                regexPatterns = listOf(" (auth\\.[a-z]+) ", "(auth\\.[a-z]+)"),
-                excludedDirectories = listOf(" vendor ", "tests\\fixtures", "vendor"),
-            ),
-        )
+        val normalized =
+            UsageScanSupport.normalize(
+                UsageScanSettingsDto(
+                    basePath = "  $temp  ",
+                    regexPatterns = listOf(" (auth\\.[a-z]+) ", "(auth\\.[a-z]+)"),
+                    excludedDirectories = listOf(" vendor ", "tests\\fixtures", "vendor"),
+                ),
+            )
 
         assertEquals(temp.toRealPath().toString(), normalized.basePath)
         assertEquals(listOf("(auth\\.[a-z]+)"), normalized.regexPatterns)
@@ -87,10 +94,11 @@ class UsageScanSupportTest {
             writeText("lookup: auth.failed\nstatus.ready\n")
         }
         val entries = listOf(entry("auth", "failed"), entry("status", "ready"))
-        val settings = UsageScanSettingsDto(
-            regexPatterns = listOf("""lookup:\s*(auth\.[a-z]+)""", """status\.ready"""),
-            excludedDirectories = emptyList(),
-        )
+        val settings =
+            UsageScanSettingsDto(
+                regexPatterns = listOf("""lookup:\s*(auth\.[a-z]+)""", """status\.ready"""),
+                excludedDirectories = emptyList(),
+            )
 
         val counts = UsageScanSupport.counts(temp, entries, emptyList(), settings)
 
@@ -98,7 +106,10 @@ class UsageScanSupportTest {
         assertEquals(1, counts[entries[1].id])
     }
 
-    private fun entry(namespace: String, key: String) = LanguageEntryDto(
+    private fun entry(
+        namespace: String,
+        key: String,
+    ) = LanguageEntryDto(
         id = "$namespace.$key",
         schemeId = "scheme",
         filePath = temp.resolve("lang/messages.php").toString(),

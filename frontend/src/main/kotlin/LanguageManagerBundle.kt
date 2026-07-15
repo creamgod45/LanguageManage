@@ -12,10 +12,16 @@ private val NO_LOCALE_FALLBACK = ResourceBundle.Control.getNoFallbackControl(Res
 
 internal object LanguageManagerBundle : DynamicBundle(BUNDLE) {
     @JvmStatic
-    fun message(@PropertyKey(resourceBundle = BUNDLE) key: String, vararg params: Any): String =
-        messageForLanguage(LanguageManagerSettings.currentLanguage(), key, *params)
+    fun message(
+        @PropertyKey(resourceBundle = BUNDLE) key: String,
+        vararg params: Any,
+    ): String = messageForLanguage(LanguageManagerSettings.currentLanguage(), key, *params)
 
-    internal fun messageForLanguage(language: DisplayLanguage, key: String, vararg params: Any): String {
+    internal fun messageForLanguage(
+        language: DisplayLanguage,
+        key: String,
+        vararg params: Any,
+    ): String {
         val locale = language.locale ?: return getMessage(key, *params)
         val bundle = ResourceBundle.getBundle(BUNDLE, locale, javaClass.classLoader, NO_LOCALE_FALLBACK)
         return AbstractBundle.message(bundle, key, *params)

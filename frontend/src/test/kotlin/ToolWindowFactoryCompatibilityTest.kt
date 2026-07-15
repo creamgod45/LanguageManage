@@ -8,17 +8,19 @@ import kotlin.test.assertTrue
 class ToolWindowFactoryCompatibilityTest {
     @Test
     fun `factory does not emit compatibility bridges to unstable platform methods`() {
-        val unstablePlatformMethods = setOf(
-            "isApplicable",
-            "isDoNotActivateOnStart",
-            "getAnchor",
-            "getIcon",
-            "manage",
-        )
+        val unstablePlatformMethods =
+            setOf(
+                "isApplicable",
+                "isDoNotActivateOnStart",
+                "getAnchor",
+                "getIcon",
+                "manage",
+            )
 
-        val emittedBridges = LanguageManagerToolWindowFactory::class.java.declaredMethods
-            .mapTo(mutableSetOf()) { it.name }
-            .intersect(unstablePlatformMethods)
+        val emittedBridges =
+            LanguageManagerToolWindowFactory::class.java.declaredMethods
+                .mapTo(mutableSetOf()) { it.name }
+                .intersect(unstablePlatformMethods)
 
         assertTrue(
             emittedBridges.isEmpty(),

@@ -33,11 +33,18 @@ internal object SchemeSettingsLocalFileAccess {
         }
     }
 
-    fun write(path: Path, content: String) {
+    fun write(
+        path: Path,
+        content: String,
+    ) {
         require(path.fileName.toString().endsWith(".json", true) && content.toByteArray(StandardCharsets.UTF_8).size <= MAX_BYTES) {
             message("scheme.transfer.file.invalid")
         }
-        path.toAbsolutePath().normalize().parent?.let(Files::createDirectories)
+        path
+            .toAbsolutePath()
+            .normalize()
+            .parent
+            ?.let(Files::createDirectories)
         val target = path.toAbsolutePath().normalize()
         val temp = Files.createTempFile(target.parent, ".language-manager-schemes-", ".tmp")
         try {
@@ -67,38 +74,58 @@ internal class SchemeImportPreviewDialog(
         init()
     }
 
-    override fun createCenterPanel(): JComponent = JPanel(BorderLayout(6, 6)).apply {
-        preferredSize = Dimension(1050, 520)
-        add(JBLabel(message("scheme.transfer.preview.summary", preview.schemes.size, rows.size, preview.basePath)), BorderLayout.NORTH)
-        table.autoCreateRowSorter = true
-        table.autoResizeMode = JBTable.AUTO_RESIZE_OFF
-        add(JBScrollPane(table), BorderLayout.CENTER)
-        listOf(150, 260, 390, 220).forEachIndexed { index, width -> table.columnModel.getColumn(index).preferredWidth = width }
-        if (!preview.canImport) add(JBLabel(message("scheme.transfer.preview.blocked")), BorderLayout.SOUTH)
-    }
+    override fun createCenterPanel(): JComponent =
+        JPanel(BorderLayout(6, 6)).apply {
+            preferredSize = Dimension(1050, 520)
+            add(JBLabel(message("scheme.transfer.preview.summary", preview.schemes.size, rows.size, preview.basePath)), BorderLayout.NORTH)
+            table.autoCreateRowSorter = true
+            table.autoResizeMode = JBTable.AUTO_RESIZE_OFF
+            add(JBScrollPane(table), BorderLayout.CENTER)
+            listOf(150, 260, 390, 220).forEachIndexed { index, width -> table.columnModel.getColumn(index).preferredWidth = width }
+            if (!preview.canImport) add(JBLabel(message("scheme.transfer.preview.blocked")), BorderLayout.SOUTH)
+        }
 }
 
 private class SchemeImportPreviewTableModel(
     private val rows: List<Pair<String, SchemeImportFilePreviewDto>>,
 ) : AbstractTableModel() {
     override fun getRowCount(): Int = rows.size
+
     override fun getColumnCount(): Int = 4
-    override fun getColumnName(column: Int): String = when (column) {
-        0 -> message("scheme.transfer.table.scheme")
-        1 -> message("scheme.transfer.table.configured")
-        2 -> message("scheme.transfer.table.resolved")
-        else -> message("scheme.transfer.table.status")
-    }
-    override fun getValueAt(rowIndex: Int, columnIndex: Int): Any = rows[rowIndex].let { (scheme, file) ->
-        when (columnIndex) {
-            0 -> scheme
-            1 -> file.configuredPath
-            2 -> file.resolvedPath
-            else -> when {
-                !file.available -> message("scheme.transfer.status.unavailable", file.detail)
-                file.recognized -> message("scheme.transfer.status.recognized")
-                else -> message("scheme.transfer.status.parse.warning", file.detail)
+
+    override fun getColumnName(column: Int): String =
+        when (column) {
+            0 -> message("scheme.transfer.table.scheme")
+            1 -> message("scheme.transfer.table.configured")
+            2 -> message("scheme.transfer.table.resolved")
+            else -> message("scheme.transfer.table.status")
+        }
+
+    override fun getValueAt(
+        rowIndex: Int,
+        columnIndex: Int,
+    ): Any =
+        rows[rowIndex].let { (scheme, file) ->
+            when (columnIndex) {
+                0 -> {
+                    scheme
+                }
+
+                1 -> {
+                    file.configuredPath
+                }
+
+                2 -> {
+                    file.resolvedPath
+                }
+
+                else -> {
+                    when {
+                        !file.available -> message("scheme.transfer.status.unavailable", file.detail)
+                        file.recognized -> message("scheme.transfer.status.recognized")
+                        else -> message("scheme.transfer.status.parse.warning", file.detail)
+                    }
+                }
             }
         }
-    }
 }

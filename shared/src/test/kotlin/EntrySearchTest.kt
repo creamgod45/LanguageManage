@@ -15,39 +15,59 @@ class EntrySearchTest {
 
     @Test
     fun `find in files omits properties bundle namespace`() {
-        val row = EntrySearch.join(
-            listOf(
-                entry("en", "LanguageManagerFrontendBundle", "button.save", "Save", filePath = "LanguageManagerFrontendBundle.properties"),
-                entry("zh_TW", "LanguageManagerFrontendBundle", "button.save", "儲存", filePath = "LanguageManagerFrontendBundle_zh_TW.properties"),
-            ),
-        ).single()
+        val row =
+            EntrySearch
+                .join(
+                    listOf(
+                        entry(
+                            "en",
+                            "LanguageManagerFrontendBundle",
+                            "button.save",
+                            "Save",
+                            filePath = "LanguageManagerFrontendBundle.properties",
+                        ),
+                        entry(
+                            "zh_TW",
+                            "LanguageManagerFrontendBundle",
+                            "button.save",
+                            "儲存",
+                            filePath = "LanguageManagerFrontendBundle_zh_TW.properties",
+                        ),
+                    ),
+                ).single()
 
         assertEquals("button.save", EntrySearch.findInFilesQuery(row))
     }
 
     @Test
     fun `find in files omits Laravel PHP namespace`() {
-        val row = EntrySearch.join(
-            listOf(entry("en", "auth", "failed", "Login failed", filePath = "en/auth.php")),
-        ).single()
+        val row =
+            EntrySearch
+                .join(
+                    listOf(entry("en", "auth", "failed", "Login failed", filePath = "en/auth.php")),
+                ).single()
 
         assertEquals("failed", EntrySearch.findInFilesQuery(row))
     }
 
     @Test
     fun `find in files uses key when namespace is empty`() {
-        val row = EntrySearch.join(
-            listOf(entry("en", "", "Not powered on or not detected", "Offline")),
-        ).single()
+        val row =
+            EntrySearch
+                .join(
+                    listOf(entry("en", "", "Not powered on or not detected", "Offline")),
+                ).single()
 
         assertEquals("Not powered on or not detected", EntrySearch.findInFilesQuery(row))
     }
 
     @Test
     fun `usage regex search injects literal key and removes boundary anchors`() {
-        val row = EntrySearch.join(
-            listOf(entry("en", "auth", "Not powered on (or not detected)", "Offline", filePath = "en/auth.php")),
-        ).single()
+        val row =
+            EntrySearch
+                .join(
+                    listOf(entry("en", "auth", "Not powered on (or not detected)", "Offline", filePath = "en/auth.php")),
+                ).single()
 
         assertEquals(
             """\(\s*(?<quote>["'])Not powered on \(or not detected\)\k<quote>\s*\)""",
@@ -60,9 +80,11 @@ class EntrySearchTest {
 
     @Test
     fun `usage regex search escapes dotted key without quote blocks or doubled slashes`() {
-        val row = EntrySearch.join(
-            listOf(entry("en", "", "custom.attribute-name.rule-name", "Custom")),
-        ).single()
+        val row =
+            EntrySearch
+                .join(
+                    listOf(entry("en", "", "custom.attribute-name.rule-name", "Custom")),
+                ).single()
 
         assertEquals(
             """\(\s*(?<quote>["'])custom\.attribute-name\.rule-name\k<quote>\s*\)""",
@@ -88,27 +110,38 @@ class EntrySearchTest {
 
     @Test
     fun `filters joined rows by missing translations and zero usage`() {
-        val complete = listOf(
-            entry("en", "auth", "ready", "Ready", usageCount = 2),
-            entry("zh_TW", "auth", "ready", "就緒", usageCount = 2),
-        )
+        val complete =
+            listOf(
+                entry("en", "auth", "ready", "Ready", usageCount = 2),
+                entry("zh_TW", "auth", "ready", "就緒", usageCount = 2),
+            )
         val missingLocale = listOf(entry("en", "auth", "failed", "Failed", usageCount = 1))
-        val blankValue = listOf(
-            entry("en", "auth", "offline", "Offline"),
-            entry("zh_TW", "auth", "offline", ""),
-        )
+        val blankValue =
+            listOf(
+                entry("en", "auth", "offline", "Offline"),
+                entry("zh_TW", "auth", "offline", ""),
+            )
         val rows = EntrySearch.join(complete + missingLocale + blankValue)
         val locales = setOf("en", "zh_TW")
 
-        assertEquals(setOf("failed", "offline"), EntrySearch.filterRows(rows, locales, TranslationRowFilter.MISSING_TRANSLATION).map { it.key }.toSet())
+        assertEquals(
+            setOf("failed", "offline"),
+            EntrySearch
+                .filterRows(rows, locales, TranslationRowFilter.MISSING_TRANSLATION)
+                .map {
+                    it.key
+                }.toSet(),
+        )
         assertEquals(listOf("offline"), EntrySearch.filterRows(rows, locales, TranslationRowFilter.ZERO_USAGE).map { it.key })
         assertEquals(rows, EntrySearch.filterRows(rows, locales, TranslationRowFilter.ALL))
     }
-    private val entries = listOf(
-        LanguageEntryDto("1", "s", "en.json", "en", "auth", "failed", "Login failed"),
-        LanguageEntryDto("2", "s", "zh.json", "zh", "auth", "failed", "登入失敗"),
-        LanguageEntryDto("3", "s", "en.json", "en", "common", "save", "Save"),
-    )
+
+    private val entries =
+        listOf(
+            LanguageEntryDto("1", "s", "en.json", "en", "auth", "failed", "Login failed"),
+            LanguageEntryDto("2", "s", "zh.json", "zh", "auth", "failed", "登入失敗"),
+            LanguageEntryDto("3", "s", "en.json", "en", "common", "save", "Save"),
+        )
 
     @Test fun `fuzzy search scans key value namespace locale and path`() {
         assertEquals(2, EntrySearch.filter(entries, "fail", SearchMode.FUZZY, null).size)
@@ -130,9 +163,10 @@ class EntrySearchTest {
     }
 
     @Test fun `pagination never returns more than one hundred joined rows`() {
-        val many = List(205) { index ->
-            LanguageEntryDto("$index", "s", "en.json", "en", "common", "key_$index", "value_$index")
-        }
+        val many =
+            List(205) { index ->
+                LanguageEntryDto("$index", "s", "en.json", "en", "common", "key_$index", "value_$index")
+            }
         val joined = EntrySearch.join(many)
         assertEquals(100, EntrySearch.paginate(joined, 0).rows.size)
         assertEquals(100, EntrySearch.paginate(joined, 1).rows.size)

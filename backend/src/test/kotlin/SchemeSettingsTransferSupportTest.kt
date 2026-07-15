@@ -19,21 +19,25 @@ class SchemeSettingsTransferSupportTest {
     private val temp = Files.createTempDirectory("language-manager-scheme-transfer-test")
 
     @AfterTest
-    fun cleanup() { temp.toFile().deleteRecursively() }
+    fun cleanup() {
+        temp.toFile().deleteRecursively()
+    }
 
     @Test
     fun `exports project files as portable paths and imports them safely`() {
-        val languageFile = temp.resolve("lang/en/auth.php").apply {
-            parent.createDirectories()
-            writeText("<?php return ['failed' => 'Invalid'];")
-        }
-        val scheme = LanguageSchemeDto(
-            id = "scheme",
-            name = "Laravel",
-            files = listOf(languageFile.toString()),
-            updatedAtEpochMs = 1,
-            usageScanSettings = UsageScanSettingsDto(basePath = temp.toString()),
-        )
+        val languageFile =
+            temp.resolve("lang/en/auth.php").apply {
+                parent.createDirectories()
+                writeText("<?php return ['failed' => 'Invalid'];")
+            }
+        val scheme =
+            LanguageSchemeDto(
+                id = "scheme",
+                name = "Laravel",
+                files = listOf(languageFile.toString()),
+                updatedAtEpochMs = 1,
+                usageScanSettings = UsageScanSettingsDto(basePath = temp.toString()),
+            )
 
         val content = SchemeSettingsTransferSupport.export(listOf(scheme), temp.toString())
         val preview = SchemeSettingsTransferSupport.preview(content, temp.toString())
@@ -41,7 +45,13 @@ class SchemeSettingsTransferSupportTest {
 
         assertTrue("lang/en/auth.php" in content)
         assertTrue(preview.canImport)
-        assertTrue(preview.schemes.single().files.single().recognized)
+        assertTrue(
+            preview.schemes
+                .single()
+                .files
+                .single()
+                .recognized,
+        )
         assertEquals(languageFile.toRealPath().toString(), imported.files.single())
         assertEquals(temp.toRealPath().toString(), imported.usageScanSettings.basePath)
     }
@@ -53,7 +63,13 @@ class SchemeSettingsTransferSupportTest {
         val preview = SchemeSettingsTransferSupport.preview(content, temp.toString())
 
         assertFalse(preview.canImport)
-        assertFalse(preview.schemes.single().files.single().available)
+        assertFalse(
+            preview.schemes
+                .single()
+                .files
+                .single()
+                .available,
+        )
         assertFailsWith<IllegalArgumentException> { SchemeSettingsTransferSupport.resolve(content, temp.toString()) }
     }
 

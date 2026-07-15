@@ -7,6 +7,8 @@ private const val BACKEND_BUNDLE = "messages.LanguageManagerBackendBundle"
 
 internal object LanguageManagerBackendBundle : DynamicBundle(BACKEND_BUNDLE) {
     @JvmStatic
-    fun message(@PropertyKey(resourceBundle = BACKEND_BUNDLE) key: String, vararg params: Any): String =
-        getMessage(key, *params)
+    fun message(
+        @PropertyKey(resourceBundle = BACKEND_BUNDLE) key: String,
+        vararg params: Any,
+    ): String = getMessage(key, *params)
 }

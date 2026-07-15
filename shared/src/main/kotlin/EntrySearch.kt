@@ -3,14 +3,21 @@ package cg.creamgod45.localization
 object EntrySearch {
     fun findInFilesQuery(row: JoinedTranslationRow): String = row.key
 
-    fun usageRegexFindInFilesQuery(row: JoinedTranslationRow, patterns: List<String>): String? = patterns
-        .asSequence()
-        .map(String::trim)
-        .filter(String::isNotEmpty)
-        .mapNotNull { injectLiteralKey(it, row.key) }
-        .firstOrNull()
+    fun usageRegexFindInFilesQuery(
+        row: JoinedTranslationRow,
+        patterns: List<String>,
+    ): String? =
+        patterns
+            .asSequence()
+            .map(String::trim)
+            .filter(String::isNotEmpty)
+            .mapNotNull { injectLiteralKey(it, row.key) }
+            .firstOrNull()
 
-    private fun injectLiteralKey(pattern: String, key: String): String? {
+    private fun injectLiteralKey(
+        pattern: String,
+        key: String,
+    ): String? {
         val marker = "(?<key>"
         val groupStart = pattern.indexOf(marker)
         if (groupStart < 0) return null
@@ -22,11 +29,26 @@ object EntrySearch {
         while (index < pattern.length) {
             val character = pattern[index]
             when {
-                escaped -> escaped = false
-                character == '\\' -> escaped = true
-                character == '[' && !inCharacterClass -> inCharacterClass = true
-                character == ']' && inCharacterClass -> inCharacterClass = false
-                !inCharacterClass && character == '(' -> depth++
+                escaped -> {
+                    escaped = false
+                }
+
+                character == '\\' -> {
+                    escaped = true
+                }
+
+                character == '[' && !inCharacterClass -> {
+                    inCharacterClass = true
+                }
+
+                character == ']' && inCharacterClass -> {
+                    inCharacterClass = false
+                }
+
+                !inCharacterClass && character == '(' -> {
+                    depth++
+                }
+
                 !inCharacterClass && character == ')' -> {
                     depth--
                     if (depth == 0) break
@@ -52,44 +74,74 @@ object EntrySearch {
         return precedingBackslashes % 2 == 0
     }
 
-    private fun escapeRegexLiteral(value: String): String = buildString(value.length) {
-        value.forEach { character ->
-            if (character in REGEX_META_CHARACTERS) append('\\')
-            append(character)
-        }
-    }
-
-    fun filter(entries: List<LanguageEntryDto>, query: String, mode: SearchMode, locale: String?): List<LanguageEntryDto> {
-        val normalized = query.trim()
-        return entries.filter { entry ->
-            (locale.isNullOrBlank() || entry.locale == locale) && when {
-                normalized.isEmpty() -> true
-                mode == SearchMode.EXACT -> listOf(entry.key, entry.value, entry.namespace, "${entry.namespace}.${entry.key}").any { it.equals(normalized, true) }
-                else -> listOf(entry.key, entry.value, entry.namespace, entry.locale, entry.filePath).any { it.contains(normalized, true) }
+    private fun escapeRegexLiteral(value: String): String =
+        buildString(value.length) {
+            value.forEach { character ->
+                if (character in REGEX_META_CHARACTERS) append('\\')
+                append(character)
             }
         }
+
+    fun filter(
+        entries: List<LanguageEntryDto>,
+        query: String,
+        mode: SearchMode,
+        locale: String?,
+    ): List<LanguageEntryDto> {
+        val normalized = query.trim()
+        return entries.filter { entry ->
+            (locale.isNullOrBlank() || entry.locale == locale) &&
+                when {
+                    normalized.isEmpty() -> {
+                        true
+                    }
+
+                    mode == SearchMode.EXACT -> {
+                        listOf(entry.key, entry.value, entry.namespace, "${entry.namespace}.${entry.key}").any {
+                            it.equals(normalized, true)
+                        }
+                    }
+
+                    else -> {
+                        listOf(entry.key, entry.value, entry.namespace, entry.locale, entry.filePath).any { it.contains(normalized, true) }
+                    }
+                }
+        }
     }
 
-    fun join(entries: List<LanguageEntryDto>): List<JoinedTranslationRow> = entries
-        .groupBy { it.namespace to it.key }
-        .map { (identity, translations) ->
-            JoinedTranslationRow(identity.first, identity.second, translations.sortedBy { it.locale })
-        }
-        .sortedWith(compareBy<JoinedTranslationRow> { it.namespace }.thenBy { it.key })
+    fun join(entries: List<LanguageEntryDto>): List<JoinedTranslationRow> =
+        entries
+            .groupBy { it.namespace to it.key }
+            .map { (identity, translations) ->
+                JoinedTranslationRow(identity.first, identity.second, translations.sortedBy { it.locale })
+            }.sortedWith(compareBy<JoinedTranslationRow> { it.namespace }.thenBy { it.key })
 
     fun filterRows(
         rows: List<JoinedTranslationRow>,
         locales: Set<String>,
         filter: TranslationRowFilter,
-    ): List<JoinedTranslationRow> = when (filter) {
-        TranslationRowFilter.ALL -> rows
-        TranslationRowFilter.MISSING_TRANSLATION -> rows.filter { row ->
-            locales.any { locale -> row.translations.none { it.locale == locale && it.value.isNotBlank() } }
-        }
-        TranslationRowFilter.ZERO_USAGE -> rows.filter { it.usageCount == 0 }
-    }
+    ): List<JoinedTranslationRow> =
+        when (filter) {
+            TranslationRowFilter.ALL -> {
+                rows
+            }
 
-    fun paginate(rows: List<JoinedTranslationRow>, requestedPage: Int, pageSize: Int = 100): JoinedTranslationPage {
+            TranslationRowFilter.MISSING_TRANSLATION -> {
+                rows.filter { row ->
+                    locales.any { locale -> row.translations.none { it.locale == locale && it.value.isNotBlank() } }
+                }
+            }
+
+            TranslationRowFilter.ZERO_USAGE -> {
+                rows.filter { it.usageCount == 0 }
+            }
+        }
+
+    fun paginate(
+        rows: List<JoinedTranslationRow>,
+        requestedPage: Int,
+        pageSize: Int = 100,
+    ): JoinedTranslationPage {
         require(pageSize in 1..100) { "每頁筆數必須介於 1 到 100" }
         val pageCount = maxOf(1, (rows.size + pageSize - 1) / pageSize)
         val page = requestedPage.coerceIn(0, pageCount - 1)
@@ -113,6 +165,7 @@ data class JoinedTranslationRow(
     val translations: List<LanguageEntryDto>,
 ) {
     fun values(locale: String): String = translations.filter { it.locale == locale }.joinToString(" | ") { it.value }
+
     val usageCount: Int get() = translations.maxOfOrNull { it.usageCount } ?: 0
 }
 

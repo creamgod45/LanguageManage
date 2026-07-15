@@ -1,7 +1,7 @@
 package cg.creamgod45.localization.ui
 
-import javax.swing.ListSelectionModel
 import javax.swing.JButton
+import javax.swing.ListSelectionModel
 import javax.swing.SwingUtilities
 import javax.swing.table.DefaultTableModel
 import kotlin.test.Test
@@ -13,12 +13,13 @@ class RowHighlightTableTest {
     @Test
     fun `selected cell paints its row without expanding the actual column selection`() {
         SwingUtilities.invokeAndWait {
-            val table = RowHighlightTable(DefaultTableModel(2, 3)).apply {
-                cellSelectionEnabled = true
-                rowSelectionAllowed = true
-                columnSelectionAllowed = true
-                selectionModel.selectionMode = ListSelectionModel.MULTIPLE_INTERVAL_SELECTION
-            }
+            val table =
+                RowHighlightTable(DefaultTableModel(2, 3)).apply {
+                    cellSelectionEnabled = true
+                    rowSelectionAllowed = true
+                    columnSelectionAllowed = true
+                    selectionModel.selectionMode = ListSelectionModel.MULTIPLE_INTERVAL_SELECTION
+                }
 
             table.changeSelection(0, 1, false, false)
 
@@ -34,9 +35,10 @@ class RowHighlightTableTest {
     @Test
     fun `responsive grid wraps cells when the tool window becomes narrow`() {
         SwingUtilities.invokeAndWait {
-            val panel = ResponsiveGridPanel(4, 4).apply {
-                repeat(3) { add(JButton("Button").apply { preferredSize = java.awt.Dimension(80, 24) }) }
-            }
+            val panel =
+                ResponsiveGridPanel(4, 4).apply {
+                    repeat(3) { add(JButton("Button").apply { preferredSize = java.awt.Dimension(80, 24) }) }
+                }
 
             panel.setSize(180, 100)
             panel.doLayout()

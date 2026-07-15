@@ -10,16 +10,41 @@ enum class TranslationRowFilter { ALL, MISSING_TRANSLATION, ZERO_USAGE }
 @Serializable
 enum class IssueSeverity { INFO, WARNING, ERROR }
 
-val DEFAULT_USAGE_REGEX_PATTERNS: List<String> = listOf(
-    """\(\s*(?<quote>["'])(?<key>[^\r\n]{1,256}?)\k<quote>\s*\)""",
-)
+val DEFAULT_USAGE_REGEX_PATTERNS: List<String> =
+    listOf(
+        """\(\s*(?<quote>["'])(?<key>[^\r\n]{1,256}?)\k<quote>\s*\)""",
+    )
 
-val DEFAULT_USAGE_EXCLUDED_DIRECTORIES: List<String> = listOf(
-    ".git", ".github", "docs", "vendor", "storage", "database",
-    "gradle", ".gradle", "build", "out", "dist", "target", "node_modules",
-    ".idea", ".run", ".vscode", ".fleet", ".vs", ".settings", ".metadata", "nbproject",
-    ".env", ".claude", ".codex", ".gemini", ".agents", ".ai",
-)
+val DEFAULT_USAGE_EXCLUDED_DIRECTORIES: List<String> =
+    listOf(
+        ".git",
+        ".github",
+        "docs",
+        "vendor",
+        "storage",
+        "database",
+        "gradle",
+        ".gradle",
+        "build",
+        "out",
+        "dist",
+        "target",
+        "node_modules",
+        ".idea",
+        ".run",
+        ".vscode",
+        ".fleet",
+        ".vs",
+        ".settings",
+        ".metadata",
+        "nbproject",
+        ".env",
+        ".claude",
+        ".codex",
+        ".gemini",
+        ".agents",
+        ".ai",
+    )
 
 @Serializable
 data class UsageScanSettingsDto(
@@ -159,5 +184,7 @@ data class SchemeImportPreviewDto(
     val basePath: String = "",
     val schemes: List<SchemeImportItemPreviewDto> = emptyList(),
 ) {
-    val canImport: Boolean get() = schemes.isNotEmpty() && schemes.all { scheme -> scheme.files.isNotEmpty() && scheme.files.all { it.available } }
+    val canImport: Boolean get() =
+        schemes.isNotEmpty() &&
+            schemes.all { scheme -> scheme.files.isNotEmpty() && scheme.files.all { it.available } }
 }

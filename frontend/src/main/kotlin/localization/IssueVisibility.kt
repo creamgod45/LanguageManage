@@ -6,7 +6,8 @@ internal fun visibleIssues(
     issues: List<LanguageIssueDto>,
     ignoreDuplicateValues: Boolean,
     ignoreUnusedKeys: Boolean,
-): List<LanguageIssueDto> = issues.filterNot { issue ->
-    ignoreDuplicateValues && issue.code == "DUPLICATE_VALUE" ||
-        ignoreUnusedKeys && issue.code == "UNUSED_KEY"
-}
+): List<LanguageIssueDto> =
+    issues.filterNot { issue ->
+        ignoreDuplicateValues && issue.code == "DUPLICATE_VALUE" ||
+            ignoreUnusedKeys && issue.code == "UNUSED_KEY"
+    }

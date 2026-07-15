@@ -5,14 +5,16 @@ import cg.creamgod45.localization.DEFAULT_USAGE_REGEX_PATTERNS
 import cg.creamgod45.localization.UsageScanSettingsDto
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.components.PersistentStateComponent
+import com.intellij.openapi.components.RoamingType
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.State
 import com.intellij.openapi.components.Storage
-import com.intellij.openapi.components.RoamingType
-import java.util.Locale
 import java.nio.file.Path
+import java.util.Locale
 
-internal enum class DisplayLanguage(val locale: Locale?) {
+internal enum class DisplayLanguage(
+    val locale: Locale?,
+) {
     AUTO(null),
     ENGLISH(Locale.ENGLISH),
     TRADITIONAL_CHINESE(Locale.TAIWAN),
@@ -23,10 +25,21 @@ internal enum class DisplayLanguage(val locale: Locale?) {
 
 internal enum class DefaultBasePathMode { PROJECT_DIRECTORY, PARENT_LEVELS }
 
-internal val LEGACY_DEFAULT_EXCLUSIONS = listOf(
-    ".git", ".github", "docs", "vendor", ".env", ".run", ".claude", ".codex",
-    ".gemini", ".agents", ".ai", ".vscode",
-)
+internal val LEGACY_DEFAULT_EXCLUSIONS =
+    listOf(
+        ".git",
+        ".github",
+        "docs",
+        "vendor",
+        ".env",
+        ".run",
+        ".claude",
+        ".codex",
+        ".gemini",
+        ".agents",
+        ".ai",
+        ".vscode",
+    )
 
 @Service(Service.Level.APP)
 @State(
@@ -53,8 +66,9 @@ internal class LanguageManagerSettings : PersistentStateComponent<LanguageManage
         }
 
     var defaultBasePathMode: DefaultBasePathMode
-        get() = runCatching { DefaultBasePathMode.valueOf(settingsState.defaultBasePathMode) }
-            .getOrDefault(DefaultBasePathMode.PROJECT_DIRECTORY)
+        get() =
+            runCatching { DefaultBasePathMode.valueOf(settingsState.defaultBasePathMode) }
+                .getOrDefault(DefaultBasePathMode.PROJECT_DIRECTORY)
         set(value) {
             settingsState.defaultBasePathMode = value.name
         }
@@ -79,17 +93,22 @@ internal class LanguageManagerSettings : PersistentStateComponent<LanguageManage
 
     var ignoreDuplicateValueIssues: Boolean
         get() = settingsState.ignoreDuplicateValueIssues
-        set(value) { settingsState.ignoreDuplicateValueIssues = value }
+        set(value) {
+            settingsState.ignoreDuplicateValueIssues = value
+        }
 
     var ignoreUnusedKeyIssues: Boolean
         get() = settingsState.ignoreUnusedKeyIssues
-        set(value) { settingsState.ignoreUnusedKeyIssues = value }
+        set(value) {
+            settingsState.ignoreUnusedKeyIssues = value
+        }
 
-    fun defaultUsageSettings(projectBasePath: String?): UsageScanSettingsDto = UsageScanSettingsDto(
-        basePath = resolveDefaultBasePath(projectBasePath, defaultBasePathMode, defaultParentLevels),
-        regexPatterns = defaultRegexPatterns,
-        excludedDirectories = defaultExcludedDirectories,
-    )
+    fun defaultUsageSettings(projectBasePath: String?): UsageScanSettingsDto =
+        UsageScanSettingsDto(
+            basePath = resolveDefaultBasePath(projectBasePath, defaultBasePathMode, defaultParentLevels),
+            regexPatterns = defaultRegexPatterns,
+            excludedDirectories = defaultExcludedDirectories,
+        )
 
     override fun getState(): SettingsState = settingsState
 
@@ -103,12 +122,12 @@ internal class LanguageManagerSettings : PersistentStateComponent<LanguageManage
 
     companion object {
         const val MAX_PARENT_LEVELS = 10
+
         fun currentLanguage(): DisplayLanguage =
             ApplicationManager.getApplication()?.getService(LanguageManagerSettings::class.java)?.displayLanguage
                 ?: DisplayLanguage.AUTO
 
-        fun getInstance(): LanguageManagerSettings =
-            ApplicationManager.getApplication().getService(LanguageManagerSettings::class.java)
+        fun getInstance(): LanguageManagerSettings = ApplicationManager.getApplication().getService(LanguageManagerSettings::class.java)
     }
 }
 
