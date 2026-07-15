@@ -1,319 +1,321 @@
-# 在地化管理器使用者操作手冊
+[English](user_manual_book.md) | [繁體中文](user_manual_book.zh.md)
 
-本手冊說明如何在 JetBrains IDE 中使用「在地化管理器 (LanguageManager)」建立語言方案、管理翻譯、檢查問題及安全套用修復。
+# LanguageManager User Manual
 
-> 插件不會自動選取、納管或修改任何語言檔。只有加入目前方案的檔案才會被讀取或寫入。
+This manual explains how to use LanguageManager in a JetBrains IDE to create isolated localization schemes, manage translations, inspect problems, and apply repairs safely.
 
-### 支援的 IDE 版本
+> The plugin never selects, enrolls, or modifies language files automatically. Only files explicitly added to the active scheme can be read or written.
 
-插件最低支援 JetBrains Platform build `253.5`（IntelliJ IDEA 2025.3.5），且不設定最高版本。目前已由 Marketplace Plugin Verifier 驗證 IntelliJ IDEA 2025.3.5、2025.3.6、2026.1.1～2026.1.4 與 2026.2 RC 相容；完整紀錄請參閱 [相容性驗證](compatibility.md)。
+### Supported IDE versions
 
-## 1. 支援內容
+The minimum supported version is JetBrains Platform build `253.5` (IntelliJ IDEA 2025.3.5), with no configured upper bound. Marketplace Plugin Verifier has confirmed compatibility with IntelliJ IDEA 2025.3.5, 2025.3.6, 2026.1.1 through 2026.1.4, and 2026.2 RC. See [Compatibility Verification](compatibility.md) for the complete record.
 
-### 支援格式
+## 1. Supported Content
 
-- JSON：`.json`
-- YAML：`.yaml`、`.yml`
-- Laravel PHP：`.php`，內容可有 `declare(strict_types=1);`，之後必須是靜態 `return [...]` 或 `return array(...)`
-- JetBrains／Java ResourceBundle Properties：`.properties`
+### File formats
 
-### 介面語言
+- JSON: `.json`
+- YAML: `.yaml`, `.yml`
+- Laravel PHP: `.php`; an optional `declare(strict_types=1);` may precede a static `return [...]` or `return array(...)`
+- JetBrains/Java ResourceBundle Properties: `.properties`
 
-插件會跟隨 IDE 顯示語言，目前提供：
+### UI languages
+
+The plugin follows the IDE display language by default and includes:
 
 - English
-- 繁體中文
-- 简体中文
-- 日本語
-- 한국어
+- Traditional Chinese
+- Simplified Chinese
+- Japanese
+- Korean
 
-## 2. 安裝插件
+## 2. Installing the Plugin
 
-### 從 ZIP 安裝
+### Install from ZIP
 
-1. 開啟 IDE 設定。
-2. 前往 **Plugins**。
-3. 點擊齒輪圖示，選擇 **Install Plugin from Disk…**。
-4. 選擇 `LanguageManage-{version}.zip`，不要先解壓縮。
-5. 依 IDE 提示重新啟動。
+1. Open IDE Settings.
+2. Go to **Plugins**.
+3. Click the gear icon and choose **Install Plugin from Disk…**.
+4. Select `LanguageManage-{version}.zip` without extracting it.
+5. Restart the IDE if requested.
 
-安裝後，IDE 右側工具視窗列會出現「在地化管理器」圖示。
+After installation, the LanguageManager icon appears in the IDE Tool Window sidebar.
 
-## 3. 建立第一個方案
+## 3. Creating Your First Scheme
 
-1. 開啟「在地化管理器」工具視窗。
-2. 點擊「新增方案」下拉選單。
-3. 選擇建立方式：
-   - 「依檔案選取」：在 file chooser 中選擇一個或多個 JSON、YAML/YML、PHP、Properties 語言檔，再輸入方案名稱。
-   - 「依資料夾選取」：一次選擇一個或多個資料夾，例如 `en`、`zh_CN`、`zh_TW`，等待 backend 合併掃描並嘗試解析支援格式檔案。
-4. 資料夾識別視窗會顯示完整路徑、格式、locale、namespace、entry 筆數與識別結果。解析失敗的檔案會保留錯誤原因，但無法勾選；如有遺漏，可點擊「增加資料夾」重新合併掃描。
-5. 輸入容易辨識的方案名稱，例如「網站前台」或「Admin API」，確認要列管的可識別檔案後點擊「建立方案」。
-6. 等待狀態列完成讀取；翻譯表會顯示解析結果。
+1. Open the **LanguageManager** Tool Window.
+2. Open the **New Scheme** dropdown.
+3. Choose a creation mode:
+   - **Select Files**: select one or more JSON, YAML/YML, PHP, or Properties files, then enter a scheme name.
+   - **Select Folders**: select one or more folders—such as `en`, `zh_CN`, and `zh_TW`—and wait for the backend to combine, scan, and parse the supported files.
+4. The folder-recognition dialog displays each full path, format, locale, namespace, entry count, and recognition result. A failed file keeps its error message but cannot be selected. Use **Add Folder** to merge another folder into the scan.
+5. Enter a recognizable scheme name, select the recognized files to manage, and click **Create Scheme**.
+6. Wait for loading to finish. Parsed entries then appear in the translation table.
 
-資料夾模式整批最多檢查 500 個支援格式檔案、每個根目錄遞迴深度最多 16 層，並略過 `.git`、`.idea`、`vendor`、`node_modules`、`build`、`storage`、`cache` 等常見非來源目錄。若同時選到父目錄和子目錄，會依正規化完整路徑去重。掃描只提供候選清單，不會自動納管未經確認的檔案。
+Folder mode checks at most 500 supported files, descends at most 16 levels per root, and skips common non-source directories such as `.git`, `.idea`, `vendor`, `node_modules`, `build`, `storage`, and `cache`. Selecting both a parent and child directory does not duplicate files because normalized absolute paths are deduplicated. Discovery only creates a candidate list; no file is managed until the user confirms it.
 
-方案的特性：
+Scheme behavior:
 
-- 每個方案擁有獨立檔案清單與快取。
-- 切換方案不會混入其他方案的資料。
-- 刪除方案不會刪除來源語言檔。
-- 建立方案前可在資料夾識別 Popup 增加其他資料夾；方案建立後若要變更列管範圍，請建立新方案，插件不會自動加入檔案。
+- Every scheme owns an independent file list and cache.
+- Switching schemes never mixes entries from another scheme.
+- Deleting a scheme never deletes its source language files.
+- More folders may be added in the recognition popup before creation. To change the managed scope later, create a new scheme; the plugin never adds files automatically.
 
-### 匯入與匯出方案設定
+### Import and export scheme settings
 
-在 Tool Window「新增方案」下拉選單可選擇「匯入方案設定」或「匯出方案設定」。
+Choose **Import Scheme Settings** or **Export Scheme Settings** from the Tool Window's **New Scheme** dropdown.
 
-- 匯出內容包含方案名稱、列管檔案、使用率 base path、Regex 與排除清單。
-- 專案根目錄下的路徑會匯出為 `/` 分隔的相對路徑；專案外路徑保留絕對路徑。
-- 不匯出 entry、issue、使用次數或 cache，匯入後會重新解析。
-- 匯入以目前開啟專案的根目錄解析相對路徑，並在預覽表顯示方案、原設定路徑、解析後路徑與識別結果。
-- 任一列管檔案缺失、副檔名不支援、路徑不安全或使用 `..` 超出專案根目錄時，匯入按鈕會停用。
-- 檔案存在但 parser 回報錯誤時會顯示警告，仍可匯入，方便後續使用修復功能。
+- Exports include scheme names, managed files, usage base paths, Regex patterns, and exclusions.
+- Paths under the project root become portable `/`-separated relative paths. External paths remain absolute.
+- Entries, issues, usage counts, and cache are not exported; imported schemes are reparsed.
+- Relative paths are resolved from the currently open project root. The preview shows the scheme, configured path, resolved path, and recognition result.
+- Import is disabled if any managed file is missing, has an unsupported extension, is unsafe, or uses `..` to escape the project root.
+- Existing files with parser errors are shown as warnings and may still be imported for later repair.
 
-## 4. 語言與 Namespace 判定
+## 4. Locale and Namespace Detection
 
-### JSON／YAML
+### JSON/YAML
 
-檔名會作為 locale：
+The filename is the locale:
 
 ```text
-lang/en.json       -> locale: en, namespace: 空
-lang/zh_TW.yaml    -> locale: zh_TW, namespace: 空
+lang/en.json       -> locale: en, namespace: empty
+lang/zh_TW.yaml    -> locale: zh_TW, namespace: empty
 ```
 
 ### Laravel PHP
 
-父目錄是 locale，檔名是 namespace：
+The parent folder is the locale and the filename is the namespace:
 
 ```text
 lang/en/messages.php       -> locale: en, namespace: messages
 lang/zh_TW/validation.php  -> locale: zh_TW, namespace: validation
 ```
 
-### JetBrains／Java ResourceBundle Properties
+### JetBrains/Java ResourceBundle Properties
 
-檔名的 base 部分是 namespace；沒有 locale 後綴的 bundle 視為英文：
+The base filename is the namespace. A bundle without a locale suffix is treated as English:
 
 ```text
 LanguageManagerBundle.properties        -> locale: en, namespace: LanguageManagerBundle
 LanguageManagerBundle_zh_TW.properties  -> locale: zh_TW, namespace: LanguageManagerBundle
 ```
 
-## 5. 使用翻譯表
+## 5. Using the Translation Table
 
-翻譯表會把相同 `namespace + key` 的翻譯合併成一列，每個 locale 是一個 value 欄位。
+Translations with the same `namespace + key` are JOINed into one row. Every locale is displayed in a separate value column.
 
-例如：
+Example:
 
 | Namespace | Key | en | zh_TW |
 | --- | --- | --- | --- |
 | messages | auth.failed | Invalid credentials | 登入資料錯誤 |
 
-### 搜尋
+### Search
 
-- **模糊搜尋**：key、value、namespace、locale 或檔案路徑包含輸入文字即可命中。
-- **精準搜尋**：key、value、namespace 或完整 `namespace.key` 必須相等，不區分大小寫。
-- **語言篩選**：只用指定 locale 判斷哪些 key 命中，但表格仍保留同一 key 的其他語言欄位供比較。
-- **翻譯狀態篩選**：預設「全部顯示」；可切換為「缺少任一語言翻譯」（語言不存在或 value 為空），或「使用次數為 0（可能未使用）」。
+- **Fuzzy Search**: matches text contained in a key, value, namespace, locale, or path.
+- **Exact Search**: a key, value, namespace, or full `namespace.key` must match without case sensitivity.
+- **Locale Filter**: uses the selected locale to decide which keys match while retaining other locale columns for comparison.
+- **Translation Status Filter**: defaults to all rows; it can show rows missing any locale value or rows with a usage count of zero.
 
-### 分頁
+### Pagination
 
-- 每頁最多 100 列。
-- 使用表格下方「上一頁」與「下一頁」切換。
-- 搜尋條件改變時會回到第一頁。
+- Every page contains at most 100 rows.
+- Use **Previous** and **Next** below the table.
+- Changing search conditions returns to the first page.
 
-### 儲存格選取與剪貼簿
+### Cell selection and clipboard
 
-- 點擊任何 cell 會同時把該 cell 所屬 row 作為操作對象，整列會使用目前 IDE 主題的選取色高亮。
-- `Ctrl+C`：複製目前選取的 cell；選取多個 cell 時輸出 TSV。
-- `Ctrl+V`：只可貼入單一 locale value cell。
-- Namespace、Key、使用次數與問題欄位不可貼上。
+- Clicking any cell maps row actions to that cell's row. The whole row uses the current IDE theme's selection color.
+- `Ctrl+C` copies selected cells; multiple cells produce TSV.
+- `Ctrl+V` may paste into one locale value cell only.
+- Namespace, Key, Usage, and issue columns cannot be pasted into.
 
-## 6. 翻譯操作選單
+## 6. Translation Actions
 
-點擊「操作 ▾」可使用：
+Open **Actions ▾** to access the following commands.
 
-### 新增翻譯
+### Add translation
 
-1. 選擇要寫入的方案檔案。
-2. 確認由檔案推導出的語言與 namespace。
-3. 輸入 key 與 value。
-4. 確認後插件會安全寫回檔案並重新載入方案。
+1. Choose the managed scheme file to write.
+2. Confirm the locale and namespace derived from that file.
+3. Enter a key and value.
+4. Confirm to write safely and reload the scheme.
 
-### 新增語言版本
+### Add locale version
 
-1. 點擊「操作 ▾」→「新增語言版本」。
-2. 選擇來源語言，例如 `en`。
-3. 輸入新語言代碼，例如西班牙文 `es`。
-4. 插件會依來源語言的全部檔案建立目標清單：Laravel `en/auth.php` 會對應為 `es/auth.php`；`en.json` 會對應為 `es.json`。
-5. 一般翻譯 value 會清空以等待翻譯；JSON array 會保留原結構，避免產生無法解析的檔案。
-6. 在 Diff 視窗逐一確認新檔案，按下套用後才會建立檔案並加入目前方案。
+1. Choose **Actions ▾ → Add Locale Version**.
+2. Select a source locale such as `en`.
+3. Enter a new locale code such as `es`.
+4. The plugin maps every source file to a target: `en/auth.php` becomes `es/auth.php`, and `en.json` becomes `es.json`.
+5. Normal translation values are cleared for translation. JSON arrays retain their structure to keep files parseable.
+6. Review every new file in the Diff and apply before files are created and added to the scheme.
 
-若目標 locale 已存在、目標檔案已存在、來源檔案解析失敗或多個來源對應到同一路徑，插件會停止建立，不會覆寫既有檔案。
+Creation stops without overwriting if the target locale or file already exists, a source cannot be parsed, or multiple sources map to the same target.
 
-### 編輯所選
+### Edit selected
 
-1. 選擇翻譯表中的任一 cell。
-2. 點擊「操作 ▾」→「編輯所選」。
-3. 若點擊 locale value 欄，插件會直接編輯該語言，不再額外顯示語言選擇 Popup；若點擊 Namespace 或 Key 欄，則使用該列第一個既有語言。
-4. 編輯 Form 以「標題｜輸入框」雙欄排列；在視窗切換檔案時，locale、namespace 與 value 會更新為該檔案中相同 key 的內容，若尚無相同 key，value 會清空。
-5. key 可直接使用含空格、Unicode 與標點的原文句子，例如 `Not powered on or not detected`；僅空白、控制字元或超過 256 字元會被拒絕。
-5. 修改 key 或 value 後確認；儲存目標是目前選取的檔案。
+1. Select any cell in the translation table.
+2. Choose **Actions ▾ → Edit Selected**.
+3. Selecting a locale value edits that locale directly. Selecting Namespace or Key uses the row's first existing locale.
+4. The form uses label/input rows. Switching its target file refreshes locale, namespace, and value from the same key in that file; a missing key produces an empty value.
+5. Keys may be natural-language sentences containing spaces, Unicode, and punctuation, such as `Not powered on or not detected`. Only blank, control-character, or over-256-character values are rejected.
+6. Confirm the key/value changes. The currently selected file is the write target.
 
-### 批量刪除
+### Bulk delete
 
-1. 選擇一列或多列。
-2. 點擊「批量刪除」。
-3. 確認視窗顯示的是所選翻譯鍵列數，不會將各 locale entry 重複計數。
-4. 確認後，所選列包含的所有語言 entries 會從來源檔刪除。
+1. Select one or more rows.
+2. Choose **Delete Selected**.
+3. The confirmation count represents selected JOINed key rows, not the multiplied number of locale entries.
+4. Confirm to remove all locale entries belonging to those rows.
 
-### Key 改名
+### Rename key
 
-1. 選擇一個翻譯 key。
-2. 點擊「Key 改名」。
-3. 輸入新 key。
-4. 方案內所有含有舊 key 的語言檔會一起改名。
+1. Select one translation key.
+2. Choose **Rename Key**.
+3. Enter the new key.
+4. Every file in the scheme containing the old key is renamed together.
 
-若任一檔案已有新 key，操作會拒絕寫入以避免覆蓋。
+If any affected file already contains the new key, the entire write is rejected to prevent overwriting.
 
-### IDE 全文搜尋
+### IDE Find in Files
 
-選擇一列後點擊「IDE 全文搜尋」，插件會開啟 IDE 原生 **Find in Files**，且所有格式都只帶入實際 key。PHP 的檔名 namespace（例如 `auth`）及 Java ResourceBundle 的 bundle namespace（例如 `LanguageManagerFrontendBundle`）都不會加入搜尋文字。
+Select one row and choose **Find in Files** to open the IDE-native search. Every format inserts only the actual key. PHP filename namespaces such as `auth` and ResourceBundle names such as `LanguageManagerFrontendBundle` are never prefixed.
 
-點擊「帶入計算次數格式於全文搜尋」時，插件會從目前方案依序選擇第一個含 `(?<key>…)` 命名群組的使用率 Regex，將整個 key 群組替換成目前 row 的 literal key、移除最外層 `^`／`$`，並自動開啟 Find in Files 的 Regex 模式。key 內的句點等 Regex 符號會逐字元跳脫，例如 `custom\.attribute-name\.rule-name`，不會產生容易被 IDE 再次跳脫的 `\Q...\E`。其他群組及反向參照會保留，例如 `(?<quote>…)` 與 `\k<quote>`。若 Regex 清單沒有 `key` 命名群組，插件會顯示錯誤而不開啟搜尋。
+Choose **Find in Files with Usage Regex** to select the first active-scheme usage Regex containing a `(?<key>…)` named group. The complete key group is replaced with the selected row's literal key, outer `^`/`$` anchors are removed, and IDE Regex mode is enabled. Regex metacharacters in the key are escaped character by character—for example, `custom\.attribute-name\.rule-name`—without using `\Q...\E`. Other groups and backreferences, such as `(?<quote>…)` and `\k<quote>`, are retained. If no pattern contains a named `key` group, the plugin reports an error without opening search.
 
-## 7. 問題與建議
+## 7. Issues and Suggestions
 
-切換到「問題與建議」頁籤可查看：
+The **Issues and Suggestions** tab can contain:
 
-| 類型 | 意義 | 可用操作 |
+| Type | Meaning | Available action |
 | --- | --- | --- |
-| 格式錯誤／讀取錯誤 | 檔案無法安全解析或讀取 | 開啟來源檔案手動修正 |
-| 缺失值 | Value 是空白 | 預覽以 key 補值 |
-| 重複鍵 | 同 locale、namespace、key 重複 | 定位後人工判斷 |
-| 重複值 | 多個 key 使用相同 value | 定位後人工判斷 |
-| 缺少語言 | 某 key 未出現在全部 locale | 定位到翻譯表 |
-| 可能未使用 | 專案來源碼未掃描到 key | 預覽刪除或保留 |
+| Parse/read error | A file cannot be parsed or read safely | Open the source file for manual repair |
+| Missing value | Value is blank | Preview filling it with the key |
+| Duplicate key | Same locale, namespace, and key appear more than once | Locate and decide manually |
+| Duplicate value | Multiple keys share one value | Locate and decide manually |
+| Missing locale | A key is absent from one or more locales | Locate it in the translation table |
+| Possibly unused | No source-code usage was discovered | Preview deletion or keep it |
 
-### 單列處理
+### Single-row handling
 
-點擊該列最後一欄的「處理」按鈕。按鈕會依類型執行修復預覽、刪除預覽、開啟檔案或定位翻譯表。
+Click **Handle** in the final column. Depending on issue type, the action previews a repair/deletion, opens the file, or locates the translation row.
 
-### 批量處理
+### Bulk handling
 
-- 「處理所選」：處理目前選取的問題列。
-- 「處理全部可修復」：包含缺失值與可能未使用 key。
-- 需要人工判斷的項目不會被自動修改。
+- **Handle Selected** processes the selected issue rows.
+- **Handle All Repairable** includes missing values and possibly-unused keys.
+- Issues requiring human judgment are never modified automatically.
 
-> 「可能未使用」來自有限範圍的文字掃描，只是建議，不代表 key 一定可以刪除。動態組合的 key 可能無法被掃描到。
+> Possibly-unused results come from a bounded text scan and are suggestions only. Dynamically constructed keys may not be discovered.
 
-## 8. Diff 預覽與安全套用
+## 8. Diff Preview and Safe Apply
 
-「修復／正規化」及問題自動處理不會立即寫檔。
+**Repair/Normalize** and automatic issue handling never write immediately.
 
-1. 插件在 backend 產生目前內容與修改後內容。
-2. 顯示 IDE 雙欄 Diff；左側是目前內容，右側是 proposed content。
-3. 批量修改時，可從上方選單逐一查看受影響檔案。
-4. 選擇「取消」不會修改任何檔案。
-5. 選擇「套用變更」後，插件會再次檢查原檔 SHA-256。
-6. 若檔案在預覽期間被 IDE、Git 或其他程序修改，插件會拒絕覆蓋並要求重新預覽。
+1. The backend generates current and proposed content in memory.
+2. An IDE two-pane Diff displays current content on the left and proposed content on the right.
+3. For bulk changes, select each affected file from the control above the Diff.
+4. **Cancel** writes nothing.
+5. **Apply Changes** rechecks the source SHA-256.
+6. If the IDE, Git, or another process changed the file after preview, the plugin refuses to overwrite and requests another preview.
 
-### 修復／正規化會做什麼
+### What repair/normalize does
 
-- 以 key 補上空白 value。
-- 將可解析內容依標準 JSON、YAML、PHP 或 Properties 格式重新輸出。
-- 無法解析的檔案不會被猜測修復或寫回。
+- Fills blank values with their key.
+- Renders parseable content in normalized JSON, YAML, PHP, or Properties syntax.
+- Never guesses or writes an unparseable file.
 
-## 9. 格式注意事項
+## 9. Format Notes
 
 ### JSON
 
-- 根節點必須是 object。
-- 巢狀 object 在表格中以點號 key 顯示。
-- Array value 在 cell 中以 JSON 文字顯示，寫回時仍保持 array。
-- 完整句子作為 key 時，句點會保留為字面 key，不會自動變成巢狀 object。
+- The root must be an object.
+- Nested objects appear as dotted keys in the table.
+- Arrays are displayed as JSON text and remain arrays when written back.
+- Dots inside sentence-style keys remain literal and do not create nested objects.
 
 ### YAML
 
-- 使用空白縮排，不可使用 tab。
-- 支援單引號、雙引號與一般行尾註解。
-- 正規化可能重新排列引號與縮排格式，請先檢查 Diff。
+- Use spaces for indentation; tabs are rejected.
+- Single quotes, double quotes, and normal end-of-line comments are supported.
+- Normalization may change quoting and indentation; always review the Diff.
 
 ### Laravel PHP
 
-- 僅接受可選的 `declare(strict_types=1);` 與靜態 return array。
-- 支援字串、數字、布林與巢狀 array。
-- 不支援其他 `declare` 指令、函式呼叫、變數、字串串接或任意 expression。
-- 插件不會執行 PHP。
+- Only an optional `declare(strict_types=1);` and a static return array are accepted.
+- Strings, numbers, booleans, and nested arrays are supported.
+- Other `declare` directives, calls, variables, concatenation, and arbitrary expressions are rejected.
+- PHP is never executed.
 
-### JetBrains／Java ResourceBundle Properties
+### JetBrains/Java ResourceBundle Properties
 
-- 接受以 `#` 或 `!` 開頭的註解，以及 `=`、`:` 或空白分隔 key/value。
-- 支援反斜線續行及 Java escape，例如 `\\t`、`\\n`、`\\ `、`\\:` 與 `\\u4F60`。
-- 同一檔案內的重複 key、空白 key、未完成 escape 或錯誤 `\\uXXXX` 會安全回報 `PARSE_ERROR`，不會寫回來源檔。
-- 編輯或正規化後使用 UTF-8 輸出；註解與原始排版不保留，因此套用前請檢查 Diff。
-- 新增語言版本時，`Bundle.properties` 可產生 `Bundle_es.properties`；既有 `Bundle_zh_TW.properties` 也會保留 `Bundle` namespace。
+- Supports comments beginning with `#` or `!` and `=`, `:`, or whitespace key/value separators.
+- Supports backslash continuations and Java escapes such as `\t`, `\n`, `\ `, `\:`, and `\u4F60`.
+- Duplicate/blank keys, unfinished escapes, and malformed `\uXXXX` sequences produce a safe `PARSE_ERROR` without writing the source.
+- Edits and normalization use UTF-8. Comments and original layout are not preserved, so review the Diff.
+- Locale creation can produce `Bundle_es.properties` from `Bundle.properties`; `Bundle_zh_TW.properties` retains the `Bundle` namespace.
 
-## 10. 使用率掃描設定
+## 10. Usage Scan Settings
 
-在 LanguageManager Tool Window 上方先選擇方案，再點擊「方案設定」。Popup 會直接使用 Tool Window 已載入的目前方案，顯示列管語言檔案與獨立掃描設定，不會再從 IDE Settings 頁動態讀取方案。
+Select a scheme in the Tool Window and click **Scheme Settings**. The popup uses the already-loaded active scheme and shows its managed files and isolated scan settings. It does not dynamically load schemes from IDE Settings.
 
-**Settings → Tools → LanguageManager** 不會動態載入既有方案，管理插件顯示語言、問題與建議顯示偏好，以及新建方案預設值。也可以從 Tool Window 標題列的 JetBrains「更多選項」點擊「在地化管理器設定」前往該頁。
+**Settings → Tools → LanguageManager** manages plugin display language, issue visibility, and defaults for newly created schemes. Existing schemes are not loaded there. The Tool Window's JetBrains **More Options** menu also contains a shortcut to this settings page.
 
-勾選「隱藏重複值建議」或「隱藏可能未使用建議」後，對應類型不會顯示在問題表、底部建議數量或「處理全部可修復項目」中；其他錯誤與建議不受影響。
+Hiding duplicate-value or possibly-unused suggestions removes that type from the issue table, status count, and **Handle All Repairable** action without affecting other diagnostics.
 
-此設定頁同時保存「新建方案預設值」：base path 可使用目前專案目錄，或輸入向上 1–10 層；預設 Regex 與排除清單會在之後以檔案或資料夾建立方案時複製到新方案，不會覆蓋既有方案。
+New-scheme defaults include a base path at the current project or 1–10 parent levels, Regex patterns, and exclusions. These values are copied into future schemes and never overwrite existing scheme settings.
 
-此快捷入口直接依插件設定元件定位，不依賴 IDE 顯示語言；英文、繁體中文、簡體中文、日文或韓文介面都會開啟同一個設定頁。
+The settings shortcut targets the registered plugin settings component rather than a localized page title, so it works in every supported UI language.
 
-### 掃描基準路徑
+### Scan base path
 
-- 留白時使用目前開啟專案的根目錄。
-- 可按「瀏覽」指定另一個安全的本機或 WSL 資料夾，例如 monorepo 的 frontend 根目錄。
-- 這個路徑只影響使用次數計算，不會把該資料夾中的語言檔自動加入方案。
+- Blank means the currently open project root.
+- **Browse** may select another safe local or WSL directory, such as a monorepo frontend root.
+- The base path affects usage counting only and never enrolls language files from that folder.
 
-### 使用率判斷正規表示式
+### Usage detection regular expressions
 
-每個 Regex match 會依下列順序擷取候選 key：
+Each Regex match extracts a candidate key in this order:
 
-1. 命名群組 `(?<key>…)`。
-2. 第一個 capture group。
-3. 如果沒有群組，使用完整 match。
+1. Named group `(?<key>…)`.
+2. First capture group.
+3. Complete match when no group exists.
 
-候選值最後仍需與方案中的 `key` 或 `namespace.key` 完全相同才會計數。Laravel helper 可加入例如：
+The candidate must exactly equal a scheme `key` or `namespace.key` before it is counted. Example for Laravel helpers:
 
 ```regex
 (?:__|trans)\(\s*["'](?<key>[^"']+)["']
 ```
 
-Vue／JavaScript `$t()` 可加入例如：
+Example for Vue/JavaScript `$t()`:
 
 ```regex
 \$t\(\s*["'](?<key>[^"']+)["']
 ```
 
-同一個 key 在同一行出現多次仍計為一次。動態串接的 key 通常無法可靠識別。
+Multiple occurrences of the same key on one line count once. Dynamically concatenated keys usually cannot be detected reliably.
 
-### 排除資料夾
+### Excluded directories
 
-預設清單包含：
+Defaults include:
 
-- 專案／依賴：`.git`、`.github`、`docs`、`vendor`、`node_modules`。
-- Laravel／Gradle／建置：`storage`、`database`、`gradle`、`.gradle`、`build`、`out`、`dist`、`target`。
-- IDE：`.idea`、`.run`、`.vscode`、`.fleet`、`.vs`、`.settings`、`.metadata`、`nbproject`。
-- AI／環境：`.env`、`.claude`、`.codex`、`.gemini`、`.agents`、`.ai`。
+- Project/dependency: `.git`, `.github`, `docs`, `vendor`, `node_modules`.
+- Laravel/Gradle/build: `storage`, `database`, `gradle`, `.gradle`, `build`, `out`, `dist`, `target`.
+- IDE: `.idea`, `.run`, `.vscode`, `.fleet`, `.vs`, `.settings`, `.metadata`, `nbproject`.
+- AI/environment: `.env`, `.claude`, `.codex`, `.gemini`, `.agents`, `.ai`.
 
-升級時，若清單仍是舊版原廠預設，插件會自動補上新項目；已自訂的清單不會被取代。
+When upgrading, an untouched old default list is migrated with new defaults. A customized list is never replaced.
 
-- 單一名稱（例如 `vendor`）會排除掃描樹中所有同名資料夾。
-- 相對路徑（例如 `tests/fixtures`）只排除基準路徑下的指定分支。
-- 可使用「新增／編輯／刪除」調整清單，避免測試資料、fixture 或產生碼造成誤算。
+- A single name such as `vendor` excludes every directory with that name.
+- A relative path such as `tests/fixtures` excludes only that branch under the base path.
+- Use **Add/Edit/Delete** to prevent fixtures, tests, or generated code from inflating counts.
 
-按「套用」後，插件會儲存所有已修改方案、使對應 cache 失效，並在背景重新計算目前方案。Regex 最多 20 個、每個最多 512 字元；排除項目最多 100 個。
+Applying settings persists modified schemes, invalidates their caches, and recounts the active scheme in the background. A scheme supports at most 20 Regex patterns of 512 characters each and 100 exclusions.
 
-## 11. 快取與重新讀取
+## 11. Cache and Reload
 
-方案與快取存放於：
+Schemes and caches are stored under:
 
 ```text
 .idea/language-manager/
@@ -321,51 +323,51 @@ Vue／JavaScript `$t()` 可加入例如：
 └── cache-{schemeId}.json
 ```
 
-- 一般切換方案時，檔案 fingerprint 未改變就使用 cache。
-- 點擊「重新讀取」會強制重新解析。
-- 來源檔變更、cache format 升級或 fingerprint 不符時會重建 cache。
-- 不建議手動編輯 cache；刪除 cache 不會刪除來源語言檔。
+- Normal scheme switching uses cache when fingerprints are unchanged.
+- **Reload** forces parsing.
+- A source change, cache format upgrade, or fingerprint mismatch rebuilds the cache.
+- Do not edit cache manually. Deleting cache never deletes source language files.
 
-## 12. 疑難排解
+## 12. Troubleshooting
 
-### 建立方案後沒有反應
+### Nothing happens after creating a scheme
 
-- 查看狀態列是否顯示「讀取中」。
-- 等待 WSL／遠端檔案第一次存取完成。
-- 點擊「重新讀取」。
-- 確認檔案仍存在且單檔未超過 10 MB。
-- 檢查 IDE log 中包含 `Language Manager` 的片段。
+- Check whether the status bar says loading.
+- Allow the first WSL/remote filesystem access to finish.
+- Click **Reload**.
+- Confirm files still exist and are no larger than 10 MB each.
+- Search IDE logs for `Language Manager`.
 
-### 顯示解析錯誤
+### Parser errors appear
 
-- 在問題列點擊「處理」開啟來源檔。
-- JSON 必須有 object 根節點且語法完整。
-- YAML 不可用 tab 縮排。
-- PHP 必須是可選的 `declare(strict_types=1);` 加上純靜態 return array。
+- Click **Handle** to open the source file.
+- JSON requires a complete object root.
+- YAML cannot use tab indentation.
+- PHP must be an optional `declare(strict_types=1);` followed by a purely static return array.
 
-### 貼上沒有作用
+### Paste does nothing
 
-- 一次只選擇一個 cell。
-- 必須選擇 locale value 欄，不是 Namespace、Key 或診斷欄。
-- 確認剪貼簿內容是文字。
+- Select exactly one cell.
+- Select a locale value column, not Namespace, Key, Usage, or diagnostics.
+- Confirm that the clipboard contains text.
 
-### 使用次數顯示 0
+### Usage count is zero
 
-- 動態組合 key、模板 helper 或非文字引用可能無法辨識。
-- 在 Tool Window 選擇方案後點擊「方案設定」，確認 base path、Regex 與排除清單。
-- 掃描會跳過方案排除清單中的資料夾；新方案預設會排除 `.git`、`.github`、`docs`、`vendor` 與常見 AI／IDE 設定目錄。
-- 「0」代表掃描未找到，不等同確定未使用。
+- Dynamic keys, template helpers, or non-text references may not be detected.
+- Select the scheme and open **Scheme Settings** to verify base path, Regex, and exclusions.
+- Excluded directories are skipped. New schemes exclude `.git`, `.github`, `docs`, `vendor`, and common AI/IDE configuration folders by default.
+- Zero means the bounded scan found nothing; it does not prove that a key is unused.
 
-## 13. 回報問題
+## 13. Reporting an Issue
 
-工具視窗上方提供「回報問題」連結，會開啟：
+The **Report an Issue** link at the top of the Tool Window opens:
 
 [https://github.com/creamgod45/LanguageManage/issues/new](https://github.com/creamgod45/LanguageManage/issues/new)
 
-請選擇適合的 Issue 類型：
+Choose the appropriate Issue type:
 
-- 錯誤回報：可重現的 UI、RPC、解析、寫入或效能問題。
-- 功能需求：新的操作、分析、格式或 IDE 整合需求。
-- 格式相容性：JSON、YAML、Laravel PHP、ResourceBundle Properties 無法 parse／round-trip 的最小案例。
+- Bug report: reproducible UI, RPC, parser, write, or performance problems.
+- Feature request: new workflows, analysis, formats, or IDE integration.
+- Format compatibility: a minimal JSON, YAML, Laravel PHP, or ResourceBundle Properties parse/round-trip example.
 
-提交前請移除 log、路徑與語言檔中的密碼、token、客戶名稱及其他敏感資料。
+Before submitting, remove passwords, tokens, client names, and other sensitive content from logs, paths, and language files.

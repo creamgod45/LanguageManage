@@ -1,41 +1,44 @@
-# 在地化管理器 (LanguageManager)
+[English](README.md) | [繁體中文](README.zh.md)
 
-LanguageManager 是支援 JetBrains IDE split mode 的在地化檔案管理插件，用來管理 JSON、YAML/YML、Laravel PHP 與 JetBrains/Java ResourceBundle Properties 語言檔。插件只會處理使用者在「方案」中明確選擇的檔案，不會自動納管或改寫專案內其他檔案。
+# LanguageManager
 
-目前介面與診斷支援英文、繁體中文、簡體中文、日文及韓文，顯示語言跟隨 IDE 設定。
+LanguageManager is a localization file management plugin with JetBrains IDE split-mode support. It manages JSON, YAML/YML, Laravel PHP, and JetBrains/Java ResourceBundle Properties files. The plugin only processes files that the user explicitly selects in a scheme. It never automatically enrolls or rewrites other project files.
 
-## 主要功能
+The UI and diagnostics are available in English, Traditional Chinese, Simplified Chinese, Japanese, and Korean. The display language follows the IDE by default and can be overridden in the plugin settings.
 
-- 依指定檔案或一個／多個資料夾建立互相隔離的語言管理方案；資料夾模式會先解析並預覽識別結果，也可在 Popup 繼續增加資料夾，再由使用者確認列管檔案。
-- 可在 Tool Window 下拉選單匯入／匯出方案設定 JSON；專案內路徑可攜化為相對路徑，匯入前會顯示逐檔解析與安全預覽。
-- 將相同 `namespace + key` 的多國語言翻譯 JOIN 成單一表格，每種語言各為一個欄位。
-- 支援模糊搜尋、精準搜尋、語言篩選、缺少翻譯／使用次數為 0 狀態篩選，及每頁最多 100 列的分頁。
-- 支援新增、編輯、批量刪除、跨語言 key 改名、儲存格複製／貼上及 IDE 原生全文搜尋。
-- 可從現有 locale 建立完整的新語言版本，例如將 `en/*.php` 的 key 結構建立成 `es/*.php`，經 Diff 確認後加入方案。
-- IDE Settings 可設定插件顯示語言、問題建議顯示偏好，以及新方案的 base path 模式、向上層級、Regex 與排除清單；既有方案由 Tool Window「方案設定」獨立調整。
-- 偵測解析錯誤、空值、重複鍵、重複值、缺少語言及可能未使用的 key；重複值與可能未使用建議可在設定中隱藏。
-- 預設使用率排除清單包含 `.git`、`.github`、`docs`、`vendor`、`storage`、`database`、`gradle`、`.gradle`、`build`、`out`、`dist`、`target`、`node_modules`，以及 `.idea`、`.fleet`、`.vs`、`.settings`、`.metadata`、`nbproject` 等 IDE 目錄，並允許使用者自訂。
-- 修復或刪除前顯示 IDE 雙欄 Diff；套用前驗證 SHA-256，避免覆蓋預覽後產生的外部修改。
-- 以記憶體與 `.idea/language-manager/` 磁碟快取降低重複解析成本。
-- PHP parser 只接受可選的 `declare(strict_types=1);` 加上 `return [...]`／`return array(...)` 靜態資料，不執行 PHP 程式碼。
+## Features
 
-## 文件
+- Create isolated language management schemes from explicitly selected files or one or more folders. Folder mode parses files first, previews recognition results, and lets the user add more folders before confirming the managed files.
+- Import and export portable scheme settings as JSON from the Tool Window dropdown. Project paths are converted to relative paths when possible, and every imported file receives a parser and security preview.
+- JOIN translations with the same `namespace + key` into one table row, with a separate column for each locale.
+- Fuzzy and exact search, locale filtering, missing-translation and zero-usage filters, and pagination limited to 100 rows per page.
+- Add, edit, bulk delete, rename keys across locales, copy and paste cells, and launch the IDE-native Find in Files action.
+- Create a complete new locale from an existing locale—for example, copy the key structure from `en/*.php` into `es/*.php`—then review a Diff before adding the files to the scheme.
+- Configure the plugin display language, issue visibility, and defaults for new schemes in IDE Settings. Existing scheme base paths, Regex patterns, and exclusions are edited independently from the Tool Window.
+- Detect parser errors, empty values, duplicate keys, duplicate values, missing locales, and possibly unused keys. Duplicate-value and possibly-unused suggestions can be hidden in settings.
+- The default usage-scan exclusions cover `.git`, `.github`, `docs`, `vendor`, `storage`, `database`, `gradle`, `.gradle`, `build`, `out`, `dist`, `target`, `node_modules`, and IDE-generated directories such as `.idea`, `.fleet`, `.vs`, `.settings`, `.metadata`, and `nbproject`. Users can customize the list.
+- Display an IDE two-pane Diff before repairing or deleting. SHA-256 is checked before applying a preview so external changes made after the preview are never overwritten silently.
+- Cache parsed state in memory and under `.idea/language-manager/` to reduce repeated parsing.
+- The PHP parser accepts only an optional `declare(strict_types=1);` followed by static `return [...]` or `return array(...)` data. It never executes PHP code.
 
-- [使用者操作手冊](docs/user_manual_book.md)：安裝、方案、翻譯表狀態篩選、問題顯示偏好、使用率掃描、Diff 與疑難排解。
-- [需求規格](docs/需求.md)：功能需求、表格篩選、issue 顯示規則、RPC、安全、快取與驗收條件。
-- [專案開發提示](AGENTS.md)：程式原則、架構界線、多國語言、測試與 Git 習慣。
-- [版本紀錄](CHANGELOG.md)
+## Documentation
 
-## 使用方式
+- [User Manual](docs/user_manual_book.md): installation, schemes, translation filters, issue visibility, usage scanning, Diff previews, and troubleshooting.
+- [Requirements](docs/需求.md): functional requirements, table filters, issue rules, RPC, security, caching, and acceptance criteria. Currently written in Traditional Chinese.
+- [Project Instructions](AGENTS.md): engineering principles, architecture boundaries, localization requirements, tests, and Git conventions.
+- [Compatibility Verification](docs/compatibility.md): verified IDE versions and the supported build range.
+- [Changelog](CHANGELOG.md)
 
-1. 安裝插件後，從 IDE 右側開啟「在地化管理器」。
-2. 點選「新增方案」下拉選單，選擇「依檔案選取」或「依資料夾選取」；資料夾模式可一次多選 `en`、`zh_CN`、`zh_TW` 等 locale 目錄。
-3. 資料夾模式會列出掃描到的檔案、格式、語言、namespace、筆數與識別錯誤；可在 Popup 使用「增加資料夾」，確認方案名稱及勾選項目後建立方案。
-4. 使用搜尋、語言篩選與翻譯狀態篩選，快速找出缺少語言或使用次數為 0 的 row，再透過分頁及「操作」選單管理翻譯。
-5. 在「問題與建議」頁籤選擇單列或批量處理；確認 Diff 後才會寫入檔案。
-6. 若不需要重複值或可能未使用提示，可在 **Settings → Tools → LanguageManager** 隱藏對應建議。
+## Usage
 
-## 專案架構
+1. Install the plugin and open **LanguageManager** from the IDE sidebar.
+2. Open the **New Scheme** dropdown and choose file selection or folder selection. Folder mode supports selecting locale directories such as `en`, `zh_CN`, and `zh_TW` together.
+3. Folder mode lists each discovered file, format, locale, namespace, entry count, and recognition error. Add more folders from the popup, enter a scheme name, select the recognized files, and confirm.
+4. Use search, locale filtering, and translation-status filtering to find rows with missing translations or zero usage. Manage the results with pagination and the **Actions** dropdown.
+5. Select one or more rows in **Issues and Suggestions**. Any automatic modification is written only after the user reviews and accepts its Diff.
+6. To hide duplicate-value or possibly-unused suggestions, open **Settings → Tools → LanguageManager**.
+
+## Architecture
 
 ```mermaid
 flowchart LR
@@ -57,149 +60,148 @@ flowchart LR
     RPC -->|"durable Flow"| UI
 ```
 
-根專案使用 IntelliJ Platform Gradle Plugin 組合三個 content module：
+The root project uses the IntelliJ Platform Gradle Plugin to assemble three content modules:
 
-| 模組 | 執行位置 | 責任 |
+| Module | Runtime location | Responsibility |
 | --- | --- | --- |
-| `shared` | frontend 與 backend | 可序列化 DTO、RPC 介面、表格搜尋／JOIN／分頁純邏輯 |
-| `frontend` | IDE client | 工具視窗、表格互動、對話框、Diff 預覽、在地化 UI、RPC repository |
-| `backend` | IDE backend | 方案狀態、檔案 IO、parser、快取、品質分析、使用率掃描與 RPC 實作 |
+| `shared` | frontend and backend | Serializable DTOs, RPC contract, and pure table search/JOIN/pagination logic |
+| `frontend` | IDE client | Tool Window, table interaction, dialogs, Diff previews, localized UI, and RPC repository |
+| `backend` | IDE backend | Scheme state, file IO, parsers, cache, quality analysis, usage scanning, and RPC implementation |
 
-`build.gradle.kts` 將插件安裝目標設定為 `BOTH`，使 split mode 的 frontend 與 backend 均取得各自需要的 module。
+`build.gradle.kts` sets the plugin installation target to `BOTH`, so each side of split mode receives its required module.
 
-## 關鍵檔案
+## Key Files
 
-### 根模組
+### Root module
 
-| 檔案 | 關鍵資訊 |
+| File | Purpose |
 | --- | --- |
-| `src/main/resources/META-INF/plugin.xml` | 插件 ID、名稱、說明、vendor 與三個 content module 的入口 |
-| `src/main/resources/messages/LanguageManagerBundle*.properties` | 插件名稱與說明的五語言字典 |
-| `build.gradle.kts` | IntelliJ IDEA 2025.3.5 最低相容基準、split mode、plugin module 與測試框架設定 |
-| `gradle.properties` | 發布版本與 Gradle/Kotlin 建置選項 |
-| `CHANGELOG.md` | 各版本功能與修正紀錄 |
-| `AGENTS.md` | 專案開發提示：產品原則、架構、安全、多國語言、測試與 Git 習慣 |
-| `.github/ISSUE_TEMPLATE/` | 錯誤、功能需求、格式相容性 Issue Forms 與提交入口設定 |
+| `src/main/resources/META-INF/plugin.xml` | Plugin ID, name, description, vendor, and the three content module declarations |
+| `src/main/resources/messages/LanguageManagerBundle*.properties` | Five-language dictionaries for the plugin name and description |
+| `build.gradle.kts` | IntelliJ IDEA 2025.3.5 minimum compatibility baseline, split mode, plugin modules, and test framework |
+| `gradle.properties` | Release version and Gradle/Kotlin build options |
+| `CHANGELOG.md` | Release features and fixes |
+| `AGENTS.md` | Product, architecture, security, localization, test, and Git rules |
+| `.github/ISSUE_TEMPLATE/` | Bug, feature request, and format compatibility Issue Forms |
 
 ### `shared`
 
-| 檔案 | 關鍵資訊 |
+| File | Purpose |
 | --- | --- |
-| `LocalizationModels.kt` | 方案、entry、issue、使用率預設、翻譯 row filter、資料夾識別結果、mutation 與 Diff preview DTO |
-| `LocalizationManagerRpcApi.kt` | frontend/backend 共用的 `@Rpc` 契約，所有遠端呼叫以 `ProjectId` 定位專案 |
-| `EntrySearch.kt` | 純函式形式的搜尋、`namespace + key` JOIN、缺少翻譯／零使用次數篩選及最多 100 列分頁 |
+| `LocalizationModels.kt` | Scheme, entry, issue, usage defaults, row filters, folder recognition, mutation, and Diff preview DTOs |
+| `LocalizationManagerRpcApi.kt` | Shared `@Rpc` contract; every remote call identifies its project with `ProjectId` |
+| `EntrySearch.kt` | Pure search, `namespace + key` JOIN, missing/zero-usage filters, and pagination capped at 100 rows |
 
 ### `frontend`
 
-| 檔案 | 關鍵資訊 |
+| File | Purpose |
 | --- | --- |
-| `toolWindow/LanguageManagerToolWindowFactory.kt` | 建立工具視窗內容、設定依 IDE 語言變化的標題 |
-| `localization/LocalizationManagerPanel.kt` | 主要 UI；方案建立下拉選單、資料夾識別視窗、翻譯／問題表、剪貼簿、Diff 與操作事件 |
-| `localization/LocalizationFrontendRepository.kt` | 將 UI 操作轉成 RPC；使用 durable flow 接收 backend 狀態 |
-| `localization/IssueVisibility.kt` | 根據全域偏好過濾重複值與可能未使用建議，共用於問題表、數量與批量操作 |
-| `localization/SchemeSettingsTransferDialog.kt` | 方案 JSON 安全讀寫、原子匯出與匯入逐檔預覽表格 |
-| `settings/LanguageManagerSettings.kt` | 持久化顯示語言、issue 顯示偏好、新方案 base path、Regex 與排除清單，並負責舊預設遷移 |
-| `settings/LanguageManagerSettingsConfigurable.kt` | IDE Settings 頁面；編輯插件語言、issue 顯示偏好與新方案預設 |
-| `localization/SchemeUsageSettingsDialog.kt` | Tool Window 目前方案的列管檔案、掃描路徑、Regex 與排除清單編輯視窗 |
-| `LanguageManagerBundle.kt` | frontend `DynamicBundle` 存取入口 |
-| `resources/messages/LanguageManagerFrontendBundle*.properties` | 按鈕、頁籤、欄位、提示及 Diff 的五語言字典 |
+| `toolWindow/LanguageManagerToolWindowFactory.kt` | Creates the Tool Window and localizes its title according to the IDE/plugin language |
+| `localization/LocalizationManagerPanel.kt` | Main UI: scheme dropdown, folder recognition, translation and issue tables, clipboard, Diff, and actions |
+| `localization/LocalizationFrontendRepository.kt` | Converts UI operations to RPC calls and receives backend state through a durable flow |
+| `localization/IssueVisibility.kt` | Applies duplicate-value and possibly-unused visibility preferences to the table, counts, and bulk actions |
+| `localization/SchemeSettingsTransferDialog.kt` | Safe scheme JSON IO, atomic export, and per-file import preview |
+| `settings/LanguageManagerSettings.kt` | Persists display language, issue preferences, new-scheme base path, Regex, and exclusions; migrates old defaults |
+| `settings/LanguageManagerSettingsConfigurable.kt` | IDE Settings page for plugin language, issue preferences, and new-scheme defaults |
+| `localization/SchemeUsageSettingsDialog.kt` | Edits managed files, scan path, Regex patterns, and exclusions for the active scheme |
+| `LanguageManagerBundle.kt` | Frontend resource bundle access |
+| `resources/messages/LanguageManagerFrontendBundle*.properties` | Five-language UI dictionaries for buttons, tabs, fields, prompts, and Diff text |
 
 ### `backend`
 
-| 檔案 | 關鍵資訊 |
+| File | Purpose |
 | --- | --- |
-| `BackendRpcApiProvider.kt` | 向 IntelliJ RPC backend 註冊 `LocalizationManagerRpcApi` |
-| `BackendLocalizationManagerRpcApi.kt` | RPC adapter；在 IO dispatcher 上把請求委派給 project service |
-| `LocalizationManagerService.kt` | 核心主程序：方案、狀態、快取、CRUD、修復預覽、衝突檢查與使用率掃描 |
-| `LanguageFileSupport.kt` | 安全路徑／資料夾驗證、受限遞迴探索、UTF-8 讀寫、原子寫入、JSON/YAML/PHP/Properties parse/render |
-| `UsageScanSupport.kt` | 使用率設定驗證、Regex key 擷取、base path 掃描、排除目錄與計數限制 |
-| `SchemeSettingsTransferSupport.kt` | 有版本方案 JSON 編解碼、相對路徑轉換、匯入上限與安全驗證 |
-| `TranslationInputValidation.kt` | 翻譯 key 輸入驗證；允許空格、Unicode 與標點，拒絕空白、控制字元與超長 key |
-| `LocalizationAnalysis.kt` | 建立缺失值、重複鍵／值、缺少翻譯及未使用 key 的診斷 |
-| `LanguageManagerBackendBundle.kt` | backend `DynamicBundle` 存取入口 |
-| `resources/messages/LanguageManagerBackendBundle*.properties` | parser、驗證與診斷的五語言字典 |
+| `BackendRpcApiProvider.kt` | Registers `LocalizationManagerRpcApi` in the IntelliJ RPC backend |
+| `BackendLocalizationManagerRpcApi.kt` | RPC adapter that delegates requests to the project service on an IO dispatcher |
+| `LocalizationManagerService.kt` | Core workflow for schemes, state, cache, CRUD, repair previews, conflict checks, and usage scans |
+| `LanguageFileSupport.kt` | Safe path/folder validation, bounded discovery, UTF-8 IO, atomic writes, and JSON/YAML/PHP/Properties parsing/rendering |
+| `UsageScanSupport.kt` | Usage setting validation, Regex key extraction, base path scanning, exclusions, and resource limits |
+| `SchemeSettingsTransferSupport.kt` | Versioned scheme JSON, relative path conversion, import limits, and security validation |
+| `TranslationInputValidation.kt` | Allows spaces, Unicode, and punctuation in keys while rejecting blank, control-character, and oversized input |
+| `LocalizationAnalysis.kt` | Builds diagnostics for empty values, duplicate keys/values, missing translations, and unused keys |
+| `LanguageManagerBackendBundle.kt` | Backend resource bundle access |
+| `resources/messages/LanguageManagerBackendBundle*.properties` | Five-language parser, validation, and diagnostic dictionaries |
 
-### 關鍵回歸測試
+### Regression tests
 
-| 檔案 | 驗證範圍 |
+| File | Coverage |
 | --- | --- |
-| `shared/src/test/kotlin/EntrySearchTest.kt` | 搜尋、JOIN、缺少翻譯、零使用次數篩選、分頁與批量刪除 row 計數 |
-| `shared/src/test/kotlin/LocalizationModelsTest.kt` | 舊方案的使用率預設相容性、Unicode／句子型 key Regex 與預設排除清單 |
-| `frontend/src/test/kotlin/IssueVisibilityTest.kt` | 重複值與可能未使用建議可獨立隱藏，其他 issue 不受影響 |
-| `frontend/src/test/kotlin/LanguageManagerDefaultSettingsTest.kt` | base path 層級、新方案預設、issue 顯示預設與舊排除清單遷移 |
-| `backend/src/test/kotlin/UsageScanSupportTest.kt` | 自訂 Regex、排除相對路徑、計數結果與不安全設定拒絕 |
-| `docs/compatibility.md` | Marketplace／Plugin Verifier 已驗證的 IDE 版本與插件相容範圍 |
-| `backend/src/test/kotlin/TranslationInputValidationTest.kt` | 句子型／Unicode key 接受，空白、控制字元與超長 key 拒絕 |
-| `backend/src/test/kotlin/SchemeSettingsTransferSupportTest.kt` | 專案相對路徑 round trip、缺失檔案、父目錄 traversal 與格式版本拒絕 |
+| `shared/src/test/kotlin/EntrySearchTest.kt` | Search, JOIN, missing and zero-usage filters, pagination, bulk row counts, and Find in Files Regex generation |
+| `shared/src/test/kotlin/LocalizationModelsTest.kt` | Legacy scheme defaults, Unicode/sentence keys, usage Regex, and default exclusions |
+| `frontend/src/test/kotlin/IssueVisibilityTest.kt` | Independent visibility preferences without affecting other issue types |
+| `frontend/src/test/kotlin/LanguageManagerDefaultSettingsTest.kt` | Base path levels, new-scheme defaults, issue defaults, and legacy exclusion migration |
+| `backend/src/test/kotlin/UsageScanSupportTest.kt` | Custom Regex, relative exclusions, counts, and rejection of unsafe settings |
+| `backend/src/test/kotlin/TranslationInputValidationTest.kt` | Sentence/Unicode keys and rejection of blank, control-character, and oversized keys |
+| `backend/src/test/kotlin/SchemeSettingsTransferSupportTest.kt` | Relative path round trips, missing files, parent traversal, and format version rejection |
 
-## RPC API 邏輯
+## RPC API
 
-`LocalizationManagerRpcApi` 是唯一跨 frontend/backend 邊界的公開契約。Frontend 透過 `RemoteApiProviderService.resolve()` 取得 remote API；backend provider 建立 adapter，再依 `ProjectId` 找到 `LocalizationManagerService`。
+`LocalizationManagerRpcApi` is the only public contract across the frontend/backend boundary. The frontend resolves it through `RemoteApiProviderService.resolve()`. The backend provider creates the adapter, which resolves `LocalizationManagerService` by `ProjectId`.
 
-| API | 用途 | 是否寫入語言檔 |
+| API | Purpose | Writes language files |
 | --- | --- | --- |
-| `state(projectId)` | 持續推送方案、entries、issues、busy 與錯誤狀態 | 否 |
-| `createScheme(...)` | 驗證使用者選取的檔案、保存方案並載入 | 否，僅寫入插件方案資料 |
-| `deleteScheme(...)` | 刪除方案及其 cache，不刪除語言檔 | 否 |
-| `activateScheme(...)` | 切換方案並載入 cache 或重新解析 | 否 |
-| `reload(...)` | 強制或依 fingerprint 重新載入 | 否 |
-| `updateSchemeUsageSettings(...)` | 驗證並儲存方案 base path、Regex 與排除清單，清除 cache 後重新計算 | 否，僅寫入插件方案資料 |
-| `discoverLanguageFiles(...)` | 安全掃描一個／多個指定資料夾，去重後回傳逐檔解析與識別結果 | 否 |
-| `exportSchemeSettings()` | 將所有方案轉成可攜式、有版本的 JSON 內容 | 否 |
-| `previewSchemeSettingsImport(...)` | 解析 JSON，將相對路徑對應到目前專案並回傳可用性／parser 結果 | 否 |
-| `importSchemeSettings(...)` | 重新驗證檔案與掃描設定後建立新方案 | 否，僅寫入插件方案資料 |
-| `saveEntry(...)` | 新增／編輯指定語言檔中的 entry | 是 |
-| `deleteEntries(...)` | 依 entry ID 批量刪除 | 是 |
-| `renameKey(...)` | 在方案內所有包含舊 key 的檔案中改名 | 是 |
-| `repair(...)` | 正規化所有可解析檔案並以 key 補空值 | 是；UI 改走預覽流程 |
-| `repairEntries(...)` | 精準修復指定空值 entry | 是；UI 改走預覽流程 |
-| `previewLocaleVersion(...)` | 從來源 locale 產生新語言檔案內容與逐檔 Diff | 否 |
-| `createLocaleVersion(...)` | 驗證預覽狀態、建立新語言檔並更新方案檔案清單 | 是 |
-| `previewChanges(...)` | 在記憶體產生 before/after 與原檔 SHA-256 | 否 |
-| `applyPreviewedChanges(...)` | 重建預覽、比對 hash，無衝突才原子寫入 | 是 |
+| `state(projectId)` | Streams schemes, entries, issues, busy state, and errors | No |
+| `createScheme(...)` | Validates user-selected files, persists the scheme, and loads it | No; writes plugin scheme data only |
+| `deleteScheme(...)` | Deletes a scheme and its cache without deleting language files | No |
+| `activateScheme(...)` | Switches the active scheme and loads cache or reparses | No |
+| `reload(...)` | Reloads forcibly or according to fingerprints | No |
+| `updateSchemeUsageSettings(...)` | Validates and stores base path, Regex, and exclusions, invalidates cache, and recounts | No; writes plugin scheme data only |
+| `discoverLanguageFiles(...)` | Safely scans one or more selected folders, deduplicates files, and returns recognition results | No |
+| `exportSchemeSettings()` | Serializes every scheme into portable, versioned JSON | No |
+| `previewSchemeSettingsImport(...)` | Parses JSON, resolves relative paths, and reports file/parser status | No |
+| `importSchemeSettings(...)` | Revalidates files and scan settings before creating new schemes | No; writes plugin scheme data only |
+| `saveEntry(...)` | Adds or edits an entry in a selected language file | Yes |
+| `deleteEntries(...)` | Deletes entries by entry ID | Yes |
+| `renameKey(...)` | Renames a key in every applicable file of the scheme | Yes |
+| `repair(...)` | Normalizes parseable files and fills empty values with their keys | Yes; UI uses preview first |
+| `repairEntries(...)` | Repairs specific empty entries | Yes; UI uses preview first |
+| `previewLocaleVersion(...)` | Produces new-locale content and a Diff for each file | No |
+| `createLocaleVersion(...)` | Verifies preview state, creates locale files, and updates the scheme file list | Yes |
+| `previewChanges(...)` | Produces in-memory before/after content and source SHA-256 | No |
+| `applyPreviewedChanges(...)` | Rebuilds the preview, verifies hashes, and atomically writes only when unchanged | Yes |
 
-所有 service mutation 由同一個 coroutine `Mutex` 序列化，避免同一專案內的並行操作互相覆蓋。RPC adapter 將檔案工作切至 `Dispatchers.IO`，UI 則只在 EDT 更新 Swing 元件。
+Every service mutation is serialized with one coroutine `Mutex` per project. The RPC adapter moves file operations to `Dispatchers.IO`; Swing updates run only on the EDT.
 
-## 主程序執行流程
+## Main Execution Flow
 
-### 1. IDE 啟動與工具視窗建立
+### 1. IDE startup and Tool Window creation
 
-1. `plugin.xml` 載入 shared、frontend、backend module。
-2. Backend XML 註冊 `BackendRpcApiProvider`；frontend XML 註冊 tool window。
-3. `LanguageManagerToolWindowFactory` 建立 `LocalizationManagerPanel`。
-4. Panel 建立 project coroutine scope，開始 collect repository 的 durable `state` flow。
-5. `LocalizationManagerService` 在背景 IO coroutine 讀取 `.idea/language-manager/schemes.json`；若有 active scheme，立即載入。
+1. `plugin.xml` loads the shared, frontend, and backend modules.
+2. Backend XML registers `BackendRpcApiProvider`; frontend XML registers the Tool Window.
+3. `LanguageManagerToolWindowFactory` creates `LocalizationManagerPanel`.
+4. The panel creates a project coroutine scope and collects the repository's durable `state` flow.
+5. `LocalizationManagerService` reads `.idea/language-manager/schemes.json` in an IO coroutine and immediately loads the active scheme when one exists.
 
-### 2. 建立或載入方案
+### 2. Scheme creation and loading
 
-1. 使用者透過新增方案下拉選單選擇個別檔案，或明確指定一個／多個資料夾。
-2. 資料夾模式由 backend 對整批目錄限深、限量、去重並略過依賴／建置目錄，逐一安全讀取支援格式並嘗試解析；frontend popup 顯示成功與失敗原因並可繼續增加資料夾。
-3. 使用者確認方案名稱與勾選的可識別檔案後，backend 再次驗證路徑、去重並持久化方案。
-4. `loadScheme()` 計算每個檔案的 `lastModifiedTime XOR size` fingerprint。
-5. Cache format 與 fingerprints 都相符時直接載入 `cache-{schemeId}.json`。
-6. Cache miss 時逐檔 parse，先發布 entries 與 parser issues，讓 UI 不必等待使用率掃描。
-7. Backend 依方案設定的 base path、Regex 與排除清單，最多掃描 2,000 個、每個不超過 512 KB 的來源檔，計算 key 使用次數。
-8. 執行品質分析、更新磁碟 cache，再透過 `StateFlow` 推送完整狀態。
+1. The user explicitly selects individual files or one or more folders from the new-scheme dropdown.
+2. Folder mode performs bounded, depth-limited, deduplicated discovery, skips dependency/build directories, safely reads supported files, and attempts to parse each one. The frontend popup shows successes and failures and can add more folders.
+3. After the user confirms the scheme name and selected recognized files, the backend validates and deduplicates every path again before persisting the scheme.
+4. `loadScheme()` computes a `lastModifiedTime XOR size` fingerprint for each file.
+5. If the cache format and all fingerprints match, `cache-{schemeId}.json` is loaded directly.
+6. On a cache miss, files are parsed independently and entries/parser issues are published before the usage scan finishes.
+7. The backend applies the scheme base path, Regex patterns, and exclusions to at most 2,000 source files of no more than 512 KB each.
+8. Quality analysis runs, the disk cache is updated, and the complete state is emitted through `StateFlow`.
 
-### 3. 表格顯示與互動
+### 3. Table display and interaction
 
-1. `EntrySearch.filter()` 依查詢模式與 locale 篩選 entry，`filterRows()` 再篩選缺少翻譯或使用次數為 0 的 JOIN row。
-2. `EntrySearch.join()` 以 `namespace + key` 聚合，各 locale 形成獨立欄位。
-3. `EntrySearch.paginate()` 將顯示上限限制為每頁 100 列。
-4. 單一儲存格仍會映射到該 row，供編輯、刪除與 IDE 全文搜尋使用；所有格式都只搜尋實際 key，不加入檔名或 bundle namespace。
-5. 「帶入計算次數格式於全文搜尋」會以目前 key 取代方案使用率 Regex 的 `(?<key>…)` 群組、移除邊界錨點並自動啟用 IDE Regex 搜尋。
-6. `Ctrl+C` 複製所選 cell；多 cell 輸出 TSV。`Ctrl+V` 只允許寫入單一語言 value 欄位。
-7. 問題表透過 `IssueVisibility` 套用全域偏好；被隱藏的重複值／可能未使用建議不納入狀態數量或全部批量處理。
+1. `EntrySearch.filter()` applies the query mode and locale; `filterRows()` then applies missing-translation or zero-usage filtering.
+2. `EntrySearch.join()` groups by `namespace + key` and creates one column per locale.
+3. `EntrySearch.paginate()` limits every page to 100 rows.
+4. Selecting one cell still maps row actions to that cell's row. Find in Files searches only the actual key and never prefixes a filename or bundle namespace.
+5. **Find in Files with Usage Regex** replaces the scheme Regex `(?<key>…)` group with the selected literal key, removes boundary anchors, and enables IDE Regex mode.
+6. `Ctrl+C` copies selected cells; multiple cells produce TSV. `Ctrl+V` writes only to one locale value cell.
+7. `IssueVisibility` applies global preferences consistently to the issue table, status counts, and bulk processing.
 
-### 4. 一般新增、編輯與刪除
+### 4. Add, edit, and delete
 
-1. Frontend 建立 `EntryMutationDto` 或 entry ID 清單。
-2. Backend 驗證 scheme、路徑、locale、namespace、key 長度與控制字元；key 可為含空格、Unicode 與標點的自然語言句子。
-3. 重新 parse 方案檔案，避免以過期的 UI 狀態直接覆寫。
-4. 修改 `ParsedLanguageFile` 後 render 成原格式並執行原子寫入。
-5. 強制重載方案、重建分析及 cache，最新狀態再回推 UI。
+1. The frontend creates an `EntryMutationDto` or entry ID list.
+2. The backend validates the scheme, path, locale, namespace, key length, and control characters. Keys may be natural-language sentences containing spaces, Unicode, and punctuation.
+3. The managed file is parsed again so stale UI state cannot overwrite newer content.
+4. The modified `ParsedLanguageFile` is rendered in its original format and written atomically.
+5. The scheme, analysis, and cache are rebuilt before the latest state is emitted to the UI.
 
-### 5. 修復、正規化與問題處理
+### 5. Repair, normalization, and issue handling
 
 ```mermaid
 sequenceDiagram
@@ -209,60 +211,60 @@ sequenceDiagram
     participant D as Diff Dialog
     participant FS as Language File
 
-    U->>F: 選擇修復／問題處理
+    U->>F: Select repair / issue action
     F->>B: previewChanges(request)
-    B->>FS: 安全讀取與 parse
+    B->>FS: Safe read and parse
     B-->>F: before / after / SHA-256
-    F->>D: 顯示逐檔雙欄 Diff
-    alt 使用者取消
+    F->>D: Show two-pane Diff for each file
+    alt User cancels
         D-->>F: Cancel
-    else 使用者套用
+    else User applies
         F->>B: applyPreviewedChanges(request, hashes)
-        B->>FS: 重讀並比對 SHA-256
-        alt 檔案已改變
-            B-->>F: 拒絕覆蓋，要求重新預覽
-        else 無衝突
-            B->>FS: 原子寫入 after content
-            B-->>F: 重載後的新 state
+        B->>FS: Read again and compare SHA-256
+        alt File changed
+            B-->>F: Reject overwrite and request a new preview
+        else No conflict
+            B->>FS: Atomically write after content
+            B-->>F: New state after reload
         end
     end
 ```
 
-## 格式規則
+## Format Rules
 
-- JSON 根節點必須是 object；巢狀 object 會展平成點號 key。
-- JSON array 以 JSON 文字顯示在 value cell，寫回時保留 array 型別。
-- JSON 句子型 key 中的字面句點會透過 `keyPaths` 保留，不會誤建巢狀物件。
-- YAML 支援以空白縮排的 `key: value` 與巢狀 map；不接受 tab 縮排。
-- PHP 僅解析 `return [...]` 或 `return array(...)` 的字串、數字、布林值與巢狀 array，不執行函式或任意 expression。
-- Properties 支援 Java ResourceBundle 的註解、分隔符、續行及跳脫；base bundle 視為英文，`Bundle_zh_TW.properties` 推導 locale 為 `zh_TW`、namespace 為 `Bundle`。
-- `lang/en.json` 推導 locale 為 `en`、namespace 為空。
-- `lang/en/messages.php` 推導 locale 為 `en`、namespace 為 `messages`。
+- A JSON root must be an object. Nested objects are flattened into dotted keys.
+- JSON arrays are shown as JSON text in value cells and keep their array type when written back.
+- Literal dots in sentence-style JSON keys are preserved through `keyPaths` and do not create accidental nesting.
+- YAML supports space-indented `key: value` pairs and nested maps; tab indentation is rejected.
+- PHP parses only strings, numbers, booleans, and nested arrays inside `return [...]` or `return array(...)`. Functions and arbitrary expressions are never executed.
+- Properties supports Java ResourceBundle comments, separators, continuations, and escaping. The base bundle is treated as English; `Bundle_zh_TW.properties` derives locale `zh_TW` and namespace `Bundle`.
+- `lang/en.json` derives locale `en` with an empty namespace.
+- `lang/en/messages.php` derives locale `en` and namespace `messages`.
 
-## 安全與一致性
+## Security and Consistency
 
-- 只接受使用者方案中明確選取的 `.json`、`.yaml`、`.yml`、`.php`、`.properties` 一般檔案。
-- 單檔上限 10 MB；路徑上限 4,096 字元。
-- 拒絕 URI、LDAP、`file:`、Windows device path、`GLOBALROOT` 與不安全控制字元。
-- 所有文字以 UTF-8 讀寫；先寫入同目錄 temporary file，再以 atomic move 取代原檔。
-- Diff preview 不寫檔；apply 階段會重算內容並驗證 SHA-256。
-- Backend error 回傳前會移除不可顯示控制字元並限制為 500 字元。
+- Only ordinary `.json`, `.yaml`, `.yml`, `.php`, and `.properties` files explicitly selected in a scheme are accepted.
+- Each file is limited to 10 MB; paths are limited to 4,096 characters.
+- URI, LDAP, `file:`, Windows device paths, `GLOBALROOT`, and unsafe control characters are rejected.
+- All text is read and written as UTF-8. Output is written to a temporary file in the same directory and then replaced with an atomic move.
+- Diff preview is read-only. Apply rebuilds the content and verifies SHA-256 before writing.
+- Backend errors are stripped of unsafe control characters and limited to 500 characters before being returned.
 
-## 快取與儲存
+## Cache and Storage
 
-插件資料存放於專案目錄：
+Plugin data is stored inside the project:
 
 ```text
 .idea/language-manager/
-├── schemes.json              # 方案清單與 active scheme
-└── cache-{schemeId}.json     # fingerprints、entries、issues
+├── schemes.json              # Scheme list and active scheme
+└── cache-{schemeId}.json     # Fingerprints, entries, and issues
 ```
 
-記憶體中的權威狀態為 `LocalizationStateDto`／`StateFlow`。磁碟 cache 只用於加速重啟與方案切換；檔案 fingerprint 或 cache format 改變時會重新 parse。
+The authoritative in-memory state is `LocalizationStateDto`/`StateFlow`. Disk cache only accelerates restart and scheme switching; a changed fingerprint or cache format forces a reparse.
 
-## 開發與測試
+## Development and Testing
 
-插件最低支援 JetBrains Platform build `253.5`（IntelliJ IDEA 2025.3.5），未設定最高版本；已驗證版本請參閱 [相容性驗證](docs/compatibility.md)。開發建置需求為 JDK 21，或使用 PhpStorm 2026.1 隨附 JBR。
+The plugin supports JetBrains Platform build `253.5` (IntelliJ IDEA 2025.3.5) and later, with no configured upper bound. See [Compatibility Verification](docs/compatibility.md) for tested versions. Development requires JDK 21 or the JBR bundled with PhpStorm 2026.1.
 
 ```powershell
 $env:JAVA_HOME='C:\Program Files\JetBrains\PhpStorm 2026.1\jbr'
@@ -272,19 +274,19 @@ $env:GRADLE_OPTS='-Dkotlin.incremental=false'
 .\gradlew.bat buildPlugin --no-daemon --console=plain
 ```
 
-安裝包輸出位置：
+The installable archive is generated at:
 
 ```text
 build/distributions/LanguageManage-{version}.zip
 ```
 
-測試範圍：
+Test coverage includes:
 
-- `shared`: 搜尋、JOIN、語言／翻譯狀態篩選、使用率預設及分頁。
-- `backend`: JSON/YAML/PHP/Properties parse/render、安全路徑、array、句子型 key、使用率 Regex／排除計數、分析、唯讀 preview 與五語資源鍵完整性。
-- `frontend`: 設定預設與遷移、issue 顯示過濾、Tool Window API 相容性與五語資源鍵完整性。
+- `shared`: search, JOIN, locale/translation filters, usage defaults, Find in Files queries, and pagination.
+- `backend`: JSON/YAML/PHP/Properties parse/render, safe paths, arrays, sentence-style keys, usage Regex/exclusions/counts, analysis, read-only previews, and five-language bundle parity.
+- `frontend`: setting defaults/migration, issue visibility, Tool Window API compatibility, explicit locale selection, and five-language bundle parity.
 
-## 版本與授權
+## Version and License
 
-- 版本紀錄：[CHANGELOG.md](CHANGELOG.md)
-- 授權條款：[LICENSE](LICENSE)
+- Releases: [CHANGELOG.md](CHANGELOG.md)
+- License: [LICENSE](LICENSE)
