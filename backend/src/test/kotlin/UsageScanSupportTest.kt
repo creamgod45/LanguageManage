@@ -85,6 +85,12 @@ class UsageScanSupportTest {
         assertFailsWith<IllegalArgumentException> {
             UsageScanSupport.normalize(UsageScanSettingsDto(regexPatterns = listOf("x"), excludedDirectories = listOf("../secret")))
         }
+        assertFailsWith<IllegalArgumentException> {
+            UsageScanSupport.normalize(UsageScanSettingsDto(maxLanguageFileKb = 0))
+        }
+        assertFailsWith<IllegalArgumentException> {
+            UsageScanSupport.normalize(UsageScanSettingsDto(maxEntriesPerFile = 10, maxEntriesPerScheme = 9))
+        }
     }
 
     @Test

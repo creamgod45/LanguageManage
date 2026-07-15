@@ -2,6 +2,10 @@ package cg.creamgod45.settings
 
 import cg.creamgod45.localization.DEFAULT_USAGE_EXCLUDED_DIRECTORIES
 import cg.creamgod45.localization.DEFAULT_USAGE_REGEX_PATTERNS
+import cg.creamgod45.localization.DEFAULT_MAX_ENTRIES_PER_FILE
+import cg.creamgod45.localization.DEFAULT_MAX_ENTRIES_PER_SCHEME
+import cg.creamgod45.localization.DEFAULT_MAX_LANGUAGE_FILE_KB
+import cg.creamgod45.localization.DEFAULT_MAX_LANGUAGE_SCHEME_MB
 import java.nio.file.Path
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -30,6 +34,10 @@ class LanguageManagerDefaultSettingsTest {
         assertEquals(1, state.defaultParentLevels)
         assertEquals(DEFAULT_USAGE_REGEX_PATTERNS, state.defaultRegexPatterns)
         assertEquals(DEFAULT_USAGE_EXCLUDED_DIRECTORIES, state.defaultExcludedDirectories)
+        assertEquals(DEFAULT_MAX_LANGUAGE_FILE_KB, state.defaultMaxLanguageFileKb)
+        assertEquals(DEFAULT_MAX_LANGUAGE_SCHEME_MB, state.defaultMaxLanguageSchemeMb)
+        assertEquals(DEFAULT_MAX_ENTRIES_PER_FILE, state.defaultMaxEntriesPerFile)
+        assertEquals(DEFAULT_MAX_ENTRIES_PER_SCHEME, state.defaultMaxEntriesPerScheme)
         assertEquals(false, state.ignoreDuplicateValueIssues)
         assertEquals(false, state.ignoreUnusedKeyIssues)
     }

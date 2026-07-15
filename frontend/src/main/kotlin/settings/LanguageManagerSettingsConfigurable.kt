@@ -1,8 +1,13 @@
 package cg.creamgod45.settings
 
 import cg.creamgod45.LanguageManagerBundle.message
+import cg.creamgod45.RegexPatternUi
 import cg.creamgod45.localization.DEFAULT_USAGE_EXCLUDED_DIRECTORIES
 import cg.creamgod45.localization.DEFAULT_USAGE_REGEX_PATTERNS
+import cg.creamgod45.localization.HARD_MAX_ENTRIES_PER_FILE
+import cg.creamgod45.localization.HARD_MAX_ENTRIES_PER_SCHEME
+import cg.creamgod45.localization.HARD_MAX_LANGUAGE_FILE_KB
+import cg.creamgod45.localization.HARD_MAX_LANGUAGE_SCHEME_MB
 import cg.creamgod45.toolWindow.LanguageManagerToolWindowFactory
 import com.intellij.openapi.options.Configurable
 import com.intellij.openapi.options.ConfigurationException
@@ -34,6 +39,10 @@ class LanguageManagerSettingsConfigurable(
     private var parentLevelsSpinner: JSpinner? = null
     private var regexModel: DefaultListModel<String>? = null
     private var exclusionModel: DefaultListModel<String>? = null
+    private var maxLanguageFileKbSpinner: JSpinner? = null
+    private var maxLanguageSchemeMbSpinner: JSpinner? = null
+    private var maxEntriesPerFileSpinner: JSpinner? = null
+    private var maxEntriesPerSchemeSpinner: JSpinner? = null
     private var ignoreDuplicateValueIssuesBox: JBCheckBox? = null
     private var ignoreUnusedKeyIssuesBox: JBCheckBox? = null
 
@@ -52,6 +61,10 @@ class LanguageManagerSettingsConfigurable(
         parentLevelsSpinner = JSpinner(SpinnerNumberModel(1, 1, LanguageManagerSettings.MAX_PARENT_LEVELS, 1))
         regexModel = DefaultListModel()
         exclusionModel = DefaultListModel()
+        maxLanguageFileKbSpinner = JSpinner(SpinnerNumberModel(1, 1, HARD_MAX_LANGUAGE_FILE_KB, 128))
+        maxLanguageSchemeMbSpinner = JSpinner(SpinnerNumberModel(1, 1, HARD_MAX_LANGUAGE_SCHEME_MB, 1))
+        maxEntriesPerFileSpinner = JSpinner(SpinnerNumberModel(1, 1, HARD_MAX_ENTRIES_PER_FILE, 1_000))
+        maxEntriesPerSchemeSpinner = JSpinner(SpinnerNumberModel(1, 1, HARD_MAX_ENTRIES_PER_SCHEME, 5_000))
         ignoreDuplicateValueIssuesBox = JBCheckBox(message("settings.issues.ignore.duplicate.values"))
         ignoreUnusedKeyIssuesBox = JBCheckBox(message("settings.issues.ignore.unused.keys"))
 
@@ -65,6 +78,12 @@ class LanguageManagerSettingsConfigurable(
                 .addComponent(ignoreUnusedKeyIssuesBox!!)
                 .addSeparator()
                 .addComponent(javax.swing.JLabel(message("settings.defaults.title")))
+                .addComponent(javax.swing.JLabel(message("settings.load.limits.title")))
+                .addLabeledComponent(message("settings.load.max.file.kb"), maxLanguageFileKbSpinner!!)
+                .addLabeledComponent(message("settings.load.max.scheme.mb"), maxLanguageSchemeMbSpinner!!)
+                .addLabeledComponent(message("settings.load.max.entries.file"), maxEntriesPerFileSpinner!!)
+                .addLabeledComponent(message("settings.load.max.entries.scheme"), maxEntriesPerSchemeSpinner!!)
+                .addTooltip(message("settings.load.limits.help"))
                 .addLabeledComponent(message("settings.default.base.mode"), basePathModeBox!!)
                 .addLabeledComponent(message("settings.default.parent.levels"), parentLevelsSpinner!!)
                 .addTooltip(message("settings.default.parent.levels.help", LanguageManagerSettings.MAX_PARENT_LEVELS))
@@ -75,8 +94,9 @@ class LanguageManagerSettingsConfigurable(
                         message("settings.regex.add.prompt"),
                         message("settings.regex.edit.prompt"),
                         DEFAULT_USAGE_REGEX_PATTERNS,
+                        regexInput = true,
                     ),
-                ).addTooltip(message("settings.usage.regex.help"))
+                ).addComponent(RegexPatternUi.helpComponent())
                 .addLabeledComponent(
                     message("settings.default.exclusions"),
                     listEditor(
@@ -100,6 +120,10 @@ class LanguageManagerSettingsConfigurable(
             (parentLevelsSpinner?.value as? Int) != settings.defaultParentLevels ||
             regexModel.values() != settings.defaultRegexPatterns ||
             exclusionModel.values() != settings.defaultExcludedDirectories ||
+            (maxLanguageFileKbSpinner?.value as? Int) != settings.defaultMaxLanguageFileKb ||
+            (maxLanguageSchemeMbSpinner?.value as? Int) != settings.defaultMaxLanguageSchemeMb ||
+            (maxEntriesPerFileSpinner?.value as? Int) != settings.defaultMaxEntriesPerFile ||
+            (maxEntriesPerSchemeSpinner?.value as? Int) != settings.defaultMaxEntriesPerScheme ||
             ignoreDuplicateValueIssuesBox?.isSelected != settings.ignoreDuplicateValueIssues ||
             ignoreUnusedKeyIssuesBox?.isSelected != settings.ignoreUnusedKeyIssues
     }
@@ -107,7 +131,12 @@ class LanguageManagerSettingsConfigurable(
     override fun apply() {
         val regexPatterns = regexModel.values()
         val exclusions = exclusionModel.values()
-        validateDefaults(regexPatterns, exclusions)
+        validateDefaults(
+            regexPatterns,
+            exclusions,
+            maxEntriesPerFileSpinner?.value as? Int ?: 1,
+            maxEntriesPerSchemeSpinner?.value as? Int ?: 1,
+        )
 
         val settings = LanguageManagerSettings.getInstance()
         val selectedLanguage = languageBox?.selectedItem as? DisplayLanguage ?: DisplayLanguage.AUTO
@@ -121,6 +150,10 @@ class LanguageManagerSettingsConfigurable(
         settings.defaultParentLevels = parentLevelsSpinner?.value as? Int ?: 1
         settings.defaultRegexPatterns = regexPatterns
         settings.defaultExcludedDirectories = exclusions
+        settings.defaultMaxLanguageFileKb = maxLanguageFileKbSpinner?.value as? Int ?: settings.defaultMaxLanguageFileKb
+        settings.defaultMaxLanguageSchemeMb = maxLanguageSchemeMbSpinner?.value as? Int ?: settings.defaultMaxLanguageSchemeMb
+        settings.defaultMaxEntriesPerFile = maxEntriesPerFileSpinner?.value as? Int ?: settings.defaultMaxEntriesPerFile
+        settings.defaultMaxEntriesPerScheme = maxEntriesPerSchemeSpinner?.value as? Int ?: settings.defaultMaxEntriesPerScheme
         settings.ignoreDuplicateValueIssues = ignoreDuplicateValueIssuesBox?.isSelected ?: false
         settings.ignoreUnusedKeyIssues = ignoreUnusedKeyIssuesBox?.isSelected ?: false
         if (languageChanged || issueVisibilityChanged) LanguageManagerToolWindowFactory.refreshOpenToolWindows()
@@ -133,6 +166,10 @@ class LanguageManagerSettingsConfigurable(
         parentLevelsSpinner?.value = settings.defaultParentLevels
         regexModel?.replaceWith(settings.defaultRegexPatterns)
         exclusionModel?.replaceWith(settings.defaultExcludedDirectories)
+        maxLanguageFileKbSpinner?.value = settings.defaultMaxLanguageFileKb
+        maxLanguageSchemeMbSpinner?.value = settings.defaultMaxLanguageSchemeMb
+        maxEntriesPerFileSpinner?.value = settings.defaultMaxEntriesPerFile
+        maxEntriesPerSchemeSpinner?.value = settings.defaultMaxEntriesPerScheme
         ignoreDuplicateValueIssuesBox?.isSelected = settings.ignoreDuplicateValueIssues
         ignoreUnusedKeyIssuesBox?.isSelected = settings.ignoreUnusedKeyIssues
         updateParentLevelsEnabled()
@@ -144,6 +181,10 @@ class LanguageManagerSettingsConfigurable(
         parentLevelsSpinner = null
         regexModel = null
         exclusionModel = null
+        maxLanguageFileKbSpinner = null
+        maxLanguageSchemeMbSpinner = null
+        maxEntriesPerFileSpinner = null
+        maxEntriesPerSchemeSpinner = null
         ignoreDuplicateValueIssuesBox = null
         ignoreUnusedKeyIssuesBox = null
     }
@@ -155,6 +196,8 @@ class LanguageManagerSettingsConfigurable(
     private fun validateDefaults(
         regexPatterns: List<String>,
         exclusions: List<String>,
+        maxEntriesPerFile: Int,
+        maxEntriesPerScheme: Int,
     ) {
         if (regexPatterns.isEmpty() || regexPatterns.size > 20) {
             throw ConfigurationException(message("settings.default.regex.count"))
@@ -166,6 +209,9 @@ class LanguageManagerSettingsConfigurable(
         }
         if (exclusions.size > 100 || exclusions.any(::unsafeExclusion)) {
             throw ConfigurationException(message("settings.default.exclusion.invalid"))
+        }
+        if (maxEntriesPerFile > maxEntriesPerScheme) {
+            throw ConfigurationException(message("settings.load.entries.order"))
         }
     }
 
@@ -181,6 +227,7 @@ class LanguageManagerSettingsConfigurable(
         addPrompt: String,
         editPrompt: String,
         defaultValues: List<String>,
+        regexInput: Boolean = false,
     ): JComponent {
         val list = JBList(model).apply { visibleRowCount = 5 }
         return JPanel(BorderLayout(0, JBUI.scale(4))).apply {
@@ -190,8 +237,7 @@ class LanguageManagerSettingsConfigurable(
                     add(
                         JButton(message("settings.list.add")).apply {
                             addActionListener {
-                                Messages
-                                    .showInputDialog(project, addPrompt, message("settings.display.name"), null)
+                                requestListValue(addPrompt, null, regexInput)
                                     ?.trim()
                                     ?.takeIf(String::isNotEmpty)
                                     ?.let { if (it !in model.values()) model.addElement(it) }
@@ -203,8 +249,7 @@ class LanguageManagerSettingsConfigurable(
                             addActionListener {
                                 val index = list.selectedIndex
                                 if (index < 0) return@addActionListener
-                                Messages
-                                    .showInputDialog(project, editPrompt, message("settings.display.name"), null, model[index], null)
+                                requestListValue(editPrompt, model[index], regexInput)
                                     ?.trim()
                                     ?.takeIf(String::isNotEmpty)
                                     ?.let { model[index] = it }
@@ -226,6 +271,17 @@ class LanguageManagerSettingsConfigurable(
             )
         }
     }
+
+    private fun requestListValue(
+        prompt: String,
+        initialValue: String?,
+        regexInput: Boolean,
+    ): String? =
+        if (regexInput) {
+            RegexPatternUi.showInputDialog(project, message("settings.display.name"), prompt, initialValue)
+        } else {
+            Messages.showInputDialog(project, prompt, message("settings.display.name"), null, initialValue, null)
+        }
 }
 
 private fun localizedRenderer(label: (Any?) -> String?): DefaultListCellRenderer =

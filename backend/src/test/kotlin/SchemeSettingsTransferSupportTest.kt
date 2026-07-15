@@ -36,7 +36,14 @@ class SchemeSettingsTransferSupportTest {
                 name = "Laravel",
                 files = listOf(languageFile.toString()),
                 updatedAtEpochMs = 1,
-                usageScanSettings = UsageScanSettingsDto(basePath = temp.toString()),
+                usageScanSettings =
+                    UsageScanSettingsDto(
+                        basePath = temp.toString(),
+                        maxLanguageFileKb = 4_096,
+                        maxLanguageSchemeMb = 40,
+                        maxEntriesPerFile = 40_000,
+                        maxEntriesPerScheme = 150_000,
+                    ),
             )
 
         val content = SchemeSettingsTransferSupport.export(listOf(scheme), temp.toString())
@@ -54,6 +61,10 @@ class SchemeSettingsTransferSupportTest {
         )
         assertEquals(languageFile.toRealPath().toString(), imported.files.single())
         assertEquals(temp.toRealPath().toString(), imported.usageScanSettings.basePath)
+        assertEquals(4_096, imported.usageScanSettings.maxLanguageFileKb)
+        assertEquals(40, imported.usageScanSettings.maxLanguageSchemeMb)
+        assertEquals(40_000, imported.usageScanSettings.maxEntriesPerFile)
+        assertEquals(150_000, imported.usageScanSettings.maxEntriesPerScheme)
     }
 
     @Test

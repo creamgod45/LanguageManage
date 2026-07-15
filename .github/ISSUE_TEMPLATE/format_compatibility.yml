@@ -3,7 +3,6 @@ description: 回報 JSON、YAML 或 Laravel PHP 無法安全解析或 round-trip
 title: "[Format] "
 labels:
   - parser
-type: bug
 body:
   - type: dropdown
     id: format

@@ -19,6 +19,7 @@ The UI and diagnostics are available in English, Traditional Chinese, Simplified
 - The default usage-scan exclusions cover `.git`, `.github`, `docs`, `vendor`, `storage`, `database`, `gradle`, `.gradle`, `build`, `out`, `dist`, `target`, `node_modules`, and IDE-generated directories such as `.idea`, `.fleet`, `.vs`, `.settings`, `.metadata`, and `nbproject`. Users can customize the list.
 - Display an IDE two-pane Diff before repairing or deleting. SHA-256 is checked before applying a preview so external changes made after the preview are never overwritten silently.
 - Cache parsed state in memory and under `.idea/language-manager/` to reduce repeated parsing.
+- Bound parser memory per scheme with configurable per-file size, total content size, per-file entry, and total entry limits. File size is checked before content is read; entry and nesting limits are enforced while parsing.
 - The PHP parser accepts only an optional `declare(strict_types=1);` followed by static `return [...]` or `return array(...)` data. It never executes PHP code.
 
 ## Documentation
@@ -116,6 +117,7 @@ The root project uses the IntelliJ Platform Gradle Plugin to assemble three cont
 | `LocalizationManagerService.kt` | Core workflow for schemes, state, cache, CRUD, repair previews, conflict checks, and usage scans |
 | `LanguageFileSupport.kt` | Safe path/folder validation, bounded discovery, UTF-8 IO, atomic writes, and JSON/YAML/PHP/Properties parsing/rendering |
 | `UsageScanSupport.kt` | Usage setting validation, Regex key extraction, base path scanning, exclusions, and resource limits |
+| `LanguageLoadBudget.kt` | Applies pre-parse file-size and post-parse entry budgets across one isolated scheme |
 | `SchemeSettingsTransferSupport.kt` | Versioned scheme JSON, relative path conversion, import limits, and security validation |
 | `TranslationInputValidation.kt` | Allows spaces, Unicode, and punctuation in keys while rejecting blank, control-character, and oversized input |
 | `LocalizationAnalysis.kt` | Builds diagnostics for empty values, duplicate keys/values, missing translations, and unused keys |
@@ -146,7 +148,7 @@ The root project uses the IntelliJ Platform Gradle Plugin to assemble three cont
 | `activateScheme(...)` | Switches the active scheme and loads cache or reparses | No |
 | `reload(...)` | Reloads forcibly or according to fingerprints | No |
 | `updateSchemeUsageSettings(...)` | Validates and stores base path, Regex, and exclusions, invalidates cache, and recounts | No; writes plugin scheme data only |
-| `discoverLanguageFiles(...)` | Safely scans one or more selected folders, deduplicates files, and returns recognition results | No |
+| `discoverLanguageFiles(...)` | Safely scans selected folders with the new-scheme loading budget, deduplicates files, and returns recognition results | No |
 | `exportSchemeSettings()` | Serializes every scheme into portable, versioned JSON | No |
 | `previewSchemeSettingsImport(...)` | Parses JSON, resolves relative paths, and reports file/parser status | No |
 | `importSchemeSettings(...)` | Revalidates files and scan settings before creating new schemes | No; writes plugin scheme data only |

@@ -26,6 +26,16 @@ class LanguageManagerFrontendBundleTest {
     }
 
     @Test
+    fun `usage regex placeholder is a directly usable double quote example`() {
+        val english = load("LanguageManagerFrontendBundle.properties")
+
+        assertEquals(
+            """(?:backendMessage|message)\(\s*"(?<key>[^"\r\n]{1,256})"\s*\)""",
+            english.getProperty("settings.regex.placeholder"),
+        )
+    }
+
+    @Test
     fun `explicit display language overrides automatic IDE locale`() {
         val english = LanguageManagerBundle.messageForLanguage(DisplayLanguage.ENGLISH, "tab.issues")
         val traditionalChinese = LanguageManagerBundle.messageForLanguage(DisplayLanguage.TRADITIONAL_CHINESE, "tab.issues")

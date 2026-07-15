@@ -2,6 +2,10 @@ package cg.creamgod45
 
 import cg.creamgod45.localization.LanguageEntryDto
 import cg.creamgod45.localization.UsageScanSettingsDto
+import cg.creamgod45.localization.HARD_MAX_ENTRIES_PER_FILE
+import cg.creamgod45.localization.HARD_MAX_ENTRIES_PER_SCHEME
+import cg.creamgod45.localization.HARD_MAX_LANGUAGE_FILE_KB
+import cg.creamgod45.localization.HARD_MAX_LANGUAGE_SCHEME_MB
 import com.intellij.openapi.diagnostic.Logger
 import java.nio.charset.StandardCharsets
 import java.nio.file.FileVisitResult
@@ -77,7 +81,22 @@ internal object UsageScanSupport {
                     segments.none { it.isBlank() || it == "." || it == ".." },
             ) { backendMessage("usage.exclusion.invalid", exclusion) }
         }
-        return UsageScanSettingsDto(basePath, patterns, exclusions)
+        require(settings.maxLanguageFileKb in 1..HARD_MAX_LANGUAGE_FILE_KB) {
+            backendMessage("load.limit.file.size", HARD_MAX_LANGUAGE_FILE_KB)
+        }
+        require(settings.maxLanguageSchemeMb in 1..HARD_MAX_LANGUAGE_SCHEME_MB) {
+            backendMessage("load.limit.scheme.size", HARD_MAX_LANGUAGE_SCHEME_MB)
+        }
+        require(settings.maxEntriesPerFile in 1..HARD_MAX_ENTRIES_PER_FILE) {
+            backendMessage("load.limit.file.entries", HARD_MAX_ENTRIES_PER_FILE)
+        }
+        require(settings.maxEntriesPerScheme in 1..HARD_MAX_ENTRIES_PER_SCHEME) {
+            backendMessage("load.limit.scheme.entries", HARD_MAX_ENTRIES_PER_SCHEME)
+        }
+        require(settings.maxEntriesPerFile <= settings.maxEntriesPerScheme) {
+            backendMessage("load.limit.entries.order")
+        }
+        return settings.copy(basePath = basePath, regexPatterns = patterns, excludedDirectories = exclusions)
     }
 
     fun counts(

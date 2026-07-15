@@ -48,6 +48,7 @@ interface LocalizationManagerRpcApi : RemoteApi<Unit> {
     suspend fun discoverLanguageFiles(
         projectId: ProjectId,
         folderPaths: List<String>,
+        settings: UsageScanSettingsDto,
     ): FolderDiscoveryDto
 
     suspend fun exportSchemeSettings(projectId: ProjectId): String

@@ -60,9 +60,10 @@ class BackendLocalizationManagerRpcApi : LocalizationManagerRpcApi {
     override suspend fun discoverLanguageFiles(
         projectId: ProjectId,
         folderPaths: List<String>,
+        settings: UsageScanSettingsDto,
     ): FolderDiscoveryDto =
         withContext(Dispatchers.IO) {
-            projectId.service()?.discoverLanguageFiles(folderPaths)
+            projectId.service()?.discoverLanguageFiles(folderPaths, settings)
                 ?: FolderDiscoveryDto(folderPaths.firstOrNull().orEmpty(), folderPaths = folderPaths)
         }
 

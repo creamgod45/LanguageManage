@@ -31,7 +31,10 @@ class LocalizationManagerService(
     private val coroutineScope: CoroutineScope,
 ) {
     companion object {
-        private const val CACHE_FORMAT_VERSION = 4
+        private const val CACHE_FORMAT_VERSION = 5
+        private const val MAX_PERSISTED_STATE_BYTES = 10L * 1024 * 1024
+        private const val MAX_DISK_CACHE_ENTRIES = 25_000
+        private const val MAX_ESTIMATED_CACHE_CHARS = 5_000_000L
         private val LOG = Logger.getInstance(LocalizationManagerService::class.java)
 
         fun getInstance(project: Project): LocalizationManagerService = project.getService(LocalizationManagerService::class.java)
@@ -157,7 +160,10 @@ class LocalizationManagerService(
         loadScheme(scheme, force)
     }
 
-    fun discoverLanguageFiles(folderPaths: List<String>): FolderDiscoveryDto = LanguageFolderDiscovery.discover(folderPaths)
+    fun discoverLanguageFiles(
+        folderPaths: List<String>,
+        rawSettings: UsageScanSettingsDto,
+    ): FolderDiscoveryDto = LanguageFolderDiscovery.discover(folderPaths, UsageScanSupport.normalize(rawSettings))
 
     suspend fun exportSchemeSettings(): String =
         mutex.withLock {
@@ -476,7 +482,12 @@ class LocalizationManagerService(
         try {
             val fingerprints = fingerprints(scheme)
             if (!force) {
-                readCache(scheme.id)?.takeIf { it.formatVersion == CACHE_FORMAT_VERSION && it.fingerprints == fingerprints }?.let { cache ->
+                readCache(scheme.id)
+                    ?.takeIf {
+                        it.formatVersion == CACHE_FORMAT_VERSION &&
+                            it.fingerprints == fingerprints &&
+                            cacheFitsLimits(scheme, it)
+                    }?.let { cache ->
                     LOG.info("Loaded localization scheme '${scheme.name}' from cache (${cache.entries.size} entries)")
                     mutableState.value =
                         mutableState.value.copy(activeSchemeId = scheme.id, entries = cache.entries, issues = cache.issues, busy = false)
@@ -525,7 +536,7 @@ class LocalizationManagerService(
             val entries = entriesWithoutUsage.map { it.copy(usageCount = usages[it.id] ?: 0) }
             val issues = documents.flatMap { it.issues } + LocalizationAnalysis.analyze(scheme.id, entries)
             val cache = CacheStore(CACHE_FORMAT_VERSION, fingerprints, entries, issues)
-            writeJson(cacheFile(scheme.id), json.encodeToString(cache))
+            persistCacheIfSafe(scheme.id, cache)
             mutableState.value = mutableState.value.copy(activeSchemeId = scheme.id, entries = entries, issues = issues, busy = false)
             LOG.info("Loaded localization scheme '${scheme.name}': ${entries.size} entries, ${issues.size} issues")
         } catch (e: Exception) {
@@ -534,10 +545,15 @@ class LocalizationManagerService(
         }
     }
 
-    private fun parseDocuments(scheme: LanguageSchemeDto): List<ParsedLanguageFile> =
-        scheme.files.map { raw ->
+    private fun parseDocuments(scheme: LanguageSchemeDto): List<ParsedLanguageFile> {
+        val budget = LanguageLoadBudget(scheme.usageScanSettings)
+        return scheme.files.map { raw ->
             try {
-                LanguageFileCodec.parse(SafeLanguageFileAccess.validate(raw), scheme.id)
+                val path = SafeLanguageFileAccess.validate(raw)
+                budget.acceptFile(path)
+                val document = LanguageFileCodec.parse(path, scheme.id, scheme.usageScanSettings.maxEntriesPerFile)
+                budget.acceptEntries(path, document.values.size)
+                document
             } catch (
                 e: Exception,
             ) {
@@ -553,6 +569,22 @@ class LocalizationManagerService(
                 )
             }
         }
+    }
+
+    private fun cacheFitsLimits(
+        scheme: LanguageSchemeDto,
+        cache: CacheStore,
+    ): Boolean {
+        return runCatching {
+            val budget = LanguageLoadBudget(scheme.usageScanSettings)
+            scheme.files.forEach { raw -> budget.acceptFile(SafeLanguageFileAccess.validate(raw)) }
+            cache.entries
+                .groupingBy { it.filePath }
+                .eachCount()
+                .forEach { (filePath, count) -> budget.acceptEntries(Path.of(filePath), count) }
+            true
+        }.getOrDefault(false)
+    }
 
     private fun validateMutation(
         scheme: LanguageSchemeDto,
@@ -609,11 +641,33 @@ class LocalizationManagerService(
 
     private fun readCache(id: String): CacheStore? =
         runCatching {
-            json.decodeFromString<CacheStore>(Files.readString(cacheFile(id)))
+            json.decodeFromString<CacheStore>(readBoundedState(cacheFile(id)))
         }.getOrNull()
 
     private fun readSchemeStore(): SchemeStore =
-        if (schemeFile.exists()) json.decodeFromString(Files.readString(schemeFile)) else SchemeStore()
+        if (schemeFile.exists()) json.decodeFromString(readBoundedState(schemeFile)) else SchemeStore()
+
+    private fun readBoundedState(path: Path): String {
+        require(Files.size(path) <= MAX_PERSISTED_STATE_BYTES) { backendMessage("load.persisted.state.too.large") }
+        return Files.readString(path)
+    }
+
+    private fun persistCacheIfSafe(
+        schemeId: String,
+        cache: CacheStore,
+    ) {
+        val path = cacheFile(schemeId)
+        val estimatedChars =
+            cache.entries.sumOf { entry ->
+                entry.filePath.length.toLong() + entry.locale.length + entry.namespace.length + entry.key.length + entry.value.length + 160
+            } + cache.issues.sumOf { issue -> issue.filePath.length.toLong() + issue.key.length + issue.message.length + 120 }
+        if (cache.entries.size > MAX_DISK_CACHE_ENTRIES || estimatedChars > MAX_ESTIMATED_CACHE_CHARS) {
+            Files.deleteIfExists(path)
+            LOG.info("Skipped oversized disk cache for scheme '$schemeId' (${cache.entries.size} entries)")
+            return
+        }
+        writeJson(path, json.encodeToString(cache))
+    }
 
     private fun persistSchemes() =
         writeJson(schemeFile, json.encodeToString(SchemeStore(mutableState.value.schemes, mutableState.value.activeSchemeId)))

@@ -370,8 +370,9 @@ internal class LocalizationManagerPanel(
                 .map { it.path }
                 .distinct()
         if (folders.isEmpty()) return
+        val defaultSettings = LanguageManagerSettings.getInstance().defaultUsageSettings(project.basePath)
         runAction {
-            val discovery = repository.discoverLanguageFiles(folders)
+            val discovery = repository.discoverLanguageFiles(folders, defaultSettings)
             val selection =
                 withContext(Dispatchers.EDT) {
                     if (discovery.files.isEmpty()) {
@@ -380,7 +381,7 @@ internal class LocalizationManagerPanel(
                     } else {
                         FolderSchemeDialog(project, discovery) { folderPaths, completed ->
                             scope.launch {
-                                val result = runCatching { repository.discoverLanguageFiles(folderPaths) }
+                                val result = runCatching { repository.discoverLanguageFiles(folderPaths, defaultSettings) }
                                 withContext(Dispatchers.EDT) { completed(result) }
                             }
                         }.let { dialog ->
@@ -392,7 +393,7 @@ internal class LocalizationManagerPanel(
                 repository.createScheme(
                     selection.name,
                     selection.files,
-                    LanguageManagerSettings.getInstance().defaultUsageSettings(project.basePath),
+                    defaultSettings,
                 )
             }
         }

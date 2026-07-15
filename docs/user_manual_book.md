@@ -52,7 +52,7 @@ After installation, the LanguageManager icon appears in the IDE Tool Window side
 5. Enter a recognizable scheme name, select the recognized files to manage, and click **Create Scheme**.
 6. Wait for loading to finish. Parsed entries then appear in the translation table.
 
-Folder mode checks at most 500 supported files, descends at most 16 levels per root, and skips common non-source directories such as `.git`, `.idea`, `vendor`, `node_modules`, `build`, `storage`, and `cache`. Selecting both a parent and child directory does not duplicate files because normalized absolute paths are deduplicated. Discovery only creates a candidate list; no file is managed until the user confirms it.
+Folder mode checks at most 500 supported files, descends at most 16 levels per root, applies the configured new-scheme loading budget, and skips common non-source directories such as `.git`, `.idea`, `vendor`, `node_modules`, `build`, `storage`, and `cache`. Selecting both a parent and child directory does not duplicate files because normalized absolute paths are deduplicated. Discovery only creates a candidate list; no file is managed until the user confirms it.
 
 Scheme behavior:
 
@@ -266,6 +266,8 @@ Hiding duplicate-value or possibly-unused suggestions removes that type from the
 
 New-scheme defaults include a base path at the current project or 1–10 parent levels, Regex patterns, and exclusions. These values are copied into future schemes and never overwrite existing scheme settings.
 
+New schemes default to a 2,048 KB limit per language file, 20 MB total language content, 20,000 entries per file, and 100,000 entries per scheme. The same four limits can be changed independently in each scheme. File size is checked before parser allocation; entry limits are enforced while the parser builds its map, and JSON/PHP nesting is capped at 128 levels. Over-limit content is skipped and appears as an issue instead of being retained in the table or cache. Hard safety ceilings are 10 MB per file, 100 MB per scheme, 100,000 entries per file, and 250,000 entries per scheme. Oversized results remain usable in the current in-memory state but are not serialized into an oversized disk cache.
+
 The settings shortcut targets the registered plugin settings component rather than a localized page title, so it works in every supported UI language.
 
 ### Scan base path
@@ -275,6 +277,8 @@ The settings shortcut targets the registered plugin settings component rather th
 - The base path affects usage counting only and never enrolls language files from that folder.
 
 ### Usage detection regular expressions
+
+Both the new-scheme defaults and active-scheme settings display the complete placeholder explanation below the Regex list. The Add/Edit dialog also shows a directly usable double-quote example such as `(?:backendMessage|message)\(\s*"(?<key>[^"\r\n]{1,256})"\s*\)`. Replace the function names with those used by the project. Prefer a function-specific prefix over matching every quoted string, because an earlier string or character literal on the same line can consume a non-overlapping match before the localization call is reached.
 
 Each Regex match extracts a candidate key in this order:
 

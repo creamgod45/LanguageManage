@@ -1,9 +1,12 @@
 package cg.creamgod45
 
+import cg.creamgod45.localization.DEFAULT_MAX_ENTRIES_PER_FILE
 import cg.creamgod45.localization.FolderDiscoveryDto
 import cg.creamgod45.localization.IssueSeverity
+import cg.creamgod45.localization.LanguageLoadBudget
 import cg.creamgod45.localization.LanguageFileCandidateDto
 import cg.creamgod45.localization.LanguageIssueDto
+import cg.creamgod45.localization.UsageScanSettingsDto
 import kotlinx.serialization.json.*
 import java.nio.charset.StandardCharsets
 import java.nio.file.FileVisitResult
@@ -91,11 +94,18 @@ internal object LanguageFolderDiscovery {
     private val ignoredDirectories =
         setOf(".git", ".idea", ".gradle", "build", "dist", "vendor", "node_modules", "storage", "cache", "coverage")
 
-    fun discover(rawFolder: String): FolderDiscoveryDto = discover(listOf(rawFolder))
+    fun discover(
+        rawFolder: String,
+        settings: UsageScanSettingsDto = UsageScanSettingsDto(),
+    ): FolderDiscoveryDto = discover(listOf(rawFolder), settings)
 
-    fun discover(rawFolders: List<String>): FolderDiscoveryDto {
+    fun discover(
+        rawFolders: List<String>,
+        settings: UsageScanSettingsDto = UsageScanSettingsDto(),
+    ): FolderDiscoveryDto {
         require(rawFolders.isNotEmpty()) { backendMessage("folder.selection.required") }
         val roots = rawFolders.map(SafeLanguageFileAccess::validateDirectory).distinct()
+        val budget = LanguageLoadBudget(settings)
         val candidates = linkedMapOf<String, LanguageFileCandidateDto>()
         var truncated = false
         roots.forEach { root ->
@@ -129,7 +139,7 @@ internal object LanguageFolderDiscovery {
                             truncated = true
                             return FileVisitResult.TERMINATE
                         }
-                        candidates[normalizedPath] = inspect(file, extension)
+                        candidates[normalizedPath] = inspect(file, extension, settings, budget)
                         return FileVisitResult.CONTINUE
                     }
                 },
@@ -146,10 +156,14 @@ internal object LanguageFolderDiscovery {
     private fun inspect(
         file: Path,
         extension: String,
+        settings: UsageScanSettingsDto,
+        budget: LanguageLoadBudget,
     ): LanguageFileCandidateDto =
         try {
             val safePath = SafeLanguageFileAccess.validate(file.toString())
-            val parsed = LanguageFileCodec.parse(safePath, "folder-discovery")
+            budget.acceptFile(safePath)
+            val parsed = LanguageFileCodec.parse(safePath, "folder-discovery", settings.maxEntriesPerFile)
+            budget.acceptEntries(safePath, parsed.values.size)
             val errors = parsed.issues.filter { it.severity == IssueSeverity.ERROR }
             LanguageFileCandidateDto(
                 filePath = safePath.toString(),
@@ -264,11 +278,13 @@ internal object LanguageLocaleVersionSupport {
 }
 
 internal object LanguageFileCodec {
+    private const val MAX_STRUCTURED_DEPTH = 128
     private val json = Json { prettyPrint = true }
 
     fun parse(
         path: Path,
         schemeId: String,
+        maxEntries: Int = DEFAULT_MAX_ENTRIES_PER_FILE,
     ): ParsedLanguageFile {
         val (locale, namespace) =
             when (path.extension.lowercase()) {
@@ -293,10 +309,10 @@ internal object LanguageFileCodec {
             val keyPaths = linkedMapOf<String, List<String>>()
             val values =
                 when (path.extension.lowercase()) {
-                    "json" -> parseJson(text, structuredKeys, keyPaths)
-                    "yaml", "yml" -> parseYaml(text, schemeId, path)
-                    "php" -> PhpArrayParser(text).parse()
-                    "properties" -> parseProperties(text, keyPaths)
+                    "json" -> parseJson(text, structuredKeys, keyPaths, maxEntries)
+                    "yaml", "yml" -> parseYaml(text, maxEntries)
+                    "php" -> PhpArrayParser(text, maxEntries).parse()
+                    "properties" -> parseProperties(text, keyPaths, maxEntries)
                     else -> error(backendMessage("format.unsupported"))
                 }
             ParsedLanguageFile(path, locale, namespace, values, structuredKeys, keyPaths)
@@ -336,6 +352,7 @@ internal object LanguageFileCodec {
     private fun parseProperties(
         text: String,
         keyPaths: MutableMap<String, List<String>>,
+        maxEntries: Int,
     ): LinkedHashMap<String, String> {
         val out = linkedMapOf<String, String>()
         propertiesLogicalLines(text).forEach { (lineNumber, rawLine) ->
@@ -346,6 +363,7 @@ internal object LanguageFileCodec {
             val value = decodePropertyEscapes(rawValue, lineNumber)
             require(key.isNotBlank()) { backendMessage("properties.empty.key", lineNumber) }
             require(key !in out) { backendMessage("properties.duplicate.key", lineNumber, key) }
+            require(out.size < maxEntries) { backendMessage("parser.entry.limit", maxEntries) }
             out[key] = value
             keyPaths[key] = listOf(key)
         }
@@ -495,10 +513,14 @@ internal object LanguageFileCodec {
         text: String,
         structuredKeys: MutableSet<String>,
         keyPaths: MutableMap<String, List<String>>,
+        maxEntries: Int,
     ): LinkedHashMap<String, String> {
+        requireJsonNestingDepth(text)
         val root = json.parseToJsonElement(text)
         require(root is JsonObject) { backendMessage("json.root.object") }
-        return linkedMapOf<String, String>().also { flattenJson(root, emptyList(), it, structuredKeys, keyPaths) }
+        return linkedMapOf<String, String>().also {
+            flattenJson(root, emptyList(), it, structuredKeys, keyPaths, maxEntries)
+        }
     }
 
     private fun flattenJson(
@@ -507,11 +529,14 @@ internal object LanguageFileCodec {
         out: LinkedHashMap<String, String>,
         structuredKeys: MutableSet<String>,
         keyPaths: MutableMap<String, List<String>>,
+        maxEntries: Int,
     ) {
         val displayKey = path.joinToString(".")
         when (element) {
             is JsonObject -> {
-                element.forEach { (key, child) -> flattenJson(child, path + key, out, structuredKeys, keyPaths) }
+                element.forEach { (key, child) ->
+                    flattenJson(child, path + key, out, structuredKeys, keyPaths, maxEntries)
+                }
             }
 
             is JsonPrimitive -> {
@@ -519,6 +544,7 @@ internal object LanguageFileCodec {
                     backendMessage("json.null.unsupported", displayKey)
                 }.also {
                     require(displayKey !in out) { backendMessage("json.path.conflict", displayKey) }
+                    require(out.size < maxEntries) { backendMessage("parser.entry.limit", maxEntries) }
                     out[displayKey] = element.content
                     keyPaths[displayKey] = path
                 }
@@ -526,9 +552,34 @@ internal object LanguageFileCodec {
 
             is JsonArray -> {
                 require(displayKey !in out) { backendMessage("json.path.conflict", displayKey) }
+                require(out.size < maxEntries) { backendMessage("parser.entry.limit", maxEntries) }
                 structuredKeys += displayKey
                 out[displayKey] = json.encodeToString(JsonElement.serializer(), element)
                 keyPaths[displayKey] = path
+            }
+        }
+    }
+
+    private fun requireJsonNestingDepth(text: String) {
+        var depth = 0
+        var inString = false
+        var escaped = false
+        text.forEach { char ->
+            if (inString) {
+                when {
+                    escaped -> escaped = false
+                    char == '\\' -> escaped = true
+                    char == '"' -> inString = false
+                }
+            } else {
+                when (char) {
+                    '"' -> inString = true
+                    '{', '[' -> {
+                        depth++
+                        require(depth <= MAX_STRUCTURED_DEPTH) { backendMessage("parser.depth.limit", MAX_STRUCTURED_DEPTH) }
+                    }
+                    '}', ']' -> depth--
+                }
             }
         }
     }
@@ -622,8 +673,7 @@ internal object LanguageFileCodec {
 
     private fun parseYaml(
         text: String,
-        schemeId: String,
-        path: Path,
+        maxEntries: Int,
     ): LinkedHashMap<String, String> {
         val out = linkedMapOf<String, String>()
         val parents = mutableListOf<Pair<Int, String>>()
@@ -643,6 +693,7 @@ internal object LanguageFileCodec {
             } else {
                 val full = (parents.map { it.second } + key).joinToString(".")
                 require(full !in out) { backendMessage("yaml.duplicate.key", index + 1, full) }
+                require(out.size < maxEntries) { backendMessage("parser.entry.limit", maxEntries) }
                 out[full] = unquote(stripYamlComment(rest))
             }
         }
@@ -728,9 +779,11 @@ internal object LanguageFileCodec {
 
 internal class PhpArrayParser(
     private val source: String,
+    private val maxEntries: Int = DEFAULT_MAX_ENTRIES_PER_FILE,
 ) {
     companion object {
         private val STRICT_TYPES_DECLARE = Regex("declare\\s*\\(\\s*strict_types\\s*=\\s*1\\s*\\)\\s*;")
+        private const val MAX_DEPTH = 128
     }
 
     private var index = 0
@@ -749,7 +802,7 @@ internal class PhpArrayParser(
         }
         expectWord("return")
         skipTrivia()
-        parseMap("")
+        parseMap("", 1)
         skipTrivia()
         if (index < source.length && source[index] == ';') index++
         skipTrivia()
@@ -757,7 +810,11 @@ internal class PhpArrayParser(
         return out
     }
 
-    private fun parseMap(prefix: String) {
+    private fun parseMap(
+        prefix: String,
+        depth: Int,
+    ) {
+        require(depth <= MAX_DEPTH) { backendMessage("parser.depth.limit", MAX_DEPTH) }
         val closing =
             when {
                 peek("[") -> {
@@ -785,10 +842,11 @@ internal class PhpArrayParser(
             skipTrivia()
             val full = if (prefix.isEmpty()) key else "$prefix.$key"
             if (peek("[") || peekWord("array")) {
-                parseMap(full)
+                parseMap(full, depth + 1)
             } else {
                 val value = parseScalar()
                 require(full !in out) { backendMessage("php.duplicate.key", full) }
+                require(out.size < maxEntries) { backendMessage("parser.entry.limit", maxEntries) }
                 out[full] = value
             }
             skipTrivia()

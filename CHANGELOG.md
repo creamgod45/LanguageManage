@@ -2,6 +2,11 @@
 
 ## 1.4.1
 
+- 新增方案級語言內容載入預算：解析前限制單檔與方案總容量、解析過程限制單檔與方案總翻譯筆數，並在快取命中時重新驗證，降低未分類大型語言檔造成 OOM 的風險。
+- IDE 新方案預設與 Tool Window 方案設定可分別調整四項載入上限；超限檔案會安全略過並顯示問題。
+- JSON／YAML／PHP／Properties parser 在建立翻譯 map 時即停止超額筆數，JSON／PHP 另限制 128 層巢狀結構；過大結果不寫入磁碟 cache，避免序列化造成額外記憶體尖峰。
+
+- 使用率 Regex 清單新增固定顯示的完整 placeholder 說明，新增／編輯視窗提供可直接修改的函式限定範例，並解釋 `(?<key>…)`、quote backreference 與非重疊 match 可能漏算的情況。
 - 插件最低相容版本設為 JetBrains Platform build `253.5`（IntelliJ IDEA 2025.3.5），移除最高版本限制；記錄 Marketplace 對 2025.3.5～2026.2 RC 的相容性驗證結果。
 - 顯示語言的明確選擇改由標準 ResourceBundle 依 locale 載入，修正 2025.3.5 平台忽略指定語言而回退英文的差異。
 - IDE 全文搜尋改為所有格式只帶入實際 key，不再加入 PHP 檔名或 ResourceBundle bundle namespace。

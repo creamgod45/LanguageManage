@@ -1,6 +1,7 @@
 package cg.creamgod45
 
 import cg.creamgod45.localization.IssueSeverity
+import cg.creamgod45.localization.UsageScanSettingsDto
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -420,5 +421,40 @@ class LanguageFileSupportTest {
         assertEquals(setOf("en", "zh_CN", "zh_TW"), result.files.map { it.locale }.toSet())
         assertEquals(setOf("auth", "validation"), result.files.map { it.namespace }.toSet())
         assertTrue(result.files.all { it.recognized && it.entryCount == 1 })
+    }
+
+    @Test
+    fun `parser stops while building entries instead of retaining an oversized map`() {
+        val file = temp.resolve("many.json").apply { writeText("""{"one":"1","two":"2","three":"3"}""") }
+
+        val parsed = LanguageFileCodec.parse(file, "scheme", maxEntries = 2)
+
+        assertTrue(parsed.values.isEmpty())
+        assertTrue(parsed.issues.single().message.contains("2"))
+    }
+
+    @Test
+    fun `parser rejects extreme structured nesting before JSON tree allocation`() {
+        val nested = "{" + (1..129).joinToString("") { "\"level$it\":{" } + "\"value\":\"x\"" + "}".repeat(130)
+        val file = temp.resolve("deep.json").apply { writeText(nested) }
+
+        val parsed = LanguageFileCodec.parse(file, "scheme")
+
+        assertTrue(parsed.values.isEmpty())
+        assertTrue(parsed.issues.single().message.contains("128"))
+    }
+
+    @Test
+    fun `folder discovery uses the configured new-scheme file budget`() {
+        temp.resolve("large.json").writeText("""{"key":"value"}""" + " ".repeat(2_048))
+
+        val result =
+            LanguageFolderDiscovery.discover(
+                temp.toString(),
+                UsageScanSettingsDto(maxLanguageFileKb = 1),
+            )
+
+        assertFalse(result.files.single().recognized)
+        assertTrue(result.files.single().errorMessage.orEmpty().contains("1"))
     }
 }

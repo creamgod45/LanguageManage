@@ -2,6 +2,14 @@ package cg.creamgod45.settings
 
 import cg.creamgod45.localization.DEFAULT_USAGE_EXCLUDED_DIRECTORIES
 import cg.creamgod45.localization.DEFAULT_USAGE_REGEX_PATTERNS
+import cg.creamgod45.localization.DEFAULT_MAX_ENTRIES_PER_FILE
+import cg.creamgod45.localization.DEFAULT_MAX_ENTRIES_PER_SCHEME
+import cg.creamgod45.localization.DEFAULT_MAX_LANGUAGE_FILE_KB
+import cg.creamgod45.localization.DEFAULT_MAX_LANGUAGE_SCHEME_MB
+import cg.creamgod45.localization.HARD_MAX_ENTRIES_PER_FILE
+import cg.creamgod45.localization.HARD_MAX_ENTRIES_PER_SCHEME
+import cg.creamgod45.localization.HARD_MAX_LANGUAGE_FILE_KB
+import cg.creamgod45.localization.HARD_MAX_LANGUAGE_SCHEME_MB
 import cg.creamgod45.localization.UsageScanSettingsDto
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.components.PersistentStateComponent
@@ -53,6 +61,10 @@ internal class LanguageManagerSettings : PersistentStateComponent<LanguageManage
         var defaultParentLevels: Int = 1
         var defaultRegexPatterns: MutableList<String> = DEFAULT_USAGE_REGEX_PATTERNS.toMutableList()
         var defaultExcludedDirectories: MutableList<String> = DEFAULT_USAGE_EXCLUDED_DIRECTORIES.toMutableList()
+        var defaultMaxLanguageFileKb: Int = DEFAULT_MAX_LANGUAGE_FILE_KB
+        var defaultMaxLanguageSchemeMb: Int = DEFAULT_MAX_LANGUAGE_SCHEME_MB
+        var defaultMaxEntriesPerFile: Int = DEFAULT_MAX_ENTRIES_PER_FILE
+        var defaultMaxEntriesPerScheme: Int = DEFAULT_MAX_ENTRIES_PER_SCHEME
         var ignoreDuplicateValueIssues: Boolean = false
         var ignoreUnusedKeyIssues: Boolean = false
     }
@@ -91,6 +103,30 @@ internal class LanguageManagerSettings : PersistentStateComponent<LanguageManage
             settingsState.defaultExcludedDirectories = value.toMutableList()
         }
 
+    var defaultMaxLanguageFileKb: Int
+        get() = settingsState.defaultMaxLanguageFileKb.coerceIn(1, HARD_MAX_LANGUAGE_FILE_KB)
+        set(value) {
+            settingsState.defaultMaxLanguageFileKb = value.coerceIn(1, HARD_MAX_LANGUAGE_FILE_KB)
+        }
+
+    var defaultMaxLanguageSchemeMb: Int
+        get() = settingsState.defaultMaxLanguageSchemeMb.coerceIn(1, HARD_MAX_LANGUAGE_SCHEME_MB)
+        set(value) {
+            settingsState.defaultMaxLanguageSchemeMb = value.coerceIn(1, HARD_MAX_LANGUAGE_SCHEME_MB)
+        }
+
+    var defaultMaxEntriesPerFile: Int
+        get() = settingsState.defaultMaxEntriesPerFile.coerceIn(1, HARD_MAX_ENTRIES_PER_FILE)
+        set(value) {
+            settingsState.defaultMaxEntriesPerFile = value.coerceIn(1, HARD_MAX_ENTRIES_PER_FILE)
+        }
+
+    var defaultMaxEntriesPerScheme: Int
+        get() = settingsState.defaultMaxEntriesPerScheme.coerceIn(1, HARD_MAX_ENTRIES_PER_SCHEME)
+        set(value) {
+            settingsState.defaultMaxEntriesPerScheme = value.coerceIn(1, HARD_MAX_ENTRIES_PER_SCHEME)
+        }
+
     var ignoreDuplicateValueIssues: Boolean
         get() = settingsState.ignoreDuplicateValueIssues
         set(value) {
@@ -108,6 +144,10 @@ internal class LanguageManagerSettings : PersistentStateComponent<LanguageManage
             basePath = resolveDefaultBasePath(projectBasePath, defaultBasePathMode, defaultParentLevels),
             regexPatterns = defaultRegexPatterns,
             excludedDirectories = defaultExcludedDirectories,
+            maxLanguageFileKb = defaultMaxLanguageFileKb,
+            maxLanguageSchemeMb = defaultMaxLanguageSchemeMb,
+            maxEntriesPerFile = defaultMaxEntriesPerFile,
+            maxEntriesPerScheme = defaultMaxEntriesPerScheme,
         )
 
     override fun getState(): SettingsState = settingsState

@@ -3,7 +3,6 @@ description: 提議新的使用流程、管理能力、IDE 整合或品質分析
 title: "[Feature] "
 labels:
   - enhancement
-type: feature
 body:
   - type: markdown
     attributes:

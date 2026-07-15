@@ -46,11 +46,24 @@ val DEFAULT_USAGE_EXCLUDED_DIRECTORIES: List<String> =
         ".ai",
     )
 
+const val DEFAULT_MAX_LANGUAGE_FILE_KB = 2_048
+const val DEFAULT_MAX_LANGUAGE_SCHEME_MB = 20
+const val DEFAULT_MAX_ENTRIES_PER_FILE = 20_000
+const val DEFAULT_MAX_ENTRIES_PER_SCHEME = 100_000
+const val HARD_MAX_LANGUAGE_FILE_KB = 10_240
+const val HARD_MAX_LANGUAGE_SCHEME_MB = 100
+const val HARD_MAX_ENTRIES_PER_FILE = 100_000
+const val HARD_MAX_ENTRIES_PER_SCHEME = 250_000
+
 @Serializable
 data class UsageScanSettingsDto(
     val basePath: String = "",
     val regexPatterns: List<String> = DEFAULT_USAGE_REGEX_PATTERNS,
     val excludedDirectories: List<String> = DEFAULT_USAGE_EXCLUDED_DIRECTORIES,
+    val maxLanguageFileKb: Int = DEFAULT_MAX_LANGUAGE_FILE_KB,
+    val maxLanguageSchemeMb: Int = DEFAULT_MAX_LANGUAGE_SCHEME_MB,
+    val maxEntriesPerFile: Int = DEFAULT_MAX_ENTRIES_PER_FILE,
+    val maxEntriesPerScheme: Int = DEFAULT_MAX_ENTRIES_PER_SCHEME,
 )
 
 @Serializable

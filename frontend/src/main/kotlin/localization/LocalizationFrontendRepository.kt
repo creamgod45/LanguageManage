@@ -32,8 +32,10 @@ internal class LocalizationFrontendRepository(
 
     suspend fun reload(id: String) = LocalizationManagerRpcApi.getInstance().reload(project.projectId(), id, true)
 
-    suspend fun discoverLanguageFiles(folderPaths: List<String>) =
-        LocalizationManagerRpcApi.getInstance().discoverLanguageFiles(project.projectId(), folderPaths)
+    suspend fun discoverLanguageFiles(
+        folderPaths: List<String>,
+        settings: UsageScanSettingsDto,
+    ) = LocalizationManagerRpcApi.getInstance().discoverLanguageFiles(project.projectId(), folderPaths, settings)
 
     suspend fun exportSchemeSettings() = LocalizationManagerRpcApi.getInstance().exportSchemeSettings(project.projectId())
 
