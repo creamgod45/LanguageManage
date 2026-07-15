@@ -1,7 +1,12 @@
 # Language Manager Changelog
 
-## 1.4.0
+## 1.4.1
 
+- 插件最低相容版本設為 JetBrains Platform build `253.5`（IntelliJ IDEA 2025.3.5），移除最高版本限制；記錄 Marketplace 對 2025.3.5～2026.2 RC 的相容性驗證結果。
+- 顯示語言的明確選擇改由標準 ResourceBundle 依 locale 載入，修正 2025.3.5 平台忽略指定語言而回退英文的差異。
+- IDE 全文搜尋改為所有格式只帶入實際 key，不再加入 PHP 檔名或 ResourceBundle bundle namespace。
+- 翻譯操作新增「帶入計算次數格式於全文搜尋」：以目前 key 取代方案使用率 Regex 的 `(?<key>…)` 群組、移除最外層 `^`／`$`，並自動開啟 IDE Regex 搜尋模式。
+- 修正使用率 Regex 帶入 Find in Files 時 `\Q...\E` 與反斜線可能被 IDE 二次跳脫而無法命中的問題；Regex 模式會先啟用，key 改為逐字元跳脫。
 - Tool Window「新增方案」下拉選單新增「匯入方案設定」與「匯出方案設定」，使用有版本的可攜式 JSON。
 - 匯出包含方案名稱、列管檔案、base path、Regex 與排除清單；專案內路徑自動轉為相對路徑，不匯出 cache、entries 或 issues。
 - 匯入前顯示方案／檔案／解析路徑／識別結果預覽；缺失、超出專案根目錄或不安全路徑會禁止匯入。

@@ -1,6 +1,64 @@
 package cg.creamgod45.localization
 
 object EntrySearch {
+    fun findInFilesQuery(row: JoinedTranslationRow): String = row.key
+
+    fun usageRegexFindInFilesQuery(row: JoinedTranslationRow, patterns: List<String>): String? = patterns
+        .asSequence()
+        .map(String::trim)
+        .filter(String::isNotEmpty)
+        .mapNotNull { injectLiteralKey(it, row.key) }
+        .firstOrNull()
+
+    private fun injectLiteralKey(pattern: String, key: String): String? {
+        val marker = "(?<key>"
+        val groupStart = pattern.indexOf(marker)
+        if (groupStart < 0) return null
+
+        var depth = 1
+        var inCharacterClass = false
+        var escaped = false
+        var index = groupStart + marker.length
+        while (index < pattern.length) {
+            val character = pattern[index]
+            when {
+                escaped -> escaped = false
+                character == '\\' -> escaped = true
+                character == '[' && !inCharacterClass -> inCharacterClass = true
+                character == ']' && inCharacterClass -> inCharacterClass = false
+                !inCharacterClass && character == '(' -> depth++
+                !inCharacterClass && character == ')' -> {
+                    depth--
+                    if (depth == 0) break
+                }
+            }
+            index++
+        }
+        if (depth != 0) return null
+
+        val withKey = pattern.replaceRange(groupStart, index + 1, escapeRegexLiteral(key)).trim()
+        val withoutStartAnchor = withKey.removePrefix("^")
+        return if (withoutStartAnchor.endsWithUnescapedDollar()) withoutStartAnchor.dropLast(1) else withoutStartAnchor
+    }
+
+    private fun String.endsWithUnescapedDollar(): Boolean {
+        if (!endsWith('$')) return false
+        var precedingBackslashes = 0
+        var index = lastIndex - 1
+        while (index >= 0 && this[index] == '\\') {
+            precedingBackslashes++
+            index--
+        }
+        return precedingBackslashes % 2 == 0
+    }
+
+    private fun escapeRegexLiteral(value: String): String = buildString(value.length) {
+        value.forEach { character ->
+            if (character in REGEX_META_CHARACTERS) append('\\')
+            append(character)
+        }
+    }
+
     fun filter(entries: List<LanguageEntryDto>, query: String, mode: SearchMode, locale: String?): List<LanguageEntryDto> {
         val normalized = query.trim()
         return entries.filter { entry ->
@@ -45,6 +103,8 @@ object EntrySearch {
             entryIds = selectedRows.flatMap { it.translations }.map { it.id }.distinct(),
         )
     }
+
+    private val REGEX_META_CHARACTERS = setOf('\\', '.', '^', '$', '|', '?', '*', '+', '(', ')', '[', ']', '{', '}')
 }
 
 data class JoinedTranslationRow(

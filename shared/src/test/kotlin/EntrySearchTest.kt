@@ -4,8 +4,87 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 
 class EntrySearchTest {
-    private fun entry(locale: String, namespace: String, key: String, value: String, usageCount: Int = 0) =
-        LanguageEntryDto("$locale.$namespace.$key", "s", "$locale.json", locale, namespace, key, value, usageCount)
+    private fun entry(
+        locale: String,
+        namespace: String,
+        key: String,
+        value: String,
+        usageCount: Int = 0,
+        filePath: String = "$locale.json",
+    ) = LanguageEntryDto("$locale.$namespace.$key", "s", filePath, locale, namespace, key, value, usageCount)
+
+    @Test
+    fun `find in files omits properties bundle namespace`() {
+        val row = EntrySearch.join(
+            listOf(
+                entry("en", "LanguageManagerFrontendBundle", "button.save", "Save", filePath = "LanguageManagerFrontendBundle.properties"),
+                entry("zh_TW", "LanguageManagerFrontendBundle", "button.save", "儲存", filePath = "LanguageManagerFrontendBundle_zh_TW.properties"),
+            ),
+        ).single()
+
+        assertEquals("button.save", EntrySearch.findInFilesQuery(row))
+    }
+
+    @Test
+    fun `find in files omits Laravel PHP namespace`() {
+        val row = EntrySearch.join(
+            listOf(entry("en", "auth", "failed", "Login failed", filePath = "en/auth.php")),
+        ).single()
+
+        assertEquals("failed", EntrySearch.findInFilesQuery(row))
+    }
+
+    @Test
+    fun `find in files uses key when namespace is empty`() {
+        val row = EntrySearch.join(
+            listOf(entry("en", "", "Not powered on or not detected", "Offline")),
+        ).single()
+
+        assertEquals("Not powered on or not detected", EntrySearch.findInFilesQuery(row))
+    }
+
+    @Test
+    fun `usage regex search injects literal key and removes boundary anchors`() {
+        val row = EntrySearch.join(
+            listOf(entry("en", "auth", "Not powered on (or not detected)", "Offline", filePath = "en/auth.php")),
+        ).single()
+
+        assertEquals(
+            """\(\s*(?<quote>["'])Not powered on \(or not detected\)\k<quote>\s*\)""",
+            EntrySearch.usageRegexFindInFilesQuery(
+                row,
+                listOf("""^\(\s*(?<quote>["'])(?<key>[^\r\n]{1,256}?)\k<quote>\s*\)$"""),
+            ),
+        )
+    }
+
+    @Test
+    fun `usage regex search escapes dotted key without quote blocks or doubled slashes`() {
+        val row = EntrySearch.join(
+            listOf(entry("en", "", "custom.attribute-name.rule-name", "Custom")),
+        ).single()
+
+        assertEquals(
+            """\(\s*(?<quote>["'])custom\.attribute-name\.rule-name\k<quote>\s*\)""",
+            EntrySearch.usageRegexFindInFilesQuery(
+                row,
+                listOf("""\(\s*(?<quote>["'])(?<key>[^\r\n]{1,256}?)\k<quote>\s*\)"""),
+            ),
+        )
+    }
+
+    @Test
+    fun `usage regex search skips patterns without named key group`() {
+        val row = EntrySearch.join(listOf(entry("en", "", "ready", "Ready"))).single()
+
+        assertEquals(
+            """message\(ready\)""",
+            EntrySearch.usageRegexFindInFilesQuery(
+                row,
+                listOf("""legacy\(([^)]+)\)""", """message\((?<key>[^)]+)\)"""),
+            ),
+        )
+    }
 
     @Test
     fun `filters joined rows by missing translations and zero usage`() {

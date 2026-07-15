@@ -75,7 +75,7 @@ flowchart LR
 | --- | --- |
 | `src/main/resources/META-INF/plugin.xml` | 插件 ID、名稱、說明、vendor 與三個 content module 的入口 |
 | `src/main/resources/messages/LanguageManagerBundle*.properties` | 插件名稱與說明的五語言字典 |
-| `build.gradle.kts` | IntelliJ IDEA 2026.1.3、split mode、plugin module 與測試框架設定 |
+| `build.gradle.kts` | IntelliJ IDEA 2025.3.5 最低相容基準、split mode、plugin module 與測試框架設定 |
 | `gradle.properties` | 發布版本與 Gradle/Kotlin 建置選項 |
 | `CHANGELOG.md` | 各版本功能與修正紀錄 |
 | `AGENTS.md` | 專案開發提示：產品原則、架構、安全、多國語言、測試與 Git 習慣 |
@@ -128,6 +128,7 @@ flowchart LR
 | `frontend/src/test/kotlin/IssueVisibilityTest.kt` | 重複值與可能未使用建議可獨立隱藏，其他 issue 不受影響 |
 | `frontend/src/test/kotlin/LanguageManagerDefaultSettingsTest.kt` | base path 層級、新方案預設、issue 顯示預設與舊排除清單遷移 |
 | `backend/src/test/kotlin/UsageScanSupportTest.kt` | 自訂 Regex、排除相對路徑、計數結果與不安全設定拒絕 |
+| `docs/compatibility.md` | Marketplace／Plugin Verifier 已驗證的 IDE 版本與插件相容範圍 |
 | `backend/src/test/kotlin/TranslationInputValidationTest.kt` | 句子型／Unicode key 接受，空白、控制字元與超長 key 拒絕 |
 | `backend/src/test/kotlin/SchemeSettingsTransferSupportTest.kt` | 專案相對路徑 round trip、缺失檔案、父目錄 traversal 與格式版本拒絕 |
 
@@ -185,9 +186,10 @@ flowchart LR
 1. `EntrySearch.filter()` 依查詢模式與 locale 篩選 entry，`filterRows()` 再篩選缺少翻譯或使用次數為 0 的 JOIN row。
 2. `EntrySearch.join()` 以 `namespace + key` 聚合，各 locale 形成獨立欄位。
 3. `EntrySearch.paginate()` 將顯示上限限制為每頁 100 列。
-4. 單一儲存格仍會映射到該 row，供編輯、刪除與 IDE 全文搜尋使用。
-5. `Ctrl+C` 複製所選 cell；多 cell 輸出 TSV。`Ctrl+V` 只允許寫入單一語言 value 欄位。
-6. 問題表透過 `IssueVisibility` 套用全域偏好；被隱藏的重複值／可能未使用建議不納入狀態數量或全部批量處理。
+4. 單一儲存格仍會映射到該 row，供編輯、刪除與 IDE 全文搜尋使用；所有格式都只搜尋實際 key，不加入檔名或 bundle namespace。
+5. 「帶入計算次數格式於全文搜尋」會以目前 key 取代方案使用率 Regex 的 `(?<key>…)` 群組、移除邊界錨點並自動啟用 IDE Regex 搜尋。
+6. `Ctrl+C` 複製所選 cell；多 cell 輸出 TSV。`Ctrl+V` 只允許寫入單一語言 value 欄位。
+7. 問題表透過 `IssueVisibility` 套用全域偏好；被隱藏的重複值／可能未使用建議不納入狀態數量或全部批量處理。
 
 ### 4. 一般新增、編輯與刪除
 
@@ -260,7 +262,7 @@ sequenceDiagram
 
 ## 開發與測試
 
-需求：JDK 21，或使用 PhpStorm 2026.1 隨附 JBR。
+插件最低支援 JetBrains Platform build `253.5`（IntelliJ IDEA 2025.3.5），未設定最高版本；已驗證版本請參閱 [相容性驗證](docs/compatibility.md)。開發建置需求為 JDK 21，或使用 PhpStorm 2026.1 隨附 JBR。
 
 ```powershell
 $env:JAVA_HOME='C:\Program Files\JetBrains\PhpStorm 2026.1\jbr'

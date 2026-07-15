@@ -44,7 +44,7 @@ subprojects {
 // Read more: https://plugins.jetbrains.com/docs/intellij/tools-intellij-platform-gradle-plugin.html
 dependencies {
     intellijPlatform {
-        intellijIdea("2026.1.3")
+        intellijIdea("2025.3.5")
 
         pluginModule(implementation(project(":shared")))
         pluginModule(implementation(project(":frontend")))
@@ -57,4 +57,10 @@ dependencies {
 intellijPlatform {
     splitMode = true
     pluginInstallationTarget = SplitModeAware.PluginInstallationTarget.BOTH
+    pluginConfiguration {
+        ideaVersion {
+            sinceBuild = "253.5"
+            untilBuild = provider { null }
+        }
+    }
 }

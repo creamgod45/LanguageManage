@@ -417,11 +417,22 @@ internal class LocalizationManagerPanel(private val project: Project) : JPanel(B
 
     private fun findSelectedKeyInProject() {
         val row = selectedRows().singleOrNull() ?: return showError(message("error.select.translation.cell"))
-        val fullKey = listOf(row.namespace, row.key).filter { it.isNotBlank() }.joinToString(".")
+        openFindInFiles(EntrySearch.findInFilesQuery(row), regex = false)
+    }
+
+    private fun findSelectedKeyWithUsageRegex() {
+        val row = selectedRows().singleOrNull() ?: return showError(message("error.select.translation.cell"))
+        val scheme = activeScheme() ?: return showError(message("error.no.active.scheme"))
+        val query = EntrySearch.usageRegexFindInFilesQuery(row, scheme.usageScanSettings.regexPatterns)
+            ?: return showError(message("error.find.usage.regex.unavailable"))
+        openFindInFiles(query, regex = true)
+    }
+
+    private fun openFindInFiles(query: String, regex: Boolean) {
         val model = FindManager.getInstance(project).findInProjectModel.clone().apply {
-            stringToFind = fullKey
             isReplaceState = false
-            isRegularExpressions = false
+            isRegularExpressions = regex
+            stringToFind = query
             isMultipleFiles = true
         }
         val dataContext = DataManager.getInstance().getDataContext(entryTable)
@@ -582,6 +593,7 @@ internal class LocalizationManagerPanel(private val project: Project) : JPanel(B
                 message("action.delete.bulk") to ::deleteSelected,
                 message("action.rename") to ::renameKey,
                 message("action.find.in.ide") to ::findSelectedKeyInProject,
+                message("action.find.in.ide.usage.regex") to ::findSelectedKeyWithUsageRegex,
             ).forEach { (label, action) -> add(JMenuItem(label).apply { addActionListener { action() } }) }
         }
         return JButton(message("action.dropdown")).apply {

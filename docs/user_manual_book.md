@@ -4,6 +4,10 @@
 
 > 插件不會自動選取、納管或修改任何語言檔。只有加入目前方案的檔案才會被讀取或寫入。
 
+### 支援的 IDE 版本
+
+插件最低支援 JetBrains Platform build `253.5`（IntelliJ IDEA 2025.3.5），且不設定最高版本。目前已由 Marketplace Plugin Verifier 驗證 IntelliJ IDEA 2025.3.5、2025.3.6、2026.1.1～2026.1.4 與 2026.2 RC 相容；完整紀錄請參閱 [相容性驗證](compatibility.md)。
+
 ## 1. 支援內容
 
 ### 支援格式
@@ -174,7 +178,9 @@ LanguageManagerBundle_zh_TW.properties  -> locale: zh_TW, namespace: LanguageMan
 
 ### IDE 全文搜尋
 
-選擇一列後點擊「IDE 全文搜尋」，插件會開啟 IDE 原生 **Find in Files**，並自動帶入完整的 `namespace.key`。
+選擇一列後點擊「IDE 全文搜尋」，插件會開啟 IDE 原生 **Find in Files**，且所有格式都只帶入實際 key。PHP 的檔名 namespace（例如 `auth`）及 Java ResourceBundle 的 bundle namespace（例如 `LanguageManagerFrontendBundle`）都不會加入搜尋文字。
+
+點擊「帶入計算次數格式於全文搜尋」時，插件會從目前方案依序選擇第一個含 `(?<key>…)` 命名群組的使用率 Regex，將整個 key 群組替換成目前 row 的 literal key、移除最外層 `^`／`$`，並自動開啟 Find in Files 的 Regex 模式。key 內的句點等 Regex 符號會逐字元跳脫，例如 `custom\.attribute-name\.rule-name`，不會產生容易被 IDE 再次跳脫的 `\Q...\E`。其他群組及反向參照會保留，例如 `(?<quote>…)` 與 `\k<quote>`。若 Regex 清單沒有 `key` 命名群組，插件會顯示錯誤而不開啟搜尋。
 
 ## 7. 問題與建議
 
