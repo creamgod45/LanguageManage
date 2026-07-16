@@ -1,11 +1,11 @@
 package cg.creamgod45.settings
 
-import cg.creamgod45.localization.DEFAULT_USAGE_EXCLUDED_DIRECTORIES
-import cg.creamgod45.localization.DEFAULT_USAGE_REGEX_PATTERNS
 import cg.creamgod45.localization.DEFAULT_MAX_ENTRIES_PER_FILE
 import cg.creamgod45.localization.DEFAULT_MAX_ENTRIES_PER_SCHEME
 import cg.creamgod45.localization.DEFAULT_MAX_LANGUAGE_FILE_KB
 import cg.creamgod45.localization.DEFAULT_MAX_LANGUAGE_SCHEME_MB
+import cg.creamgod45.localization.DEFAULT_USAGE_EXCLUDED_DIRECTORIES
+import cg.creamgod45.localization.DEFAULT_USAGE_REGEX_PATTERNS
 import java.nio.file.Path
 import kotlin.test.Test
 import kotlin.test.assertEquals

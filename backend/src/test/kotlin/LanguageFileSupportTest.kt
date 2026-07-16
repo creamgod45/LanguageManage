@@ -430,7 +430,12 @@ class LanguageFileSupportTest {
         val parsed = LanguageFileCodec.parse(file, "scheme", maxEntries = 2)
 
         assertTrue(parsed.values.isEmpty())
-        assertTrue(parsed.issues.single().message.contains("2"))
+        assertTrue(
+            parsed.issues
+                .single()
+                .message
+                .contains("2"),
+        )
     }
 
     @Test
@@ -441,7 +446,12 @@ class LanguageFileSupportTest {
         val parsed = LanguageFileCodec.parse(file, "scheme")
 
         assertTrue(parsed.values.isEmpty())
-        assertTrue(parsed.issues.single().message.contains("128"))
+        assertTrue(
+            parsed.issues
+                .single()
+                .message
+                .contains("128"),
+        )
     }
 
     @Test
@@ -455,6 +465,12 @@ class LanguageFileSupportTest {
             )
 
         assertFalse(result.files.single().recognized)
-        assertTrue(result.files.single().errorMessage.orEmpty().contains("1"))
+        assertTrue(
+            result.files
+                .single()
+                .errorMessage
+                .orEmpty()
+                .contains("1"),
+        )
     }
 }

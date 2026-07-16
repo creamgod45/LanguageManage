@@ -1,8 +1,8 @@
 package cg.creamgod45.localization.ui
 
+import cg.creamgod45.localization.JoinedTranslationRow
 import cg.creamgod45.localization.LanguageEntryDto
 import cg.creamgod45.localization.LanguageSchemeDto
-import cg.creamgod45.localization.JoinedTranslationRow
 import java.nio.file.Path
 import kotlin.test.Test
 import kotlin.test.assertEquals

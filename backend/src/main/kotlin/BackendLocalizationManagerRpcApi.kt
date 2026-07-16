@@ -111,9 +111,10 @@ class BackendLocalizationManagerRpcApi : LocalizationManagerRpcApi {
         projectId: ProjectId,
         schemeId: String,
         mutations: List<EntryMutationDto>,
-    ): ChangePreviewDto = withContext(Dispatchers.IO) {
-        projectId.service()?.previewEntryMutations(schemeId, mutations) ?: ChangePreviewDto()
-    }
+    ): ChangePreviewDto =
+        withContext(Dispatchers.IO) {
+            projectId.service()?.previewEntryMutations(schemeId, mutations) ?: ChangePreviewDto()
+        }
 
     override suspend fun applyPreviewedEntryMutations(
         projectId: ProjectId,

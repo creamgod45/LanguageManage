@@ -58,8 +58,10 @@ internal class LocalizationFrontendRepository(
     suspend fun translateWithAi(request: AiTranslationRequestDto) =
         LocalizationManagerRpcApi.getInstance().translateWithAi(project.projectId(), request)
 
-    suspend fun previewEntryMutations(id: String, mutations: List<EntryMutationDto>) =
-        LocalizationManagerRpcApi.getInstance().previewEntryMutations(project.projectId(), id, mutations)
+    suspend fun previewEntryMutations(
+        id: String,
+        mutations: List<EntryMutationDto>,
+    ) = LocalizationManagerRpcApi.getInstance().previewEntryMutations(project.projectId(), id, mutations)
 
     suspend fun applyPreviewedEntryMutations(
         id: String,

@@ -7,7 +7,28 @@ import kotlin.test.assertTrue
 class RegexPresetUiTest {
     @Test
     fun `recommended framework patterns are valid and retain key capture`() {
-        assertTrue(RegexPresetUi.presets.map { it.name }.containsAll(listOf("Laravel", "Symfony", "webman", "Laminas / Zend", "CodeIgniter", "CakePHP", "Yii", "Phalcon", "FuelPHP", "Slim / Pixie / custom", "Spring MessageSource", "ResourceBundle", "IntelliJ Platform Plugin")))
+        assertTrue(
+            RegexPresetUi.presets
+                .map {
+                    it.name
+                }.containsAll(
+                    listOf(
+                        "Laravel",
+                        "Symfony",
+                        "webman",
+                        "Laminas / Zend",
+                        "CodeIgniter",
+                        "CakePHP",
+                        "Yii",
+                        "Phalcon",
+                        "FuelPHP",
+                        "Slim / Pixie / custom",
+                        "Spring MessageSource",
+                        "ResourceBundle",
+                        "IntelliJ Platform Plugin",
+                    ),
+                ),
+        )
         val patterns = RegexPresetUi.presets.flatMap { it.patterns }
         assertEquals(patterns.size, patterns.distinct().size)
         patterns.forEach { pattern ->

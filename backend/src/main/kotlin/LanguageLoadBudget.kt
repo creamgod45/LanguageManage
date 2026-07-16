@@ -1,8 +1,8 @@
 package cg.creamgod45.localization
 
-import cg.creamgod45.LanguageManagerBackendBundle.message as backendMessage
 import java.nio.file.Files
 import java.nio.file.Path
+import cg.creamgod45.LanguageManagerBackendBundle.message as backendMessage
 
 /** Tracks bounded language-file input before parsers or caches may retain it. */
 internal class LanguageLoadBudget(
@@ -23,7 +23,10 @@ internal class LanguageLoadBudget(
         return size
     }
 
-    fun acceptEntries(path: Path, count: Int) {
+    fun acceptEntries(
+        path: Path,
+        count: Int,
+    ) {
         require(count <= settings.maxEntriesPerFile) {
             backendMessage("load.file.too.many.entries", path, settings.maxEntriesPerFile)
         }

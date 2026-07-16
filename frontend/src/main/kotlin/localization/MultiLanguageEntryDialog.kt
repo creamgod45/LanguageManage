@@ -54,7 +54,17 @@ internal object TranslationEditorSupport {
     private fun inferTarget(filePath: String): TranslationEditorTarget {
         val path = Path.of(filePath)
         return when (path.extension.lowercase()) {
-            "php" -> TranslationEditorTarget(filePath, path.parent?.fileName?.toString().orEmpty(), path.nameWithoutExtension)
+            "php" -> {
+                TranslationEditorTarget(
+                    filePath,
+                    path.parent
+                        ?.fileName
+                        ?.toString()
+                        .orEmpty(),
+                    path.nameWithoutExtension,
+                )
+            }
+
             "properties" -> {
                 val match = propertiesLocaleSuffix.matchEntire(path.nameWithoutExtension)
                 if (match == null) {
@@ -63,7 +73,10 @@ internal object TranslationEditorSupport {
                     TranslationEditorTarget(filePath, match.groupValues[2], match.groupValues[1])
                 }
             }
-            else -> TranslationEditorTarget(filePath, path.nameWithoutExtension, "")
+
+            else -> {
+                TranslationEditorTarget(filePath, path.nameWithoutExtension, "")
+            }
         }
     }
 }

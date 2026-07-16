@@ -259,7 +259,8 @@ class LocalizationManagerService(
         } catch (error: Exception) {
             written.asReversed().forEach { change ->
                 runCatching { SafeLanguageFileAccess.atomicWrite(Path.of(change.filePath), change.beforeContent) }
-                    .exceptionOrNull()?.let(error::addSuppressed)
+                    .exceptionOrNull()
+                    ?.let(error::addSuppressed)
             }
             throw error
         }
@@ -277,11 +278,13 @@ class LocalizationManagerService(
             backendMessage("edit.fix.parse.first")
         }
         val changed = EntryMutationSupport.apply(documents, mutableState.value.entries, mutations) { sanitizeText(it, 100_000) }
-        return ChangePreviewDto(changed.mapNotNull { document ->
-            val before = SafeLanguageFileAccess.read(document.path)
-            val after = LanguageFileCodec.render(document)
-            if (before == after) null else FileChangePreviewDto(document.path.toString(), before, after, contentSha256(before))
-        })
+        return ChangePreviewDto(
+            changed.mapNotNull { document ->
+                val before = SafeLanguageFileAccess.read(document.path)
+                val after = LanguageFileCodec.render(document)
+                if (before == after) null else FileChangePreviewDto(document.path.toString(), before, after, contentSha256(before))
+            },
+        )
     }
 
     suspend fun deleteEntries(
@@ -534,11 +537,16 @@ class LocalizationManagerService(
                             it.fingerprints == fingerprints &&
                             cacheFitsLimits(scheme, it)
                     }?.let { cache ->
-                    LOG.info("Loaded localization scheme '${scheme.name}' from cache (${cache.entries.size} entries)")
-                    mutableState.value =
-                        mutableState.value.copy(activeSchemeId = scheme.id, entries = cache.entries, issues = cache.issues, busy = false)
-                    return
-                }
+                        LOG.info("Loaded localization scheme '${scheme.name}' from cache (${cache.entries.size} entries)")
+                        mutableState.value =
+                            mutableState.value.copy(
+                                activeSchemeId = scheme.id,
+                                entries = cache.entries,
+                                issues = cache.issues,
+                                busy = false,
+                            )
+                        return
+                    }
             }
             val documents = parseDocuments(scheme)
             val entriesWithoutUsage =
@@ -620,8 +628,8 @@ class LocalizationManagerService(
     private fun cacheFitsLimits(
         scheme: LanguageSchemeDto,
         cache: CacheStore,
-    ): Boolean {
-        return runCatching {
+    ): Boolean =
+        runCatching {
             val budget = LanguageLoadBudget(scheme.usageScanSettings)
             scheme.files.forEach { raw -> budget.acceptFile(SafeLanguageFileAccess.validate(raw)) }
             cache.entries
@@ -630,7 +638,6 @@ class LocalizationManagerService(
                 .forEach { (filePath, count) -> budget.acceptEntries(Path.of(filePath), count) }
             true
         }.getOrDefault(false)
-    }
 
     private fun validateMutation(
         scheme: LanguageSchemeDto,

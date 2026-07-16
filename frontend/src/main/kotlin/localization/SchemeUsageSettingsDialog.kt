@@ -183,7 +183,13 @@ internal class SchemeUsageSettingsDialog(
                             addActionListener { model.replaceWith(defaultValues) }
                         },
                     )
-                    if (regexInput) add(RegexPresetUi.button { patterns -> patterns.filterNot { it in model.values() }.forEach(model::addElement) })
+                    if (regexInput) {
+                        add(
+                            RegexPresetUi.button { patterns ->
+                                patterns.filterNot { it in model.values() }.forEach(model::addElement)
+                            },
+                        )
+                    }
                 },
                 BorderLayout.SOUTH,
             )

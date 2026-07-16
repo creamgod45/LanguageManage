@@ -1,11 +1,11 @@
 package cg.creamgod45
 
-import cg.creamgod45.localization.LanguageEntryDto
-import cg.creamgod45.localization.UsageScanSettingsDto
 import cg.creamgod45.localization.HARD_MAX_ENTRIES_PER_FILE
 import cg.creamgod45.localization.HARD_MAX_ENTRIES_PER_SCHEME
 import cg.creamgod45.localization.HARD_MAX_LANGUAGE_FILE_KB
 import cg.creamgod45.localization.HARD_MAX_LANGUAGE_SCHEME_MB
+import cg.creamgod45.localization.LanguageEntryDto
+import cg.creamgod45.localization.UsageScanSettingsDto
 import com.intellij.openapi.diagnostic.Logger
 import java.nio.charset.StandardCharsets
 import java.nio.file.FileVisitResult

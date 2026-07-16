@@ -3,9 +3,9 @@ package cg.creamgod45
 import cg.creamgod45.localization.DEFAULT_MAX_ENTRIES_PER_FILE
 import cg.creamgod45.localization.FolderDiscoveryDto
 import cg.creamgod45.localization.IssueSeverity
-import cg.creamgod45.localization.LanguageLoadBudget
 import cg.creamgod45.localization.LanguageFileCandidateDto
 import cg.creamgod45.localization.LanguageIssueDto
+import cg.creamgod45.localization.LanguageLoadBudget
 import cg.creamgod45.localization.UsageScanSettingsDto
 import kotlinx.serialization.json.*
 import java.nio.charset.StandardCharsets
@@ -573,12 +573,18 @@ internal object LanguageFileCodec {
                 }
             } else {
                 when (char) {
-                    '"' -> inString = true
+                    '"' -> {
+                        inString = true
+                    }
+
                     '{', '[' -> {
                         depth++
                         require(depth <= MAX_STRUCTURED_DEPTH) { backendMessage("parser.depth.limit", MAX_STRUCTURED_DEPTH) }
                     }
-                    '}', ']' -> depth--
+
+                    '}', ']' -> {
+                        depth--
+                    }
                 }
             }
         }

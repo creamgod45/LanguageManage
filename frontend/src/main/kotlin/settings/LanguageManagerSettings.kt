@@ -1,12 +1,12 @@
 package cg.creamgod45.settings
 
-import cg.creamgod45.localization.DEFAULT_USAGE_EXCLUDED_DIRECTORIES
 import cg.creamgod45.localization.AiProviderType
-import cg.creamgod45.localization.DEFAULT_USAGE_REGEX_PATTERNS
 import cg.creamgod45.localization.DEFAULT_MAX_ENTRIES_PER_FILE
 import cg.creamgod45.localization.DEFAULT_MAX_ENTRIES_PER_SCHEME
 import cg.creamgod45.localization.DEFAULT_MAX_LANGUAGE_FILE_KB
 import cg.creamgod45.localization.DEFAULT_MAX_LANGUAGE_SCHEME_MB
+import cg.creamgod45.localization.DEFAULT_USAGE_EXCLUDED_DIRECTORIES
+import cg.creamgod45.localization.DEFAULT_USAGE_REGEX_PATTERNS
 import cg.creamgod45.localization.HARD_MAX_ENTRIES_PER_FILE
 import cg.creamgod45.localization.HARD_MAX_ENTRIES_PER_SCHEME
 import cg.creamgod45.localization.HARD_MAX_LANGUAGE_FILE_KB
@@ -146,19 +146,27 @@ internal class LanguageManagerSettings : PersistentStateComponent<LanguageManage
 
     var aiProvider: AiProviderType
         get() = runCatching { AiProviderType.valueOf(settingsState.aiProvider) }.getOrDefault(AiProviderType.OPENAI_COMPATIBLE)
-        set(value) { settingsState.aiProvider = value.name }
+        set(value) {
+            settingsState.aiProvider = value.name
+        }
 
     var aiEndpoint: String
         get() = settingsState.aiEndpoint
-        set(value) { settingsState.aiEndpoint = value.trim() }
+        set(value) {
+            settingsState.aiEndpoint = value.trim()
+        }
 
     var aiModel: String
         get() = settingsState.aiModel
-        set(value) { settingsState.aiModel = value.trim() }
+        set(value) {
+            settingsState.aiModel = value.trim()
+        }
 
     var aiTemperature: String
         get() = settingsState.aiTemperature.trim()
-        set(value) { settingsState.aiTemperature = value.trim() }
+        set(value) {
+            settingsState.aiTemperature = value.trim()
+        }
 
     fun defaultUsageSettings(projectBasePath: String?): UsageScanSettingsDto =
         UsageScanSettingsDto(

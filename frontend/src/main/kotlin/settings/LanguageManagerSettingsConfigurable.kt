@@ -3,8 +3,8 @@ package cg.creamgod45.settings
 import cg.creamgod45.LanguageManagerBundle.message
 import cg.creamgod45.RegexPatternUi
 import cg.creamgod45.RegexPresetUi
-import cg.creamgod45.localization.DEFAULT_USAGE_EXCLUDED_DIRECTORIES
 import cg.creamgod45.localization.AiProviderType
+import cg.creamgod45.localization.DEFAULT_USAGE_EXCLUDED_DIRECTORIES
 import cg.creamgod45.localization.DEFAULT_USAGE_REGEX_PATTERNS
 import cg.creamgod45.localization.HARD_MAX_ENTRIES_PER_FILE
 import cg.creamgod45.localization.HARD_MAX_ENTRIES_PER_SCHEME
@@ -76,10 +76,11 @@ class LanguageManagerSettingsConfigurable(
         maxEntriesPerSchemeSpinner = JSpinner(SpinnerNumberModel(1, 1, HARD_MAX_ENTRIES_PER_SCHEME, 5_000))
         ignoreDuplicateValueIssuesBox = JBCheckBox(message("settings.issues.ignore.duplicate.values"))
         ignoreUnusedKeyIssuesBox = JBCheckBox(message("settings.issues.ignore.unused.keys"))
-        aiProviderBox = ComboBox(AiProviderType.entries.toTypedArray()).apply {
-            renderer = localizedRenderer { value -> (value as? AiProviderType)?.let { message(it.messageKey()) } }
-            addActionListener { applyProviderDefaultEndpoint() }
-        }
+        aiProviderBox =
+            ComboBox(AiProviderType.entries.toTypedArray()).apply {
+                renderer = localizedRenderer { value -> (value as? AiProviderType)?.let { message(it.messageKey()) } }
+                addActionListener { applyProviderDefaultEndpoint() }
+            }
         aiEndpointField = JBTextField()
         aiModelField = JBTextField()
         aiTemperatureField = JBTextField()
@@ -244,10 +245,11 @@ class LanguageManagerSettingsConfigurable(
         val field = aiEndpointField ?: return
         val oldDefaults = setOf("https://api.openai.com/v1/chat/completions", "https://api.anthropic.com/v1/messages", "")
         if (field.text.trim() !in oldDefaults) return
-        field.text = when (aiProviderBox?.selectedItem as? AiProviderType) {
-            AiProviderType.ANTHROPIC -> "https://api.anthropic.com/v1/messages"
-            else -> "https://api.openai.com/v1/chat/completions"
-        }
+        field.text =
+            when (aiProviderBox?.selectedItem as? AiProviderType) {
+                AiProviderType.ANTHROPIC -> "https://api.anthropic.com/v1/messages"
+                else -> "https://api.openai.com/v1/chat/completions"
+            }
     }
 
     private fun validateAiTemperature() {
@@ -333,7 +335,13 @@ class LanguageManagerSettingsConfigurable(
                             addActionListener { model.replaceWith(defaultValues) }
                         },
                     )
-                    if (regexInput) add(RegexPresetUi.button { patterns -> patterns.filterNot { it in model.values() }.forEach(model::addElement) })
+                    if (regexInput) {
+                        add(
+                            RegexPresetUi.button { patterns ->
+                                patterns.filterNot { it in model.values() }.forEach(model::addElement)
+                            },
+                        )
+                    }
                 },
                 BorderLayout.SOUTH,
             )

@@ -7,9 +7,9 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.ComboBox
 import com.intellij.openapi.ui.DialogWrapper
 import com.intellij.openapi.ui.ValidationInfo
+import com.intellij.ui.components.JBList
 import com.intellij.ui.components.JBScrollPane
 import com.intellij.ui.components.JBTextArea
-import com.intellij.ui.components.JBList
 import com.intellij.ui.table.JBTable
 import com.intellij.util.ui.FormBuilder
 import com.intellij.util.ui.JBUI
@@ -18,8 +18,8 @@ import java.awt.Dimension
 import javax.swing.DefaultListModel
 import javax.swing.JComponent
 import javax.swing.JLabel
-import javax.swing.ListSelectionModel
 import javax.swing.JPanel
+import javax.swing.ListSelectionModel
 import javax.swing.table.AbstractTableModel
 
 internal const val AI_KEY_SOURCE = "source-key"
@@ -32,10 +32,11 @@ internal class AiTranslationRequestDialog(
     private val sourceChoices = listOf(AiSourceChoice(null)) + locales.map { AiSourceChoice(it) }
     private val source = ComboBox(sourceChoices.toTypedArray())
     private val targetModel = DefaultListModel<String>()
-    private val target = JBList(targetModel).apply {
-        selectionMode = ListSelectionModel.MULTIPLE_INTERVAL_SELECTION
-        visibleRowCount = 5
-    }
+    private val target =
+        JBList(targetModel).apply {
+            selectionMode = ListSelectionModel.MULTIPLE_INTERVAL_SELECTION
+            visibleRowCount = 5
+        }
     private val previewModel = AiSourcePreviewTableModel(rows)
 
     init {
@@ -52,13 +53,15 @@ internal class AiTranslationRequestDialog(
     val sourceValues: List<String> get() = previewModel.values()
 
     override fun createCenterPanel(): JComponent =
-        FormBuilder.createFormBuilder()
+        FormBuilder
+            .createFormBuilder()
             .addComponent(JLabel(message("dialog.ai.translation.help.multi")))
             .addLabeledComponent(message("dialog.ai.source.locale"), source)
             .addLabeledComponent(message("dialog.ai.target.locales"), JBScrollPane(target))
             .addComponent(JLabel(message("dialog.ai.source.preview")))
             .addComponent(JBScrollPane(JBTable(previewModel).apply { autoResizeMode = JBTable.AUTO_RESIZE_LAST_COLUMN }))
-            .panel.apply { preferredSize = Dimension(JBUI.scale(900), JBUI.scale(520)) }
+            .panel
+            .apply { preferredSize = Dimension(JBUI.scale(900), JBUI.scale(520)) }
 
     override fun doValidate(): ValidationInfo? {
         if (targetLocales.isEmpty()) return ValidationInfo(message("error.ai.target.required"), target)
@@ -74,7 +77,9 @@ internal class AiTranslationRequestDialog(
         val selected = target.selectedValuesList.toSet()
         val sourceLocale = sourceLocale
         targetModel.clear()
-        locales.distinct().sorted()
+        locales
+            .distinct()
+            .sorted()
             .filterNot { it == sourceLocale }
             .forEach(targetModel::addElement)
         val preferred =
@@ -98,10 +103,17 @@ internal class TargetLocaleDialog(
     private val rowCount: Int,
 ) : DialogWrapper(project) {
     private val target = ComboBox(locales.toTypedArray())
-    init { title = message("dialog.copy.key.locale.title"); init() }
+
+    init {
+        title = message("dialog.copy.key.locale.title")
+        init()
+    }
+
     val locale: String get() = target.selectedItem?.toString().orEmpty()
+
     override fun createCenterPanel(): JComponent =
-        FormBuilder.createFormBuilder()
+        FormBuilder
+            .createFormBuilder()
             .addComponent(javax.swing.JLabel(message("dialog.copy.key.locale.prompt", rowCount)))
             .addLabeledComponent(message("dialog.ai.target.locale"), target)
             .panel
@@ -131,19 +143,30 @@ internal class AiTranslationReviewDialog(
         }
 }
 
-internal class AiTranslationFeedbackDialog(project: Project) : DialogWrapper(project) {
-    private val feedback = JBTextArea(6, 60).apply { lineWrap = true; wrapStyleWord = true }
+internal class AiTranslationFeedbackDialog(
+    project: Project,
+) : DialogWrapper(project) {
+    private val feedback =
+        JBTextArea(6, 60).apply {
+            lineWrap = true
+            wrapStyleWord = true
+        }
+
     init {
         title = message("dialog.ai.feedback.title")
         setCancelButtonText(message("button.back"))
         init()
     }
+
     val value: String get() = feedback.text.trim()
-    override fun createCenterPanel(): JComponent = JPanel(BorderLayout(0, JBUI.scale(6))).apply {
-        add(javax.swing.JLabel(message("dialog.ai.feedback.help")), BorderLayout.NORTH)
-        add(JBScrollPane(feedback), BorderLayout.CENTER)
-        preferredSize = Dimension(JBUI.scale(700), JBUI.scale(220))
-    }
+
+    override fun createCenterPanel(): JComponent =
+        JPanel(BorderLayout(0, JBUI.scale(6))).apply {
+            add(javax.swing.JLabel(message("dialog.ai.feedback.help")), BorderLayout.NORTH)
+            add(JBScrollPane(feedback), BorderLayout.CENTER)
+            preferredSize = Dimension(JBUI.scale(700), JBUI.scale(220))
+        }
+
     override fun doValidate(): ValidationInfo? =
         if (value.isBlank()) ValidationInfo(message("error.ai.feedback.required"), feedback) else null
 }
@@ -153,31 +176,79 @@ private class AiReviewTableModel(
     suggestions: Map<String, List<AiTranslationSuggestionDto>>,
 ) : AbstractTableModel() {
     private val locales = suggestions.keys.toList()
-    private val items = rows.mapIndexed { index, row ->
-        ReviewItem(
-            "item$index",
-            row.namespace,
-            row.key,
-            locales.associateWith { locale -> suggestions.getValue(locale).first { it.id == "item$index" }.translatedValue }.toMutableMap(),
-        )
-    }
+    private val items =
+        rows.mapIndexed { index, row ->
+            ReviewItem(
+                "item$index",
+                row.namespace,
+                row.key,
+                locales
+                    .associateWith { locale ->
+                        suggestions.getValue(locale).first { it.id == "item$index" }.translatedValue
+                    }.toMutableMap(),
+            )
+        }
+
     override fun getRowCount() = items.size
+
     override fun getColumnCount() = 2 + locales.size
+
     override fun getColumnName(column: Int) = if (column < 2) aiMetadataColumnName(column) else locales[column - 2]
-    override fun getValueAt(row: Int, column: Int): Any = when (column) { 0 -> items[row].namespace; 1 -> items[row].key; else -> items[row].values.getValue(locales[column - 2]) }
-    override fun isCellEditable(row: Int, column: Int) = column >= 2
-    override fun setValueAt(value: Any?, row: Int, column: Int) {
+
+    override fun getValueAt(
+        row: Int,
+        column: Int,
+    ): Any =
+        when (column) {
+            0 -> {
+                items[row].namespace
+            }
+
+            1 -> {
+                items[row].key
+            }
+
+            else -> {
+                items[row].values.getValue(
+                    locales[
+                        column -
+                            2,
+                    ],
+                )
+            }
+        }
+
+    override fun isCellEditable(
+        row: Int,
+        column: Int,
+    ) = column >= 2
+
+    override fun setValueAt(
+        value: Any?,
+        row: Int,
+        column: Int,
+    ) {
         if (column >= 2) {
             items[row].values[locales[column - 2]] = value?.toString().orEmpty()
             fireTableCellUpdated(row, column)
         }
     }
-    fun values(): Map<String, Map<String, String>> = locales.associateWith { locale -> items.associate { it.id to it.values.getValue(locale) } }
-    private data class ReviewItem(val id: String, val namespace: String, val key: String, val values: MutableMap<String, String>)
+
+    fun values(): Map<String, Map<String, String>> =
+        locales.associateWith { locale -> items.associate { it.id to it.values.getValue(locale) } }
+
+    private data class ReviewItem(
+        val id: String,
+        val namespace: String,
+        val key: String,
+        val values: MutableMap<String, String>,
+    )
 }
 
-internal fun sourceValue(row: JoinedTranslationRow, locale: String?): String? =
-    if (locale == null) row.key else row.translations.firstOrNull { it.locale == locale }?.value
+internal fun sourceValue(
+    row: JoinedTranslationRow,
+    locale: String?,
+): String? = if (locale == null) row.key else row.translations.firstOrNull { it.locale == locale }?.value
 
 internal fun aiMetadataColumnName(column: Int): String =
     when (column) {
@@ -186,11 +257,15 @@ internal fun aiMetadataColumnName(column: Int): String =
         else -> error("Unsupported AI translation metadata column: $column")
     }
 
-private data class AiSourceChoice(val locale: String?) {
+private data class AiSourceChoice(
+    val locale: String?,
+) {
     override fun toString(): String = locale ?: message("dialog.ai.source.key")
 }
 
-private class AiSourcePreviewTableModel(private val rows: List<JoinedTranslationRow>) : AbstractTableModel() {
+private class AiSourcePreviewTableModel(
+    private val rows: List<JoinedTranslationRow>,
+) : AbstractTableModel() {
     private val values = MutableList(rows.size) { rows[it].key }
     var sourceLocale: String? = null
         set(value) {
@@ -198,21 +273,38 @@ private class AiSourcePreviewTableModel(private val rows: List<JoinedTranslation
             rows.indices.forEach { index -> values[index] = sourceValue(rows[index], value).orEmpty() }
             fireTableDataChanged()
         }
+
     override fun getRowCount() = rows.size
+
     override fun getColumnCount() = 3
-    override fun getColumnName(column: Int) =
-        if (column < 2) aiMetadataColumnName(column) else message("dialog.ai.source.text")
-    override fun getValueAt(row: Int, column: Int): Any = when (column) {
-        0 -> rows[row].namespace
-        1 -> rows[row].key
-        else -> values[row]
-    }
-    override fun isCellEditable(row: Int, column: Int) = column == 2
-    override fun setValueAt(value: Any?, row: Int, column: Int) {
+
+    override fun getColumnName(column: Int) = if (column < 2) aiMetadataColumnName(column) else message("dialog.ai.source.text")
+
+    override fun getValueAt(
+        row: Int,
+        column: Int,
+    ): Any =
+        when (column) {
+            0 -> rows[row].namespace
+            1 -> rows[row].key
+            else -> values[row]
+        }
+
+    override fun isCellEditable(
+        row: Int,
+        column: Int,
+    ) = column == 2
+
+    override fun setValueAt(
+        value: Any?,
+        row: Int,
+        column: Int,
+    ) {
         if (column == 2) {
             values[row] = value?.toString().orEmpty()
             fireTableCellUpdated(row, column)
         }
     }
+
     fun values(): List<String> = values.toList()
 }
