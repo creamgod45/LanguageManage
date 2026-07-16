@@ -2,11 +2,31 @@ package cg.creamgod45.localization.ui
 
 import cg.creamgod45.localization.LanguageEntryDto
 import cg.creamgod45.localization.LanguageSchemeDto
+import cg.creamgod45.localization.JoinedTranslationRow
 import java.nio.file.Path
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 
 class TranslationEditorSupportTest {
+    @Test
+    fun `AI translation metadata columns resolve localized bundle labels`() {
+        listOf(aiMetadataColumnName(0), aiMetadataColumnName(1)).forEach { label ->
+            assertFalse(label.startsWith("!"), "Missing resource bundle key: $label")
+            assertFalse(label.isBlank())
+        }
+    }
+
+    @Test
+    fun `AI source can use key or selected locale value`() {
+        val entry = LanguageEntryDto("en", "scheme", "messages.json", "en", "messages", "welcome.title", "Welcome")
+        val row = JoinedTranslationRow("messages", "welcome.title", listOf(entry))
+
+        assertEquals("welcome.title", sourceValue(row, null))
+        assertEquals("Welcome", sourceValue(row, "en"))
+        assertEquals(null, sourceValue(row, "zh_TW"))
+    }
+
     @Test
     fun `derives one Laravel target for every locale folder`() {
         val root = Path.of("workspace", "lang").toAbsolutePath()

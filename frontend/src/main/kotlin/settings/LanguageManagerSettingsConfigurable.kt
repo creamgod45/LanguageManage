@@ -52,6 +52,7 @@ class LanguageManagerSettingsConfigurable(
     private var aiProviderBox: ComboBox<AiProviderType>? = null
     private var aiEndpointField: JBTextField? = null
     private var aiModelField: JBTextField? = null
+    private var aiTemperatureField: JBTextField? = null
     private var aiTokenField: JBPasswordField? = null
 
     override fun getDisplayName(): String = message("settings.display.name")
@@ -81,6 +82,7 @@ class LanguageManagerSettingsConfigurable(
         }
         aiEndpointField = JBTextField()
         aiModelField = JBTextField()
+        aiTemperatureField = JBTextField()
         aiTokenField = JBPasswordField()
 
         val form =
@@ -96,6 +98,8 @@ class LanguageManagerSettingsConfigurable(
                 .addLabeledComponent(message("settings.ai.provider"), aiProviderBox!!)
                 .addLabeledComponent(message("settings.ai.endpoint"), aiEndpointField!!)
                 .addLabeledComponent(message("settings.ai.model"), aiModelField!!)
+                .addLabeledComponent(message("settings.ai.temperature"), aiTemperatureField!!)
+                .addTooltip(message("settings.ai.temperature.help"))
                 .addLabeledComponent(message("settings.ai.token"), aiTokenField!!)
                 .addTooltip(message("settings.ai.help"))
                 .addSeparator()
@@ -151,6 +155,7 @@ class LanguageManagerSettingsConfigurable(
             aiProviderBox?.selectedItem != settings.aiProvider ||
             aiEndpointField?.text?.trim() != settings.aiEndpoint ||
             aiModelField?.text?.trim() != settings.aiModel ||
+            aiTemperatureField?.text?.trim() != settings.aiTemperature ||
             aiTokenField?.password?.concatToString().orEmpty() != AiProviderCredentialStore.getToken()
     }
 
@@ -163,6 +168,7 @@ class LanguageManagerSettingsConfigurable(
             maxEntriesPerFileSpinner?.value as? Int ?: 1,
             maxEntriesPerSchemeSpinner?.value as? Int ?: 1,
         )
+        validateAiTemperature()
 
         val settings = LanguageManagerSettings.getInstance()
         val selectedLanguage = languageBox?.selectedItem as? DisplayLanguage ?: DisplayLanguage.AUTO
@@ -185,6 +191,7 @@ class LanguageManagerSettingsConfigurable(
         settings.aiProvider = aiProviderBox?.selectedItem as? AiProviderType ?: AiProviderType.OPENAI_COMPATIBLE
         settings.aiEndpoint = aiEndpointField?.text.orEmpty()
         settings.aiModel = aiModelField?.text.orEmpty()
+        settings.aiTemperature = aiTemperatureField?.text.orEmpty()
         AiProviderCredentialStore.setToken(aiTokenField?.password?.concatToString().orEmpty())
         if (languageChanged || issueVisibilityChanged) LanguageManagerToolWindowFactory.refreshOpenToolWindows()
     }
@@ -205,6 +212,7 @@ class LanguageManagerSettingsConfigurable(
         aiProviderBox?.selectedItem = settings.aiProvider
         aiEndpointField?.text = settings.aiEndpoint
         aiModelField?.text = settings.aiModel
+        aiTemperatureField?.text = settings.aiTemperature
         aiTokenField?.text = AiProviderCredentialStore.getToken()
         updateParentLevelsEnabled()
     }
@@ -224,6 +232,7 @@ class LanguageManagerSettingsConfigurable(
         aiProviderBox = null
         aiEndpointField = null
         aiModelField = null
+        aiTemperatureField = null
         aiTokenField = null
     }
 
@@ -238,6 +247,16 @@ class LanguageManagerSettingsConfigurable(
         field.text = when (aiProviderBox?.selectedItem as? AiProviderType) {
             AiProviderType.ANTHROPIC -> "https://api.anthropic.com/v1/messages"
             else -> "https://api.openai.com/v1/chat/completions"
+        }
+    }
+
+    private fun validateAiTemperature() {
+        val text = aiTemperatureField?.text?.trim().orEmpty()
+        if (text.isEmpty()) return
+        val value = text.toDoubleOrNull()
+        val maximum = if (aiProviderBox?.selectedItem == AiProviderType.ANTHROPIC) 1.0 else 2.0
+        if (value == null || !value.isFinite() || value !in 0.0..maximum) {
+            throw ConfigurationException(message("settings.ai.temperature.invalid", maximum))
         }
     }
 

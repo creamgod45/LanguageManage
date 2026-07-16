@@ -1,5 +1,12 @@
 # Language Manager Changelog
 
+## 1.5.1
+
+- 修正部分 OpenAI-compatible 與 Anthropic 模型因固定傳送 `temperature=0.1` 而回傳 HTTP 400；Temperature 改為選填設定，預設留空時完全省略參數並使用 Provider／模型預設值，需要時才依 Provider 有效範圍送出。
+- 重整 AI 翻譯 Modal：來源可選 Key 或任一語言（優先預設 `en`，沒有時使用 Key），逐列原文可在送出前編輯；目標語言支援多選，產生結果以每個目標語言一欄合併檢視，最後以同一份檔案 Diff 套用。
+- 修正 AI 翻譯表格欄名引用不存在的字典 key 而顯示 `!column.namespace!`／`!column.key!`；「提出其他意見」按返回時會回到原 Diff 預覽，不再結束整個 AI 翻譯流程。
+- 依 JetBrains 官方規範重製 Marketplace 與 Tool Window 圖示：Marketplace Logo 使用 40×40 SVG、36 px 圓形可視區與 2 px 透明安全邊界，並以小型原生向量取代過大的自動描圖 SVG。
+
 ## 1.5.0
 
 - 主插件 descriptor 明確宣告 `com.intellij.modules.platform`，讓 Marketplace 依通用平台模組推導 IntelliJ IDEA、PhpStorm、WebStorm、PyCharm、DataGrip 等相容產品，不綁定單一語言 IDE。

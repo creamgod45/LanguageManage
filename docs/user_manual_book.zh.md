@@ -171,10 +171,10 @@ LanguageManagerBundle_zh_TW.properties  -> locale: zh_TW, namespace: LanguageMan
 
 ### AI 翻譯所選項目
 
-1. 前往 **Settings → Tools → LanguageManager**，選擇「OpenAI 相容 API」或「Anthropic Claude API」，填入完整請求端點、模型及 API Token。Token 儲存在 JetBrains PasswordSafe，不會包含於方案匯出檔。
-2. 選擇 1–100 個翻譯 row，點擊「操作 ▾ → AI 翻譯所選項目」，再選擇來源與目標語言。
-3. 插件會把全部來源值放進同一次請求，並要求保留 key、placeholder、ICU／MessageFormat、HTML、Markdown、跳脫及換行。
-4. 逐筆檢查並可編輯產生結果後，還要檢視檔案層級 Diff；只有「套用」會寫檔。「取消」不產生修改；「提出其他意見 AI」會要求輸入修正意見，並把原始來源值與上一輪已檢視翻譯一起帶入新一輪請求，新結果仍須重新檢視與確認 Diff。
+1. 前往 **Settings → Tools → LanguageManager**，選擇「OpenAI 相容 API」或「Anthropic Claude API」，填入完整請求端點、模型及 API Token。Token 儲存在 JetBrains PasswordSafe，不會包含於方案匯出檔。**Temperature** 預設留空，此時不傳送參數並採用 Provider／模型預設值；只有模型支援覆寫時才填寫（OpenAI-compatible 範圍 0–2、Anthropic 範圍 0–1）。
+2. 選擇 1–100 個翻譯 row，點擊「操作 ▾ → AI 翻譯所選項目」。Modal 有 `en` 時預設以 `en` 為來源，否則使用 Key；可切換來源、逐列編輯自動帶入的原文，並多選一個以上目標覆蓋語言。原文修改只用於這次 AI 請求，不會改寫來源語言檔。
+3. 插件會對每個目標語言各送出一個批量請求，避免回傳值錯配語言；提示詞要求保留 key、placeholder、ICU／MessageFormat、HTML、Markdown、跳脫及換行。
+4. 產生結果以每個目標語言一欄合併顯示，逐格檢查或編輯後再檢視同一份檔案層級 Diff；只有「套用」會寫檔。「取消」不產生修改；「提出其他意見 AI」會帶入已編輯原文與上一輪各語言的已檢視翻譯，新結果仍須重新檢視與確認 Diff。
 5. 單筆翻譯仍可執行，但會顯示 Toast，提醒多筆資料可一起選擇，以降低重複對話與 token 浪費。
 
 除本機 `http://localhost`、`127.0.0.1`、`::1` 相容服務外，端點只接受 HTTPS；不跟隨 redirect，回應上限 2 MB。請求格式依據官方 [OpenAI Chat Completions API](https://developers.openai.com/api/reference/resources/chat) 與 [Anthropic Messages API](https://platform.claude.com/docs/en/api/messages)。

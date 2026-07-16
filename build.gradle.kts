@@ -43,6 +43,8 @@ subprojects {
 
 // Read more: https://plugins.jetbrains.com/docs/intellij/tools-intellij-platform-gradle-plugin.html
 dependencies {
+    testImplementation(kotlin("test"))
+
     intellijPlatform {
         intellijIdea("2025.3.5")
 

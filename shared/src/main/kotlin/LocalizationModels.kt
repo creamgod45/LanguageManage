@@ -140,6 +140,7 @@ data class AiTranslationRequestDto(
     val items: List<AiTranslationItemDto>,
     val previousSuggestions: List<AiTranslationSuggestionDto> = emptyList(),
     val userFeedback: String = "",
+    val temperature: Double? = null,
 )
 
 @Serializable

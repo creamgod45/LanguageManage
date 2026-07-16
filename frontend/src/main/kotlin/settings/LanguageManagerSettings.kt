@@ -71,6 +71,7 @@ internal class LanguageManagerSettings : PersistentStateComponent<LanguageManage
         var aiProvider: String = AiProviderType.OPENAI_COMPATIBLE.name
         var aiEndpoint: String = "https://api.openai.com/v1/chat/completions"
         var aiModel: String = ""
+        var aiTemperature: String = ""
     }
 
     private var settingsState = SettingsState()
@@ -154,6 +155,10 @@ internal class LanguageManagerSettings : PersistentStateComponent<LanguageManage
     var aiModel: String
         get() = settingsState.aiModel
         set(value) { settingsState.aiModel = value.trim() }
+
+    var aiTemperature: String
+        get() = settingsState.aiTemperature.trim()
+        set(value) { settingsState.aiTemperature = value.trim() }
 
     fun defaultUsageSettings(projectBasePath: String?): UsageScanSettingsDto =
         UsageScanSettingsDto(

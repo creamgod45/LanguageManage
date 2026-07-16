@@ -587,8 +587,8 @@ internal class LocalizationManagerPanel(
             return showError(message("error.ai.settings.required"))
         }
         val locales = entryModel.locales()
-        if (locales.size < 2) return showError(message("error.ai.locales.required"))
-        val dialog = AiTranslationRequestDialog(project, locales)
+        if (locales.isEmpty()) return showError(message("error.ai.locales.required"))
+        val dialog = AiTranslationRequestDialog(project, locales, rows)
         if (!dialog.showAndGet()) return
         if (rows.size == 1) {
             NotificationGroupManager.getInstance().getNotificationGroup("LanguageManager")
@@ -596,62 +596,72 @@ internal class LocalizationManagerPanel(
                 .notify(project)
         }
         val items = rows.mapIndexed { index, row ->
-            val source = row.translations.firstOrNull { it.locale == dialog.sourceLocale }?.value
-                ?.takeIf(String::isNotBlank) ?: return showError(message("error.ai.source.missing", row.key, dialog.sourceLocale))
-            AiTranslationItemDto("item$index", row.namespace, row.key, source)
+            AiTranslationItemDto("item$index", row.namespace, row.key, dialog.sourceValues[index])
         }
-        val initialRequest = AiTranslationRequestDto(
-            settings.aiProvider,
-            settings.aiEndpoint,
-            settings.aiModel,
-            token,
-            dialog.sourceLocale,
-            dialog.targetLocale,
-            items,
-        )
+        val initialRequests = dialog.targetLocales.associateWith { targetLocale ->
+            AiTranslationRequestDto(
+                settings.aiProvider,
+                settings.aiEndpoint,
+                settings.aiModel,
+                token,
+                dialog.sourceIdentifier,
+                targetLocale,
+                items,
+                temperature = settings.aiTemperature.toDoubleOrNull(),
+            )
+        }
         runAction {
-            var request = initialRequest
-            while (true) {
-                val result = repository.translateWithAi(request)
+            var requests = initialRequests
+            translationLoop@ while (true) {
+                val suggestions = requests.mapValues { (_, request) -> repository.translateWithAi(request).suggestions }
                 val values = withContext(Dispatchers.EDT) {
-                    AiTranslationReviewDialog(project, rows, result.suggestions).takeIf { it.showAndGet() }?.values()
+                    AiTranslationReviewDialog(project, rows, suggestions).takeIf { it.showAndGet() }?.values()
                 } ?: return@runAction
-                val reviewed = rows.indices.map { index -> AiTranslationSuggestionDto("item$index", values.getValue("item$index")) }
-                val mutations = rows.mapIndexed { index, row ->
-                    mutationFor(row, dialog.targetLocale, values.getValue("item$index"))
-                        ?: error(message("error.locale.file.not.found", dialog.targetLocale))
+                val reviewed = values.mapValues { (_, localeValues) ->
+                    rows.indices.map { index -> AiTranslationSuggestionDto("item$index", localeValues.getValue("item$index")) }
+                }
+                val mutations = dialog.targetLocales.flatMap { targetLocale ->
+                    rows.mapIndexed { index, row ->
+                        mutationFor(row, targetLocale, values.getValue(targetLocale).getValue("item$index"))
+                            ?: error(message("error.locale.file.not.found", targetLocale))
+                    }
                 }
                 val schemeId = activeId()
                 val preview = repository.previewEntryMutations(schemeId, mutations)
                 if (preview.files.isEmpty()) return@runAction
-                val decision = withContext(Dispatchers.EDT) {
-                    val disposable = Disposer.newDisposable("Language Manager AI translation preview")
-                    try {
-                        ChangePreviewDialog(
-                            project,
-                            preview,
-                            message("summary.ai.translation", mutations.size, dialog.targetLocale),
-                            disposable,
-                            aiFeedbackEnabled = true,
-                        ).also { it.show() }.decision
-                    } finally { Disposer.dispose(disposable) }
-                }
-                when (decision) {
-                    ChangePreviewDecision.APPLY -> {
-                        repository.applyPreviewedEntryMutations(
-                            schemeId,
-                            mutations,
-                            preview.files.associate { it.filePath to it.beforeSha256 },
-                        )
-                        return@runAction
+                previewLoop@ while (true) {
+                    val decision = withContext(Dispatchers.EDT) {
+                        val disposable = Disposer.newDisposable("Language Manager AI translation preview")
+                        try {
+                            ChangePreviewDialog(
+                                project,
+                                preview,
+                                message("summary.ai.translation.multi", mutations.size, dialog.targetLocales.joinToString(", ")),
+                                disposable,
+                                aiFeedbackEnabled = true,
+                            ).also { it.show() }.decision
+                        } finally { Disposer.dispose(disposable) }
                     }
-                    ChangePreviewDecision.AI_FEEDBACK -> {
-                        val feedback = withContext(Dispatchers.EDT) {
-                            AiTranslationFeedbackDialog(project).takeIf { it.showAndGet() }?.value
-                        } ?: return@runAction
-                        request = initialRequest.copy(previousSuggestions = reviewed, userFeedback = feedback)
+                    when (decision) {
+                        ChangePreviewDecision.APPLY -> {
+                            repository.applyPreviewedEntryMutations(
+                                schemeId,
+                                mutations,
+                                preview.files.associate { it.filePath to it.beforeSha256 },
+                            )
+                            return@runAction
+                        }
+                        ChangePreviewDecision.AI_FEEDBACK -> {
+                            val feedback = withContext(Dispatchers.EDT) {
+                                AiTranslationFeedbackDialog(project).takeIf { it.showAndGet() }?.value
+                            } ?: continue@previewLoop
+                            requests = initialRequests.mapValues { (locale, request) ->
+                                request.copy(previousSuggestions = reviewed.getValue(locale), userFeedback = feedback)
+                            }
+                            continue@translationLoop
+                        }
+                        ChangePreviewDecision.CANCEL -> return@runAction
                     }
-                    ChangePreviewDecision.CANCEL -> return@runAction
                 }
             }
         }

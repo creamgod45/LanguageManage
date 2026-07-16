@@ -8,7 +8,7 @@
 
 AppCode 不列為目標產品；Marketplace 未列出 AppCode 時，不能透過在 `plugin.xml` 加入產品名稱強制啟用。
 
-LanguageManager `1.5.0` 的插件描述設定如下：
+LanguageManager `1.5.1` 的插件描述設定如下：
 
 - 最低版本：JetBrains Platform build `253.5`（IntelliJ IDEA 2025.3.5）
 - 最高版本：未限制

@@ -40,6 +40,7 @@ class LanguageManagerDefaultSettingsTest {
         assertEquals(DEFAULT_MAX_ENTRIES_PER_SCHEME, state.defaultMaxEntriesPerScheme)
         assertEquals(false, state.ignoreDuplicateValueIssues)
         assertEquals(false, state.ignoreUnusedKeyIssues)
+        assertEquals("", state.aiTemperature)
     }
 
     @Test

@@ -8,7 +8,7 @@
 
 AppCode is not declared as a target. Its absence from Marketplace's supported-product list cannot be overridden by adding a product name to `plugin.xml`.
 
-LanguageManager `1.5.0` uses the following plugin descriptor settings:
+LanguageManager `1.5.1` uses the following plugin descriptor settings:
 
 - Minimum version: JetBrains Platform build `253.5` (IntelliJ IDEA 2025.3.5)
 - Maximum version: unrestricted

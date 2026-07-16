@@ -57,6 +57,10 @@ internal object AiTranslationSupport {
         }
         require(!uri.host.isNullOrBlank() && request.endpoint.length <= 2_048) { backendMessage("ai.endpoint.invalid") }
         require(request.model.isNotBlank() && request.model.length <= 200 && request.model.none(Char::isISOControl)) { backendMessage("ai.model.invalid") }
+        request.temperature?.let { temperature ->
+            val maximum = if (request.provider == AiProviderType.ANTHROPIC) 1.0 else 2.0
+            require(temperature.isFinite() && temperature in 0.0..maximum) { backendMessage("ai.temperature.invalid") }
+        }
         require(request.apiToken.isNotBlank() && request.apiToken.length <= 4_096 && request.apiToken.none(Char::isISOControl)) { backendMessage("ai.token.invalid") }
         require(request.sourceLocale.matches(Regex("[A-Za-z0-9_-]{1,32}"))) { backendMessage("ai.source.locale.invalid") }
         require(request.targetLocale.matches(Regex("[A-Za-z0-9_-]{1,32}")) && request.sourceLocale != request.targetLocale) { backendMessage("ai.target.locale.invalid") }
@@ -78,7 +82,7 @@ internal object AiTranslationSupport {
                 AiProviderType.OPENAI_COMPATIBLE ->
                     buildJsonObject {
                         put("model", JsonPrimitive(request.model))
-                        put("temperature", JsonPrimitive(0.1))
+                        request.temperature?.let { put("temperature", JsonPrimitive(it)) }
                         put("messages", buildJsonArray {
                             add(message("system", systemPrompt()))
                             add(message("user", prompt))
@@ -88,7 +92,7 @@ internal object AiTranslationSupport {
                     buildJsonObject {
                         put("model", JsonPrimitive(request.model))
                         put("max_tokens", JsonPrimitive(8_192))
-                        put("temperature", JsonPrimitive(0.1))
+                        request.temperature?.let { put("temperature", JsonPrimitive(it)) }
                         put("system", JsonPrimitive(systemPrompt()))
                         put("messages", buildJsonArray { add(message("user", prompt)) })
                     }

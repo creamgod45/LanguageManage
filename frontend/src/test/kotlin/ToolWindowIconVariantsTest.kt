@@ -1,9 +1,12 @@
 package cg.creamgod45
 
+import com.intellij.openapi.util.IconLoader
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
+import kotlin.test.assertTrue
 
 class ToolWindowIconVariantsTest {
     @Test
@@ -18,12 +21,21 @@ class ToolWindowIconVariantsTest {
 
         variants.forEach { (resource, expected) ->
             val stream = assertNotNull(javaClass.classLoader.getResourceAsStream(resource), "Missing $resource")
-            val svg = stream.bufferedReader(Charsets.UTF_8).use { it.readText() }
+            val bytes = stream.use { it.readBytes() }
+            val svg = bytes.toString(Charsets.UTF_8)
 
+            assertTrue(bytes.size <= 3 * 1024, "$resource should remain a compact native vector")
             assertContains(svg, "width=\"${expected.first}\"")
             assertContains(svg, "height=\"${expected.first}\"")
+            assertContains(svg, "viewBox=\"0 0 16 16\"")
             assertContains(svg, "fill=\"${expected.second}\"")
             assertEquals(1, Regex("<svg\\b").findAll(svg).count(), "Invalid SVG root in $resource")
+            assertFalse(Regex("<(?:image|script|text)\\b", RegexOption.IGNORE_CASE).containsMatchIn(svg))
+            assertFalse(Regex("(?:href|data:|javascript:)", RegexOption.IGNORE_CASE).containsMatchIn(svg))
+
+            val rendered = IconLoader.getIcon("/$resource", javaClass)
+            assertEquals(expected.first, rendered.iconWidth, "$resource rendered width")
+            assertEquals(expected.first, rendered.iconHeight, "$resource rendered height")
         }
     }
 }
