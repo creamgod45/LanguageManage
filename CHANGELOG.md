@@ -1,5 +1,16 @@
 # Language Manager Changelog
 
+## 1.5.0
+
+- 主插件 descriptor 明確宣告 `com.intellij.modules.platform`，讓 Marketplace 依通用平台模組推導 IntelliJ IDEA、PhpStorm、WebStorm、PyCharm、DataGrip 等相容產品，不綁定單一語言 IDE。
+- 新增 OpenAI-compatible 與 Anthropic Claude AI Provider 批量翻譯：API Token 使用 JetBrains PasswordSafe，最多一次處理 100 個 row，結果必須先檢視、編輯及確認檔案 Diff；Diff 可 Apply、取消或「提出其他意見 AI」，後者會帶入上一輪來源與翻譯上下文建立新一輪請求。單筆操作會以 Toast 提醒多選可節省 token。
+- 「操作」新增「複製 key 到指定語言數值」，可對多個所選 row 一次套用。
+- 使用率 Regex 新增 PHP、Spring／Java／Kotlin、ResourceBundle 與 JetBrains Plugin 推薦格式選單；Slim／Pixie 使用通用自訂 translator 格式，不假設框架內建 API。
+- 修正多個使用率 Regex 與同一行重複呼叫只計為一次的問題；現在依實際 match 累加，並以捕獲位置與 key 去除不同 Regex 對同一段文字的重複命中。
+- Marketplace、Plugin Manager 與 Tool Window Sidebar 圖示改用 LanguageManager 多語言圓形品牌標誌；提供 Light／Dark Theme 的 40×40 Marketplace 版本，以及 16×16、20×20 的 Light／Dark JetBrains Sidebar 完整變體。
+- 新增與編輯翻譯改為同頁列出目前 namespace 的全部語言；外層使用可捲動面板，每個語言 textarea 固定保留三行／72 px 高度，不再被底部按鈕壓縮。
+- 多語言表單改走單一批量 RPC：一次解析、先驗證全部 mutation、依序原子寫入並只 reload 一次；後續寫檔失敗時會嘗試還原已寫入檔案。
+
 ## 1.4.1
 
 - 新增方案級語言內容載入預算：解析前限制單檔與方案總容量、解析過程限制單檔與方案總翻譯筆數，並在快取命中時重新驗證，降低未分類大型語言檔造成 OOM 的風險。

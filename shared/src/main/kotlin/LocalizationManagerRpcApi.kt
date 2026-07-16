@@ -69,6 +69,30 @@ interface LocalizationManagerRpcApi : RemoteApi<Unit> {
         mutation: EntryMutationDto,
     )
 
+    suspend fun saveEntries(
+        projectId: ProjectId,
+        schemeId: String,
+        mutations: List<EntryMutationDto>,
+    )
+
+    suspend fun translateWithAi(
+        projectId: ProjectId,
+        request: AiTranslationRequestDto,
+    ): AiTranslationResultDto
+
+    suspend fun previewEntryMutations(
+        projectId: ProjectId,
+        schemeId: String,
+        mutations: List<EntryMutationDto>,
+    ): ChangePreviewDto
+
+    suspend fun applyPreviewedEntryMutations(
+        projectId: ProjectId,
+        schemeId: String,
+        mutations: List<EntryMutationDto>,
+        expectedBeforeHashes: Map<String, String>,
+    )
+
     suspend fun deleteEntries(
         projectId: ProjectId,
         schemeId: String,

@@ -93,6 +93,38 @@ class BackendLocalizationManagerRpcApi : LocalizationManagerRpcApi {
         Unit
     }
 
+    override suspend fun saveEntries(
+        projectId: ProjectId,
+        schemeId: String,
+        mutations: List<EntryMutationDto>,
+    ) = withContext(Dispatchers.IO) {
+        projectId.service()?.saveEntries(schemeId, mutations)
+        Unit
+    }
+
+    override suspend fun translateWithAi(
+        projectId: ProjectId,
+        request: AiTranslationRequestDto,
+    ): AiTranslationResultDto = withContext(Dispatchers.IO) { AiTranslationSupport.translate(request) }
+
+    override suspend fun previewEntryMutations(
+        projectId: ProjectId,
+        schemeId: String,
+        mutations: List<EntryMutationDto>,
+    ): ChangePreviewDto = withContext(Dispatchers.IO) {
+        projectId.service()?.previewEntryMutations(schemeId, mutations) ?: ChangePreviewDto()
+    }
+
+    override suspend fun applyPreviewedEntryMutations(
+        projectId: ProjectId,
+        schemeId: String,
+        mutations: List<EntryMutationDto>,
+        expectedBeforeHashes: Map<String, String>,
+    ) = withContext(Dispatchers.IO) {
+        projectId.service()?.applyPreviewedEntryMutations(schemeId, mutations, expectedBeforeHashes)
+        Unit
+    }
+
     override suspend fun deleteEntries(
         projectId: ProjectId,
         schemeId: String,

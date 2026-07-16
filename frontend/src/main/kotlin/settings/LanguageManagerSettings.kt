@@ -1,6 +1,7 @@
 package cg.creamgod45.settings
 
 import cg.creamgod45.localization.DEFAULT_USAGE_EXCLUDED_DIRECTORIES
+import cg.creamgod45.localization.AiProviderType
 import cg.creamgod45.localization.DEFAULT_USAGE_REGEX_PATTERNS
 import cg.creamgod45.localization.DEFAULT_MAX_ENTRIES_PER_FILE
 import cg.creamgod45.localization.DEFAULT_MAX_ENTRIES_PER_SCHEME
@@ -67,6 +68,9 @@ internal class LanguageManagerSettings : PersistentStateComponent<LanguageManage
         var defaultMaxEntriesPerScheme: Int = DEFAULT_MAX_ENTRIES_PER_SCHEME
         var ignoreDuplicateValueIssues: Boolean = false
         var ignoreUnusedKeyIssues: Boolean = false
+        var aiProvider: String = AiProviderType.OPENAI_COMPATIBLE.name
+        var aiEndpoint: String = "https://api.openai.com/v1/chat/completions"
+        var aiModel: String = ""
     }
 
     private var settingsState = SettingsState()
@@ -138,6 +142,18 @@ internal class LanguageManagerSettings : PersistentStateComponent<LanguageManage
         set(value) {
             settingsState.ignoreUnusedKeyIssues = value
         }
+
+    var aiProvider: AiProviderType
+        get() = runCatching { AiProviderType.valueOf(settingsState.aiProvider) }.getOrDefault(AiProviderType.OPENAI_COMPATIBLE)
+        set(value) { settingsState.aiProvider = value.name }
+
+    var aiEndpoint: String
+        get() = settingsState.aiEndpoint
+        set(value) { settingsState.aiEndpoint = value.trim() }
+
+    var aiModel: String
+        get() = settingsState.aiModel
+        set(value) { settingsState.aiModel = value.trim() }
 
     fun defaultUsageSettings(projectBasePath: String?): UsageScanSettingsDto =
         UsageScanSettingsDto(

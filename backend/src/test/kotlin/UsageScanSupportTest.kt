@@ -19,7 +19,7 @@ class UsageScanSupportTest {
     }
 
     @Test
-    fun `custom regex counts matching lines and respects relative exclusions`() {
+    fun `custom regex counts every occurrence and respects relative exclusions`() {
         val source =
             temp.resolve("src/app.php").apply {
                 parent.createDirectories()
@@ -58,8 +58,31 @@ class UsageScanSupportTest {
 
         val counts = UsageScanSupport.counts(temp, entries, listOf(languageFile.toString()), settings)
 
-        assertEquals(2, counts[entries[0].id], source.toString())
+        assertEquals(3, counts[entries[0].id], source.toString())
         assertEquals(1, counts[entries[1].id])
+    }
+
+    @Test
+    fun `multiple regex formats accumulate without double counting the same captured occurrence`() {
+        temp.resolve("src/example.php").apply {
+            parent.createDirectories()
+            writeText("tr(\"auth.failed\"); __(\"auth.failed\"); tr(\"auth.failed\");")
+        }
+        val entries = listOf(entry("auth", "failed"))
+        val settings =
+            UsageScanSettingsDto(
+                regexPatterns =
+                    listOf(
+                        """tr\(\"(?<key>[^\"]+)\"\)""",
+                        """__\(\"(?<key>[^\"]+)\"\)""",
+                        """\"(?<key>auth\.[^\"]+)\"""",
+                    ),
+                excludedDirectories = emptyList(),
+            )
+
+        val counts = UsageScanSupport.counts(temp, entries, emptyList(), settings)
+
+        assertEquals(3, counts[entries[0].id])
     }
 
     @Test

@@ -50,6 +50,23 @@ internal class LocalizationFrontendRepository(
         mutation: EntryMutationDto,
     ) = LocalizationManagerRpcApi.getInstance().saveEntry(project.projectId(), id, mutation)
 
+    suspend fun saveAll(
+        id: String,
+        mutations: List<EntryMutationDto>,
+    ) = LocalizationManagerRpcApi.getInstance().saveEntries(project.projectId(), id, mutations)
+
+    suspend fun translateWithAi(request: AiTranslationRequestDto) =
+        LocalizationManagerRpcApi.getInstance().translateWithAi(project.projectId(), request)
+
+    suspend fun previewEntryMutations(id: String, mutations: List<EntryMutationDto>) =
+        LocalizationManagerRpcApi.getInstance().previewEntryMutations(project.projectId(), id, mutations)
+
+    suspend fun applyPreviewedEntryMutations(
+        id: String,
+        mutations: List<EntryMutationDto>,
+        expectedBeforeHashes: Map<String, String>,
+    ) = LocalizationManagerRpcApi.getInstance().applyPreviewedEntryMutations(project.projectId(), id, mutations, expectedBeforeHashes)
+
     suspend fun delete(
         id: String,
         entryIds: List<String>,

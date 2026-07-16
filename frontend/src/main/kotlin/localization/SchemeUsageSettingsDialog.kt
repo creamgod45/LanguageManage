@@ -2,6 +2,7 @@ package cg.creamgod45.localization.ui
 
 import cg.creamgod45.LanguageManagerBundle.message
 import cg.creamgod45.RegexPatternUi
+import cg.creamgod45.RegexPresetUi
 import cg.creamgod45.localization.DEFAULT_USAGE_EXCLUDED_DIRECTORIES
 import cg.creamgod45.localization.DEFAULT_USAGE_REGEX_PATTERNS
 import cg.creamgod45.localization.HARD_MAX_ENTRIES_PER_FILE
@@ -182,6 +183,7 @@ internal class SchemeUsageSettingsDialog(
                             addActionListener { model.replaceWith(defaultValues) }
                         },
                     )
+                    if (regexInput) add(RegexPresetUi.button { patterns -> patterns.filterNot { it in model.values() }.forEach(model::addElement) })
                 },
                 BorderLayout.SOUTH,
             )

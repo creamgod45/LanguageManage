@@ -4,6 +4,7 @@ import cg.creamgod45.CoroutineScopeHolder
 import cg.creamgod45.LanguageManagerBundle.message
 import cg.creamgod45.localization.*
 import cg.creamgod45.settings.LanguageManagerSettings
+import cg.creamgod45.settings.AiProviderCredentialStore
 import com.intellij.diff.DiffContentFactory
 import com.intellij.diff.DiffManager
 import com.intellij.diff.DiffRequestPanel
@@ -13,6 +14,8 @@ import com.intellij.find.findInProject.FindInProjectManager
 import com.intellij.ide.BrowserUtil
 import com.intellij.ide.DataManager
 import com.intellij.openapi.Disposable
+import com.intellij.notification.NotificationGroupManager
+import com.intellij.notification.NotificationType
 import com.intellij.openapi.application.EDT
 import com.intellij.openapi.fileChooser.FileChooserDescriptor
 import com.intellij.openapi.fileChooser.FileChooserFactory
@@ -34,8 +37,6 @@ import java.awt.Component
 import java.awt.Container
 import java.awt.Dimension
 import java.awt.FlowLayout
-import java.awt.GridBagConstraints
-import java.awt.GridBagLayout
 import java.awt.LayoutManager2
 import java.awt.Toolkit
 import java.awt.datatransfer.DataFlavor
@@ -526,145 +527,15 @@ internal class LocalizationManagerPanel(
     private fun editEntry() {
         val row = selectedRows().singleOrNull() ?: return showError(message("error.select.translation.key"))
         val scheme = activeScheme() ?: return
-        val modelColumn =
-            entryTable.columnModel.selectionModel.leadSelectionIndex
-                .takeIf { it >= 0 && entryTable.isColumnSelected(it) }
-                ?.let(entryTable::convertColumnIndexToModel)
-        val selectedLocale = modelColumn?.let(entryModel::localeAt)
-        val entry =
-            selectedLocale?.let { locale ->
-                row.translations.firstOrNull { it.locale == locale } ?: current.entries
-                    .firstOrNull { it.locale == locale && it.namespace == row.namespace }
-                    ?.let { target ->
-                        LanguageEntryDto("", scheme.id, target.filePath, locale, row.namespace, row.key, "")
-                    }
-                    ?: return showError(message("error.locale.file.not.found", locale))
-            } ?: row.translations.firstOrNull() ?: return showError(message("error.select.translation.key"))
-        showEntryDialog(entry, scheme)
+        showEntryDialog(row, scheme)
     }
 
     private fun showEntryDialog(
-        entry: LanguageEntryDto?,
+        row: JoinedTranslationRow?,
         scheme: LanguageSchemeDto,
     ) {
-        val file = ComboBox(scheme.files.toTypedArray())
-        file.selectedItem = entry?.filePath ?: scheme.files.first()
-        val locale = JBTextField()
-        val namespace = JBTextField()
-        val key = JBTextField(entry?.key.orEmpty())
-        val value =
-            JBTextArea(entry?.value.orEmpty(), 3, 40).apply {
-                lineWrap =
-                    true
-            }
-        var targetEntry = entry
-        locale.isEditable = false
-        namespace.isEditable = false
-
-        fun updateSelectedFile() {
-            val selectedFile = file.selectedItem.toString()
-            val path = Path.of(selectedFile)
-            val known = current.entries.firstOrNull { it.filePath == selectedFile }
-            locale.text =
-                known?.locale
-                    ?: if (path.fileName
-                            .toString()
-                            .substringAfterLast(
-                                '.',
-                                "",
-                            ).equals(
-                                "php",
-                                true,
-                            )
-                    ) {
-                        path.parent
-                            ?.fileName
-                            ?.toString()
-                            .orEmpty()
-                    } else {
-                        path.fileName.toString().substringBeforeLast('.')
-                    }
-            namespace.text =
-                known?.namespace
-                    ?: if (path.fileName.toString().endsWith(".php", true)) path.fileName.toString().substringBeforeLast('.') else ""
-            if (entry != null) {
-                targetEntry =
-                    current.entries.firstOrNull {
-                        it.filePath == selectedFile && it.namespace == namespace.text && it.key == entry.key
-                    }
-                key.text = targetEntry?.key ?: entry.key
-                value.text = targetEntry?.value.orEmpty()
-                value.caretPosition = 0
-            }
-        }
-        file.addActionListener { updateSelectedFile() }
-        updateSelectedFile()
-        val valueScrollHeight = JBUI.scale(72)
-        val valueScroll =
-            JBScrollPane(value).apply {
-                preferredSize = Dimension(JBUI.scale(520), valueScrollHeight)
-                minimumSize = Dimension(JBUI.scale(240), valueScrollHeight)
-            }
-        val panel =
-            JPanel(GridBagLayout()).apply {
-                border = JBUI.Borders.empty(8)
-                preferredSize = Dimension(JBUI.scale(720), JBUI.scale(220))
-
-                fun addField(
-                    row: Int,
-                    label: String,
-                    component: JComponent,
-                    growVertically: Boolean = false,
-                ) {
-                    add(
-                        JBLabel(label),
-                        GridBagConstraints().apply {
-                            gridx = 0
-                            gridy = row
-                            anchor = if (growVertically) GridBagConstraints.NORTHEAST else GridBagConstraints.EAST
-                            insets = JBUI.insets(5, 0, 5, 12)
-                        },
-                    )
-                    add(
-                        component,
-                        GridBagConstraints().apply {
-                            gridx = 1
-                            gridy = row
-                            weightx = 1.0
-                            weighty = 0.0
-                            fill = if (growVertically) GridBagConstraints.BOTH else GridBagConstraints.HORIZONTAL
-                            insets = JBUI.insets(5, 0)
-                        },
-                    )
-                }
-                addField(0, message("field.file"), file)
-                addField(1, message("field.language"), locale)
-                addField(2, message("field.namespace"), namespace)
-                addField(3, message("field.key"), key)
-                addField(4, message("field.value"), valueScroll, growVertically = true)
-            }
-        if (JOptionPane.showConfirmDialog(
-                this,
-                panel,
-                if (entry ==
-                    null
-                ) {
-                    message("dialog.add.translation.title")
-                } else {
-                    message("dialog.edit.translation.title")
-                },
-                JOptionPane.OK_CANCEL_OPTION,
-                JOptionPane.PLAIN_MESSAGE,
-            ) ==
-            JOptionPane.OK_OPTION
-        ) {
-            runAction {
-                repository.save(
-                    scheme.id,
-                    EntryMutationDto(targetEntry?.id, file.selectedItem.toString(), locale.text, namespace.text, key.text, value.text),
-                )
-            }
-        }
+        val dialog = MultiLanguageEntryDialog(project, scheme, current.entries, row)
+        if (dialog.showAndGet()) runAction { repository.saveAll(scheme.id, dialog.mutations()) }
     }
 
     private fun deleteSelected() {
@@ -690,6 +561,129 @@ internal class LocalizationManagerPanel(
                 )?.trim()
                 ?: return
         runAction { repository.rename(activeId(), row.key, value) }
+    }
+
+    private fun copyKeysToLocaleValues() {
+        val rows = selectedRows()
+        if (rows.isEmpty()) return showError(message("error.select.entry"))
+        val locales = entryModel.locales()
+        if (locales.isEmpty()) return showError(message("error.translation.targets.none"))
+        val dialog = TargetLocaleDialog(project, locales, rows.size)
+        if (!dialog.showAndGet()) return
+        val locale = dialog.locale
+        val mutations = rows.map { row -> mutationFor(row, locale, row.key) ?: return showError(message("error.locale.file.not.found", locale)) }
+        confirm(message("confirm.copy.key.to.locale", rows.size, locale)) {
+            previewAndApplyMutations(mutations, message("summary.copy.key.to.locale", rows.size, locale))
+        }
+    }
+
+    private fun translateSelectedWithAi() {
+        val rows = selectedRows()
+        if (rows.isEmpty()) return showError(message("error.select.entry"))
+        if (rows.size > 100) return showError(message("error.ai.batch.limit", 100))
+        val settings = LanguageManagerSettings.getInstance()
+        val token = AiProviderCredentialStore.getToken()
+        if (settings.aiEndpoint.isBlank() || settings.aiModel.isBlank() || token.isBlank()) {
+            return showError(message("error.ai.settings.required"))
+        }
+        val locales = entryModel.locales()
+        if (locales.size < 2) return showError(message("error.ai.locales.required"))
+        val dialog = AiTranslationRequestDialog(project, locales)
+        if (!dialog.showAndGet()) return
+        if (rows.size == 1) {
+            NotificationGroupManager.getInstance().getNotificationGroup("LanguageManager")
+                .createNotification(message("notification.ai.single.record"), NotificationType.INFORMATION)
+                .notify(project)
+        }
+        val items = rows.mapIndexed { index, row ->
+            val source = row.translations.firstOrNull { it.locale == dialog.sourceLocale }?.value
+                ?.takeIf(String::isNotBlank) ?: return showError(message("error.ai.source.missing", row.key, dialog.sourceLocale))
+            AiTranslationItemDto("item$index", row.namespace, row.key, source)
+        }
+        val initialRequest = AiTranslationRequestDto(
+            settings.aiProvider,
+            settings.aiEndpoint,
+            settings.aiModel,
+            token,
+            dialog.sourceLocale,
+            dialog.targetLocale,
+            items,
+        )
+        runAction {
+            var request = initialRequest
+            while (true) {
+                val result = repository.translateWithAi(request)
+                val values = withContext(Dispatchers.EDT) {
+                    AiTranslationReviewDialog(project, rows, result.suggestions).takeIf { it.showAndGet() }?.values()
+                } ?: return@runAction
+                val reviewed = rows.indices.map { index -> AiTranslationSuggestionDto("item$index", values.getValue("item$index")) }
+                val mutations = rows.mapIndexed { index, row ->
+                    mutationFor(row, dialog.targetLocale, values.getValue("item$index"))
+                        ?: error(message("error.locale.file.not.found", dialog.targetLocale))
+                }
+                val schemeId = activeId()
+                val preview = repository.previewEntryMutations(schemeId, mutations)
+                if (preview.files.isEmpty()) return@runAction
+                val decision = withContext(Dispatchers.EDT) {
+                    val disposable = Disposer.newDisposable("Language Manager AI translation preview")
+                    try {
+                        ChangePreviewDialog(
+                            project,
+                            preview,
+                            message("summary.ai.translation", mutations.size, dialog.targetLocale),
+                            disposable,
+                            aiFeedbackEnabled = true,
+                        ).also { it.show() }.decision
+                    } finally { Disposer.dispose(disposable) }
+                }
+                when (decision) {
+                    ChangePreviewDecision.APPLY -> {
+                        repository.applyPreviewedEntryMutations(
+                            schemeId,
+                            mutations,
+                            preview.files.associate { it.filePath to it.beforeSha256 },
+                        )
+                        return@runAction
+                    }
+                    ChangePreviewDecision.AI_FEEDBACK -> {
+                        val feedback = withContext(Dispatchers.EDT) {
+                            AiTranslationFeedbackDialog(project).takeIf { it.showAndGet() }?.value
+                        } ?: return@runAction
+                        request = initialRequest.copy(previousSuggestions = reviewed, userFeedback = feedback)
+                    }
+                    ChangePreviewDecision.CANCEL -> return@runAction
+                }
+            }
+        }
+    }
+
+    private fun mutationFor(row: JoinedTranslationRow, locale: String, value: String): EntryMutationDto? {
+        val existing = row.translations.firstOrNull { it.locale == locale }
+        val target = TranslationEditorSupport.targets(activeScheme() ?: return null, current.entries)
+            .firstOrNull { it.locale == locale && it.namespace == row.namespace }
+            ?: return null
+        return EntryMutationDto(existing?.id, existing?.filePath ?: target.filePath, locale, row.namespace, row.key, value)
+    }
+
+    private fun previewAndApplyMutations(mutations: List<EntryMutationDto>, summary: String) {
+        runAction { previewAndApplyMutationsInAction(mutations, summary) }
+    }
+
+    private suspend fun previewAndApplyMutationsInAction(mutations: List<EntryMutationDto>, summary: String) {
+        val schemeId = activeId()
+        val preview = repository.previewEntryMutations(schemeId, mutations)
+        if (preview.files.isEmpty()) return
+        val accepted = withContext(Dispatchers.EDT) {
+            val disposable = Disposer.newDisposable("Language Manager entry mutation preview")
+            try { ChangePreviewDialog(project, preview, summary, disposable).showAndGet() } finally { Disposer.dispose(disposable) }
+        }
+        if (accepted) {
+            repository.applyPreviewedEntryMutations(
+                schemeId,
+                mutations,
+                preview.files.associate { it.filePath to it.beforeSha256 },
+            )
+        }
     }
 
     private fun findSelectedKeyInProject() {
@@ -934,6 +928,8 @@ internal class LocalizationManagerPanel(
                     message("action.edit") to ::editEntry,
                     message("action.delete.bulk") to ::deleteSelected,
                     message("action.rename") to ::renameKey,
+                    message("action.copy.key.to.locale") to ::copyKeysToLocaleValues,
+                    message("action.ai.translate") to ::translateSelectedWithAi,
                     message("action.find.in.ide") to ::findSelectedKeyInProject,
                     message("action.find.in.ide.usage.regex") to ::findSelectedKeyWithUsageRegex,
                 ).forEach { (label, action) -> add(JMenuItem(label).apply { addActionListener { action() } }) }
@@ -1361,6 +1357,8 @@ private class EntryTableModel : AbstractTableModel() {
 
     fun localeAt(column: Int): String? = locales.getOrNull(column - 2)
 
+    fun locales(): List<String> = locales.toList()
+
     override fun getRowCount() = items.size
 
     override fun getColumnCount() = locales.size + 3
@@ -1509,14 +1507,26 @@ private class IssueActionButtonEditor(
     }
 }
 
+private enum class ChangePreviewDecision { APPLY, AI_FEEDBACK, CANCEL }
+
 private class ChangePreviewDialog(
     private val project: Project,
     private val preview: ChangePreviewDto,
     private val summary: String,
     disposable: Disposable,
+    private val aiFeedbackEnabled: Boolean = false,
 ) : DialogWrapper(project, true) {
     private val fileSelector = ComboBox(preview.files.toTypedArray())
     private val diffPanel: DiffRequestPanel = DiffManager.getInstance().createRequestPanel(project, disposable, null)
+    var decision: ChangePreviewDecision = ChangePreviewDecision.CANCEL
+        private set
+    private val feedbackAction =
+        object : DialogWrapperAction(message("diff.ai.feedback")) {
+            override fun doAction(event: ActionEvent) {
+                decision = ChangePreviewDecision.AI_FEEDBACK
+                close(NEXT_USER_EXIT_CODE)
+            }
+        }
 
     init {
         title = message("diff.title")
@@ -1536,6 +1546,14 @@ private class ChangePreviewDialog(
         updateDiff()
         init()
     }
+
+    override fun doOKAction() {
+        decision = ChangePreviewDecision.APPLY
+        super.doOKAction()
+    }
+
+    override fun createActions(): Array<Action> =
+        if (aiFeedbackEnabled) arrayOf(okAction, feedbackAction, cancelAction) else super.createActions()
 
     private fun updateDiff() {
         val change = fileSelector.selectedItem as? FileChangePreviewDto ?: return

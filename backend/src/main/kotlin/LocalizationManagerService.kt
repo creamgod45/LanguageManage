@@ -197,10 +197,15 @@ class LocalizationManagerService(
     suspend fun saveEntry(
         schemeId: String,
         mutation: EntryMutationDto,
+    ) = saveEntries(schemeId, listOf(mutation))
+
+    suspend fun saveEntries(
+        schemeId: String,
+        mutations: List<EntryMutationDto>,
     ) = mutex.withLock {
         val scheme = requireScheme(schemeId)
-        validateMutation(scheme, mutation)
-        val targetPath = SafeLanguageFileAccess.validate(mutation.filePath)
+        require(mutations.isNotEmpty()) { backendMessage("entry.mutations.required") }
+        mutations.forEach { validateMutation(scheme, it) }
         val documents = parseDocuments(scheme)
         if (documents.any {
                 it.issues.any { issue ->
@@ -210,32 +215,73 @@ class LocalizationManagerService(
         ) {
             error(backendMessage("edit.fix.parse.first"))
         }
-        var structuredValue = false
-        var originalKey: String? = null
-        var originalKeyPath: List<String>? = null
-        mutation.id?.let { id ->
-            val original = mutableState.value.entries.firstOrNull { it.id == id } ?: error(backendMessage("entry.not.found"))
-            originalKey = original.key
-            documents.firstOrNull { it.path.toString() == original.filePath }?.let { originalDocument ->
-                structuredValue = original.key in originalDocument.structuredValueKeys
-                originalKeyPath = originalDocument.keyPaths.remove(original.key)
-                originalDocument.values.remove(original.key)
-                originalDocument.structuredValueKeys.remove(original.key)
+        val changedDocuments =
+            EntryMutationSupport.apply(documents, mutableState.value.entries, mutations) { value ->
+                sanitizeText(value, 100_000)
             }
+        val originalContents = changedDocuments.associate { it.path to SafeLanguageFileAccess.read(it.path) }
+        val written = mutableListOf<Path>()
+        try {
+            changedDocuments.forEach { document ->
+                SafeLanguageFileAccess.atomicWrite(document.path, LanguageFileCodec.render(document))
+                written.add(document.path)
+            }
+        } catch (error: Exception) {
+            written.asReversed().forEach { path ->
+                runCatching { SafeLanguageFileAccess.atomicWrite(path, originalContents.getValue(path)) }
+                    .exceptionOrNull()
+                    ?.let(error::addSuppressed)
+            }
+            throw error
         }
-        val document = documents.firstOrNull { it.path == targetPath } ?: error(backendMessage("entry.target.outside"))
-        if (mutation.id == null && mutation.key in document.values) error(backendMessage("entry.key.exists", mutation.key))
-        document.values[mutation.key] = sanitizeText(mutation.value, 100_000)
-        if (structuredValue) document.structuredValueKeys += mutation.key
-        document.keyPaths[mutation.key] =
-            when {
-                originalKeyPath != null && mutation.key == originalKey -> originalKeyPath
-                originalKeyPath?.size == 1 -> listOf(mutation.key)
-                mutation.key.any(Char::isWhitespace) -> listOf(mutation.key)
-                else -> mutation.key.split('.').filter(String::isNotBlank)
-            }
-        documents.filter { it.path == targetPath || mutation.id != null && it.values !== document.values }.forEach(LanguageFileCodec::write)
         loadScheme(scheme, true)
+    }
+
+    suspend fun previewEntryMutations(
+        schemeId: String,
+        mutations: List<EntryMutationDto>,
+    ): ChangePreviewDto = mutex.withLock { buildEntryMutationPreview(requireScheme(schemeId), mutations) }
+
+    suspend fun applyPreviewedEntryMutations(
+        schemeId: String,
+        mutations: List<EntryMutationDto>,
+        expectedBeforeHashes: Map<String, String>,
+    ) = mutex.withLock {
+        val scheme = requireScheme(schemeId)
+        val preview = buildEntryMutationPreview(scheme, mutations)
+        require(preview.files.associate { it.filePath to it.beforeSha256 } == expectedBeforeHashes) { backendMessage("preview.changed") }
+        val written = mutableListOf<FileChangePreviewDto>()
+        try {
+            preview.files.forEach { change ->
+                SafeLanguageFileAccess.atomicWrite(Path.of(change.filePath), change.afterContent)
+                written += change
+            }
+        } catch (error: Exception) {
+            written.asReversed().forEach { change ->
+                runCatching { SafeLanguageFileAccess.atomicWrite(Path.of(change.filePath), change.beforeContent) }
+                    .exceptionOrNull()?.let(error::addSuppressed)
+            }
+            throw error
+        }
+        loadScheme(scheme, true)
+    }
+
+    private fun buildEntryMutationPreview(
+        scheme: LanguageSchemeDto,
+        mutations: List<EntryMutationDto>,
+    ): ChangePreviewDto {
+        require(mutations.isNotEmpty()) { backendMessage("entry.mutations.required") }
+        mutations.forEach { validateMutation(scheme, it) }
+        val documents = parseDocuments(scheme)
+        require(documents.none { document -> document.issues.any { it.severity == IssueSeverity.ERROR } }) {
+            backendMessage("edit.fix.parse.first")
+        }
+        val changed = EntryMutationSupport.apply(documents, mutableState.value.entries, mutations) { sanitizeText(it, 100_000) }
+        return ChangePreviewDto(changed.mapNotNull { document ->
+            val before = SafeLanguageFileAccess.read(document.path)
+            val after = LanguageFileCodec.render(document)
+            if (before == after) null else FileChangePreviewDto(document.path.toString(), before, after, contentSha256(before))
+        })
     }
 
     suspend fun deleteEntries(

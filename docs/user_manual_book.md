@@ -39,7 +39,7 @@ The plugin follows the IDE display language by default and includes:
 4. Select `LanguageManage-{version}.zip` without extracting it.
 5. Restart the IDE if requested.
 
-After installation, the LanguageManager icon appears in the IDE Tool Window sidebar.
+After installation, the LanguageManager icon appears in the IDE Tool Window sidebar. The IDE automatically selects the 16x16 or 20x20 Light/Dark variant for the current theme and UI scale; no separate icon setting is required.
 
 ## 3. Creating Your First Scheme
 
@@ -137,10 +137,10 @@ Open **Actions ▾** to access the following commands.
 
 ### Add translation
 
-1. Choose the managed scheme file to write.
-2. Confirm the locale and namespace derived from that file.
-3. Enter a key and value.
-4. Confirm to write safely and reload the scheme.
+1. Choose a namespace and enter the new key.
+2. The scrollable form lists every locale file available for that namespace at once.
+3. Enter each language value. Every textarea keeps a three-line, 72 px editing height and is not compressed by the dialog buttons.
+4. Confirm once to validate and write all locale values as one batch, then reload the scheme once. Empty fields are created as empty values so missing-value analysis can report them.
 
 ### Add locale version
 
@@ -157,10 +157,10 @@ Creation stops without overwriting if the target locale or file already exists, 
 
 1. Select any cell in the translation table.
 2. Choose **Actions ▾ → Edit Selected**.
-3. Selecting a locale value edits that locale directly. Selecting Namespace or Key uses the row's first existing locale.
-4. The form uses label/input rows. Switching its target file refreshes locale, namespace, and value from the same key in that file; a missing key produces an empty value.
-5. Keys may be natural-language sentences containing spaces, Unicode, and punctuation, such as `Not powered on or not detected`. Only blank, control-character, or over-256-character values are rejected.
-6. Confirm the key/value changes. The currently selected file is the write target.
+3. The same scrollable form lists all existing and available locale values for the selected namespace/key; no language-selection popup or file switching is required.
+4. Each locale displays its managed file path and an independent three-line textarea. Missing locales appear with an empty editor and are created when a value is entered.
+5. Confirm once to apply all changed languages through one batch RPC. All mutations are validated before writing; if a later file write fails, the plugin attempts to restore files already written.
+6. Use **Rename Key** to change a key across every language. Keys may contain spaces, Unicode, and punctuation, such as `Not powered on or not detected`.
 
 ### Bulk delete
 
@@ -168,6 +168,20 @@ Creation stops without overwriting if the target locale or file already exists, 
 2. Choose **Delete Selected**.
 3. The confirmation count represents selected JOINed key rows, not the multiplied number of locale entries.
 4. Confirm to remove all locale entries belonging to those rows.
+
+### AI translate selected
+
+1. Open **Settings → Tools → LanguageManager**, choose **OpenAI-compatible API** or **Anthropic Claude API**, then enter the complete request endpoint, model, and API token. The token is stored in JetBrains PasswordSafe and is not included in scheme exports.
+2. Select 1–100 translation rows and choose **Actions ▾ → AI Translate Selected**. Choose source and target locales.
+3. The plugin sends all selected source values in one request. It preserves keys, placeholders, ICU/MessageFormat syntax, HTML, Markdown, escapes, and line breaks in its instruction.
+4. Review and edit every generated value, then inspect the file-level Diff. Only **Apply** writes files. **Cancel** writes nothing; **Give AI More Feedback** asks for revision instructions and starts a new request containing the original source values plus the reviewed translations from the previous round. The revised result returns to review and Diff again.
+5. Selecting only one row is supported, but a Toast recommends batching multiple rows to reduce repeated conversation overhead and token usage.
+
+Only HTTPS endpoints are accepted, except `http://localhost`, `127.0.0.1`, and `::1` for local compatible servers. Redirects are not followed and responses are capped at 2 MB. Provider request shapes follow the official [OpenAI Chat Completions API](https://developers.openai.com/api/reference/resources/chat) and [Anthropic Messages API](https://platform.claude.com/docs/en/api/messages).
+
+### Copy key to target locale values
+
+Select one or more rows, choose **Actions ▾ → Copy Key to Locale Values**, select the target locale, and confirm. Each selected row's literal key becomes that locale's value.
 
 ### Rename key
 
@@ -280,6 +294,8 @@ The settings shortcut targets the registered plugin settings component rather th
 
 Both the new-scheme defaults and active-scheme settings display the complete placeholder explanation below the Regex list. The Add/Edit dialog also shows a directly usable double-quote example such as `(?:backendMessage|message)\(\s*"(?<key>[^"\r\n]{1,256})"\s*\)`. Replace the function names with those used by the project. Prefer a function-specific prefix over matching every quoted string, because an earlier string or character literal on the same line can consume a non-overlapping match before the localization call is reached.
 
+Use **Recommended Formats** beside the Regex list to add presets for Laravel, Symfony, webman, Laminas/Zend, CodeIgniter, CakePHP, Yii, Phalcon, FuelPHP, generic Slim/Pixie/custom translators, Spring `MessageSource`, Java/Kotlin `ResourceBundle`, or IntelliJ Platform bundle methods. Slim and Pixie do not have a verified built-in translation API, so their preset intentionally targets common custom helper names and should be edited to match the project.
+
 Each Regex match extracts a candidate key in this order:
 
 1. Named group `(?<key>…)`.
@@ -298,7 +314,7 @@ Example for Vue/JavaScript `$t()`:
 \$t\(\s*["'](?<key>[^"']+)["']
 ```
 
-Multiple occurrences of the same key on one line count once. Dynamically concatenated keys usually cannot be detected reliably.
+Every distinct match is counted, so repeated calls on the same line and matches from different Regex formats accumulate. If multiple Regex patterns capture the same key at the same source position, that occurrence is counted once to avoid inflating the result. Dynamically concatenated keys usually cannot be detected reliably.
 
 ### Excluded directories
 

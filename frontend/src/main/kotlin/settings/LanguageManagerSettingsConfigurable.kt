@@ -2,7 +2,9 @@ package cg.creamgod45.settings
 
 import cg.creamgod45.LanguageManagerBundle.message
 import cg.creamgod45.RegexPatternUi
+import cg.creamgod45.RegexPresetUi
 import cg.creamgod45.localization.DEFAULT_USAGE_EXCLUDED_DIRECTORIES
+import cg.creamgod45.localization.AiProviderType
 import cg.creamgod45.localization.DEFAULT_USAGE_REGEX_PATTERNS
 import cg.creamgod45.localization.HARD_MAX_ENTRIES_PER_FILE
 import cg.creamgod45.localization.HARD_MAX_ENTRIES_PER_SCHEME
@@ -16,7 +18,9 @@ import com.intellij.openapi.ui.ComboBox
 import com.intellij.openapi.ui.Messages
 import com.intellij.ui.components.JBCheckBox
 import com.intellij.ui.components.JBList
+import com.intellij.ui.components.JBPasswordField
 import com.intellij.ui.components.JBScrollPane
+import com.intellij.ui.components.JBTextField
 import com.intellij.util.ui.FormBuilder
 import com.intellij.util.ui.JBUI
 import java.awt.BorderLayout
@@ -45,6 +49,10 @@ class LanguageManagerSettingsConfigurable(
     private var maxEntriesPerSchemeSpinner: JSpinner? = null
     private var ignoreDuplicateValueIssuesBox: JBCheckBox? = null
     private var ignoreUnusedKeyIssuesBox: JBCheckBox? = null
+    private var aiProviderBox: ComboBox<AiProviderType>? = null
+    private var aiEndpointField: JBTextField? = null
+    private var aiModelField: JBTextField? = null
+    private var aiTokenField: JBPasswordField? = null
 
     override fun getDisplayName(): String = message("settings.display.name")
 
@@ -67,6 +75,13 @@ class LanguageManagerSettingsConfigurable(
         maxEntriesPerSchemeSpinner = JSpinner(SpinnerNumberModel(1, 1, HARD_MAX_ENTRIES_PER_SCHEME, 5_000))
         ignoreDuplicateValueIssuesBox = JBCheckBox(message("settings.issues.ignore.duplicate.values"))
         ignoreUnusedKeyIssuesBox = JBCheckBox(message("settings.issues.ignore.unused.keys"))
+        aiProviderBox = ComboBox(AiProviderType.entries.toTypedArray()).apply {
+            renderer = localizedRenderer { value -> (value as? AiProviderType)?.let { message(it.messageKey()) } }
+            addActionListener { applyProviderDefaultEndpoint() }
+        }
+        aiEndpointField = JBTextField()
+        aiModelField = JBTextField()
+        aiTokenField = JBPasswordField()
 
         val form =
             FormBuilder
@@ -76,6 +91,13 @@ class LanguageManagerSettingsConfigurable(
                 .addComponent(javax.swing.JLabel(message("settings.issues.title")))
                 .addComponent(ignoreDuplicateValueIssuesBox!!)
                 .addComponent(ignoreUnusedKeyIssuesBox!!)
+                .addSeparator()
+                .addComponent(javax.swing.JLabel(message("settings.ai.title")))
+                .addLabeledComponent(message("settings.ai.provider"), aiProviderBox!!)
+                .addLabeledComponent(message("settings.ai.endpoint"), aiEndpointField!!)
+                .addLabeledComponent(message("settings.ai.model"), aiModelField!!)
+                .addLabeledComponent(message("settings.ai.token"), aiTokenField!!)
+                .addTooltip(message("settings.ai.help"))
                 .addSeparator()
                 .addComponent(javax.swing.JLabel(message("settings.defaults.title")))
                 .addComponent(javax.swing.JLabel(message("settings.load.limits.title")))
@@ -125,7 +147,11 @@ class LanguageManagerSettingsConfigurable(
             (maxEntriesPerFileSpinner?.value as? Int) != settings.defaultMaxEntriesPerFile ||
             (maxEntriesPerSchemeSpinner?.value as? Int) != settings.defaultMaxEntriesPerScheme ||
             ignoreDuplicateValueIssuesBox?.isSelected != settings.ignoreDuplicateValueIssues ||
-            ignoreUnusedKeyIssuesBox?.isSelected != settings.ignoreUnusedKeyIssues
+            ignoreUnusedKeyIssuesBox?.isSelected != settings.ignoreUnusedKeyIssues ||
+            aiProviderBox?.selectedItem != settings.aiProvider ||
+            aiEndpointField?.text?.trim() != settings.aiEndpoint ||
+            aiModelField?.text?.trim() != settings.aiModel ||
+            aiTokenField?.password?.concatToString().orEmpty() != AiProviderCredentialStore.getToken()
     }
 
     override fun apply() {
@@ -156,6 +182,10 @@ class LanguageManagerSettingsConfigurable(
         settings.defaultMaxEntriesPerScheme = maxEntriesPerSchemeSpinner?.value as? Int ?: settings.defaultMaxEntriesPerScheme
         settings.ignoreDuplicateValueIssues = ignoreDuplicateValueIssuesBox?.isSelected ?: false
         settings.ignoreUnusedKeyIssues = ignoreUnusedKeyIssuesBox?.isSelected ?: false
+        settings.aiProvider = aiProviderBox?.selectedItem as? AiProviderType ?: AiProviderType.OPENAI_COMPATIBLE
+        settings.aiEndpoint = aiEndpointField?.text.orEmpty()
+        settings.aiModel = aiModelField?.text.orEmpty()
+        AiProviderCredentialStore.setToken(aiTokenField?.password?.concatToString().orEmpty())
         if (languageChanged || issueVisibilityChanged) LanguageManagerToolWindowFactory.refreshOpenToolWindows()
     }
 
@@ -172,6 +202,10 @@ class LanguageManagerSettingsConfigurable(
         maxEntriesPerSchemeSpinner?.value = settings.defaultMaxEntriesPerScheme
         ignoreDuplicateValueIssuesBox?.isSelected = settings.ignoreDuplicateValueIssues
         ignoreUnusedKeyIssuesBox?.isSelected = settings.ignoreUnusedKeyIssues
+        aiProviderBox?.selectedItem = settings.aiProvider
+        aiEndpointField?.text = settings.aiEndpoint
+        aiModelField?.text = settings.aiModel
+        aiTokenField?.text = AiProviderCredentialStore.getToken()
         updateParentLevelsEnabled()
     }
 
@@ -187,10 +221,24 @@ class LanguageManagerSettingsConfigurable(
         maxEntriesPerSchemeSpinner = null
         ignoreDuplicateValueIssuesBox = null
         ignoreUnusedKeyIssuesBox = null
+        aiProviderBox = null
+        aiEndpointField = null
+        aiModelField = null
+        aiTokenField = null
     }
 
     private fun updateParentLevelsEnabled() {
         parentLevelsSpinner?.isEnabled = basePathModeBox?.selectedItem == DefaultBasePathMode.PARENT_LEVELS
+    }
+
+    private fun applyProviderDefaultEndpoint() {
+        val field = aiEndpointField ?: return
+        val oldDefaults = setOf("https://api.openai.com/v1/chat/completions", "https://api.anthropic.com/v1/messages", "")
+        if (field.text.trim() !in oldDefaults) return
+        field.text = when (aiProviderBox?.selectedItem as? AiProviderType) {
+            AiProviderType.ANTHROPIC -> "https://api.anthropic.com/v1/messages"
+            else -> "https://api.openai.com/v1/chat/completions"
+        }
     }
 
     private fun validateDefaults(
@@ -266,6 +314,7 @@ class LanguageManagerSettingsConfigurable(
                             addActionListener { model.replaceWith(defaultValues) }
                         },
                     )
+                    if (regexInput) add(RegexPresetUi.button { patterns -> patterns.filterNot { it in model.values() }.forEach(model::addElement) })
                 },
                 BorderLayout.SOUTH,
             )
@@ -317,4 +366,10 @@ private fun DefaultBasePathMode.messageKey(): String =
     when (this) {
         DefaultBasePathMode.PROJECT_DIRECTORY -> "settings.default.base.project"
         DefaultBasePathMode.PARENT_LEVELS -> "settings.default.base.parents"
+    }
+
+private fun AiProviderType.messageKey(): String =
+    when (this) {
+        AiProviderType.OPENAI_COMPATIBLE -> "settings.ai.provider.openai"
+        AiProviderType.ANTHROPIC -> "settings.ai.provider.anthropic"
     }

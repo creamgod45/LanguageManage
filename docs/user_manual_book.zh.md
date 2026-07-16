@@ -39,7 +39,7 @@
 4. 選擇 `LanguageManage-{version}.zip`，不要先解壓縮。
 5. 依 IDE 提示重新啟動。
 
-安裝後，IDE 右側工具視窗列會出現「在地化管理器」圖示。
+安裝後，IDE 右側工具視窗列會出現「在地化管理器」圖示。IDE 會依目前 Light／Dark 主題與 UI 縮放，自動選擇 16×16 或 20×20 圖示，不需要另外設定。
 
 ## 3. 建立第一個方案
 
@@ -137,10 +137,10 @@ LanguageManagerBundle_zh_TW.properties  -> locale: zh_TW, namespace: LanguageMan
 
 ### 新增翻譯
 
-1. 選擇要寫入的方案檔案。
-2. 確認由檔案推導出的語言與 namespace。
-3. 輸入 key 與 value。
-4. 確認後插件會安全寫回檔案並重新載入方案。
+1. 選擇 namespace 並輸入新的 key。
+2. 可捲動表單會一次列出該 namespace 所有可用語言檔。
+3. 直接填寫各語言 value；每個 textarea 固定保留三行、72 px 編輯高度，不會被 Dialog 按鈕壓縮。
+4. 只需確認一次，插件會以單一批量操作驗證並寫入全部語言，最後只重新載入方案一次。未填欄位會建立為空值，讓缺失 value 分析可以列出。
 
 ### 新增語言版本
 
@@ -157,10 +157,10 @@ LanguageManagerBundle_zh_TW.properties  -> locale: zh_TW, namespace: LanguageMan
 
 1. 選擇翻譯表中的任一 cell。
 2. 點擊「操作 ▾」→「編輯所選」。
-3. 若點擊 locale value 欄，插件會直接編輯該語言，不再額外顯示語言選擇 Popup；若點擊 Namespace 或 Key 欄，則使用該列第一個既有語言。
-4. 編輯 Form 以「標題｜輸入框」雙欄排列；在視窗切換檔案時，locale、namespace 與 value 會更新為該檔案中相同 key 的內容，若尚無相同 key，value 會清空。
-5. key 可直接使用含空格、Unicode 與標點的原文句子，例如 `Not powered on or not detected`；僅空白、控制字元或超過 256 字元會被拒絕。
-5. 修改 key 或 value 後確認；儲存目標是目前選取的檔案。
+3. 同一個可捲動表單會列出所選 namespace／key 的全部既有與可補語言，不再出現語言選擇 Popup，也不用切換目標檔案。
+4. 每個語言會顯示實際列管檔案路徑及獨立三行 textarea；尚未有翻譯的語言會顯示空白輸入框，填入後即可一起新增。
+5. 只需確認一次，全部語言會透過單一批量 RPC 套用；所有 mutation 會先完成驗證，若後續檔案寫入失敗，插件會嘗試還原已寫入檔案。
+6. 若要跨全部語言變更 key，請使用「Key 改名」。key 可包含空格、Unicode 與標點，例如 `Not powered on or not detected`。
 
 ### 批量刪除
 
@@ -168,6 +168,20 @@ LanguageManagerBundle_zh_TW.properties  -> locale: zh_TW, namespace: LanguageMan
 2. 點擊「批量刪除」。
 3. 確認視窗顯示的是所選翻譯鍵列數，不會將各 locale entry 重複計數。
 4. 確認後，所選列包含的所有語言 entries 會從來源檔刪除。
+
+### AI 翻譯所選項目
+
+1. 前往 **Settings → Tools → LanguageManager**，選擇「OpenAI 相容 API」或「Anthropic Claude API」，填入完整請求端點、模型及 API Token。Token 儲存在 JetBrains PasswordSafe，不會包含於方案匯出檔。
+2. 選擇 1–100 個翻譯 row，點擊「操作 ▾ → AI 翻譯所選項目」，再選擇來源與目標語言。
+3. 插件會把全部來源值放進同一次請求，並要求保留 key、placeholder、ICU／MessageFormat、HTML、Markdown、跳脫及換行。
+4. 逐筆檢查並可編輯產生結果後，還要檢視檔案層級 Diff；只有「套用」會寫檔。「取消」不產生修改；「提出其他意見 AI」會要求輸入修正意見，並把原始來源值與上一輪已檢視翻譯一起帶入新一輪請求，新結果仍須重新檢視與確認 Diff。
+5. 單筆翻譯仍可執行，但會顯示 Toast，提醒多筆資料可一起選擇，以降低重複對話與 token 浪費。
+
+除本機 `http://localhost`、`127.0.0.1`、`::1` 相容服務外，端點只接受 HTTPS；不跟隨 redirect，回應上限 2 MB。請求格式依據官方 [OpenAI Chat Completions API](https://developers.openai.com/api/reference/resources/chat) 與 [Anthropic Messages API](https://platform.claude.com/docs/en/api/messages)。
+
+### 複製 key 到指定語言數值
+
+選擇一個或多個 row，點擊「操作 ▾ → 複製 key 到指定語言數值」，選擇目標語言並確認；每個 row 的 literal key 會成為該語言 value。
 
 ### Key 改名
 
@@ -280,6 +294,8 @@ LanguageManagerBundle_zh_TW.properties  -> locale: zh_TW, namespace: LanguageMan
 
 「新建方案預設值」與目前方案設定都會在 Regex 清單下方固定顯示完整 placeholder 說明；新增／編輯視窗也會顯示可直接使用的雙引號範例，例如 `(?:backendMessage|message)\(\s*"(?<key>[^"\r\n]{1,256})"\s*\)`。請依專案實際函式名稱調整前綴。建議限定函式名稱，不要直接配對所有引號文字，因為同一行前面若有其他字串或字元常值，可能先消耗非重疊 match 而漏掉真正的在地化呼叫。
 
+Regex 清單旁的「推薦格式」可加入 Laravel、Symfony、webman、Laminas／Zend、CodeIgniter、CakePHP、Yii、Phalcon、FuelPHP、Slim／Pixie／自訂 translator、Spring `MessageSource`、Java／Kotlin `ResourceBundle` 與 IntelliJ Platform bundle 預設。Slim 與 Pixie 沒有可確認的內建翻譯 API，因此使用通用自訂 helper 格式，加入後應依專案實際函式名稱調整。
+
 每個 Regex match 會依下列順序擷取候選 key：
 
 1. 命名群組 `(?<key>…)`。
@@ -298,7 +314,7 @@ Vue／JavaScript `$t()` 可加入例如：
 \$t\(\s*["'](?<key>[^"']+)["']
 ```
 
-同一個 key 在同一行出現多次仍計為一次。動態串接的 key 通常無法可靠識別。
+每個不同 match 都會計數，因此同一行的重複呼叫，以及不同 Regex 格式各自命中的使用位置都會累加。若多個 Regex 捕獲到同一來源位置的相同 key，該位置只計一次，避免重疊規則灌高結果。動態串接的 key 通常無法可靠識別。
 
 ### 排除資料夾
 

@@ -158,9 +158,12 @@ internal object UsageScanSupport {
                         runCatching {
                             Files.newBufferedReader(file, StandardCharsets.UTF_8).useLines { lines ->
                                 lines.forEach { rawLine ->
-                                    val candidates = extractCandidates(rawLine.take(MAX_LINE_LENGTH), patterns)
-                                    val matchedIds = candidates.flatMapTo(linkedSetOf()) { needleOwners[it].orEmpty() }
-                                    matchedIds.forEach { id -> counts[id] = counts.getValue(id) + 1 }
+                                    val occurrences = extractCandidateOccurrences(rawLine.take(MAX_LINE_LENGTH), patterns)
+                                    occurrences.forEach { occurrence ->
+                                        needleOwners[occurrence.candidate].orEmpty().forEach { id ->
+                                            counts[id] = counts.getValue(id) + 1
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -173,19 +176,25 @@ internal object UsageScanSupport {
         return counts
     }
 
-    private fun extractCandidates(
+    private fun extractCandidateOccurrences(
         line: String,
         patterns: List<Regex>,
-    ): Set<String> =
+    ): Set<CandidateOccurrence> =
         buildSet {
             patterns.forEach { pattern ->
                 pattern.findAll(line).forEach { match ->
-                    val named = runCatching { match.groups["key"]?.value }.getOrNull()
-                    val captured =
-                        named ?: (1 until match.groups.size)
-                            .firstNotNullOfOrNull { match.groups[it]?.value } ?: match.value
-                    if (captured.length in 1..256) add(captured)
+                    val named = runCatching { match.groups["key"] }.getOrNull()
+                    val capturedGroup = named ?: (1 until match.groups.size).firstNotNullOfOrNull { match.groups[it] }
+                    val captured = capturedGroup?.value ?: match.value
+                    if (captured.length in 1..256) {
+                        add(CandidateOccurrence(captured, capturedGroup?.range ?: match.range))
+                    }
                 }
             }
         }
+
+    private data class CandidateOccurrence(
+        val candidate: String,
+        val range: IntRange,
+    )
 }

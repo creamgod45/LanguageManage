@@ -16,5 +16,6 @@
                 anchor="right"
                 factoryClass="cg.creamgod45.toolWindow.LanguageManagerToolWindowFactory"
                 icon="cg.creamgod45.LanguageManagerIcons.ToolWindow"/>
+        <notificationGroup id="LanguageManager" displayType="BALLOON"/>
     </extensions>
 </idea-plugin>

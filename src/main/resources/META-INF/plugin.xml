@@ -8,6 +8,7 @@
         <p>管理專案中的 JSON、YAML 與 Laravel PHP 在地化語言檔。可建立彼此獨立的檔案方案，使用表格搜尋與編輯翻譯，檢查格式錯誤、缺失值、重複翻譯、缺少語言及使用率建議。</p>
     ]]></description>
     <resource-bundle>messages.LanguageManagerBundle</resource-bundle>
+    <depends>com.intellij.modules.platform</depends>
     <content>
         <module name="LanguageManage.shared" loading="required"/>
         <module name="LanguageManage.frontend"/>

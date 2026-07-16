@@ -8,6 +8,9 @@ enum class SearchMode { FUZZY, EXACT }
 enum class TranslationRowFilter { ALL, MISSING_TRANSLATION, ZERO_USAGE }
 
 @Serializable
+enum class AiProviderType { OPENAI_COMPATIBLE, ANTHROPIC }
+
+@Serializable
 enum class IssueSeverity { INFO, WARNING, ERROR }
 
 val DEFAULT_USAGE_REGEX_PATTERNS: List<String> =
@@ -116,6 +119,38 @@ data class EntryMutationDto(
     val namespace: String,
     val key: String,
     val value: String,
+)
+
+@Serializable
+data class AiTranslationItemDto(
+    val id: String,
+    val namespace: String,
+    val key: String,
+    val sourceValue: String,
+)
+
+@Serializable
+data class AiTranslationRequestDto(
+    val provider: AiProviderType,
+    val endpoint: String,
+    val model: String,
+    val apiToken: String,
+    val sourceLocale: String,
+    val targetLocale: String,
+    val items: List<AiTranslationItemDto>,
+    val previousSuggestions: List<AiTranslationSuggestionDto> = emptyList(),
+    val userFeedback: String = "",
+)
+
+@Serializable
+data class AiTranslationSuggestionDto(
+    val id: String,
+    val translatedValue: String,
+)
+
+@Serializable
+data class AiTranslationResultDto(
+    val suggestions: List<AiTranslationSuggestionDto>,
 )
 
 @Serializable
