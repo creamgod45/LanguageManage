@@ -14,6 +14,7 @@ class LocalizationModelsTest {
             )
 
         assertEquals("", scheme.usageScanSettings.basePath)
+        assertTrue(scheme.localeNotes.isEmpty())
         assertEquals(DEFAULT_USAGE_REGEX_PATTERNS, scheme.usageScanSettings.regexPatterns)
         assertEquals(DEFAULT_USAGE_EXCLUDED_DIRECTORIES, scheme.usageScanSettings.excludedDirectories)
         assertTrue("vendor" in scheme.usageScanSettings.excludedDirectories)
@@ -38,5 +39,15 @@ class LocalizationModelsTest {
                 ?.get("key")
                 ?.value,
         )
+    }
+
+    @Test
+    fun `scheme locale notes survive serialization while old transfers default empty`() {
+        val scheme = LanguageSchemeDto("scheme", "Demo", listOf("en.json"), 1, localeNotes = mapOf("es-MX" to "formal"))
+        val restored = Json.decodeFromString<LanguageSchemeDto>(Json.encodeToString(LanguageSchemeDto.serializer(), scheme))
+        val oldPortable = Json.decodeFromString<PortableLanguageSchemeDto>("""{"name":"Old","files":["en.json"]}""")
+
+        assertEquals(mapOf("es-MX" to "formal"), restored.localeNotes)
+        assertTrue(oldPortable.localeNotes.isEmpty())
     }
 }

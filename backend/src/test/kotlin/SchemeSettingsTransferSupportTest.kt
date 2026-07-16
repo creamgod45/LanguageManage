@@ -44,6 +44,7 @@ class SchemeSettingsTransferSupportTest {
                         maxEntriesPerFile = 40_000,
                         maxEntriesPerScheme = 150_000,
                     ),
+                localeNotes = mapOf("es-MX" to "Mexican Spanish, formal tone"),
             )
 
         val content = SchemeSettingsTransferSupport.export(listOf(scheme), temp.toString())
@@ -65,6 +66,9 @@ class SchemeSettingsTransferSupportTest {
         assertEquals(40, imported.usageScanSettings.maxLanguageSchemeMb)
         assertEquals(40_000, imported.usageScanSettings.maxEntriesPerFile)
         assertEquals(150_000, imported.usageScanSettings.maxEntriesPerScheme)
+        assertEquals(mapOf("es-MX" to "Mexican Spanish, formal tone"), imported.localeNotes)
+        assertTrue("localeNotes" in content)
+        assertEquals(2, preview.formatVersion)
     }
 
     @Test
@@ -92,5 +96,13 @@ class SchemeSettingsTransferSupportTest {
         assertFailsWith<IllegalArgumentException> { SchemeSettingsTransferSupport.preview(wrongVersion, temp.toString()) }
         assertFalse(SchemeSettingsTransferSupport.preview(traversal, temp.toString()).canImport)
         assertFailsWith<IllegalArgumentException> { SchemeSettingsTransferSupport.resolve(traversal, temp.toString()) }
+    }
+
+    @Test
+    fun `rejects unsafe locale notes during import`() {
+        val content =
+            """{"formatVersion":1,"schemes":[{"name":"Unsafe","files":["lang/en/auth.php"],"localeNotes":{"es":"bad\u0000note"}}]}"""
+
+        assertFailsWith<IllegalArgumentException> { SchemeSettingsTransferSupport.preview(content, temp.toString()) }
     }
 }

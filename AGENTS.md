@@ -41,7 +41,7 @@
 ## UI and localization
 
 - 所有使用者可見文字都必須進 resource bundle，不可新增硬編碼 UI 文案。
-- Base 英文、`zh_TW`、`zh_CN`、`ja`、`ko` 五套字典必須同步新增相同 key。
+- Base 英文、`zh_TW`、`zh_CN`、`ja`、`ko`、`es`、`th` 七套字典必須同步新增相同 key。
 - 插件中繼資料、frontend UI 與 backend 診斷三層字典都要考慮。
 - 新增或修改字典後更新 bundle parity tests。
 - 使用 JetBrains 原生元件與 API，例如 Diff viewer、Find in Files、ActionLink、Messages。

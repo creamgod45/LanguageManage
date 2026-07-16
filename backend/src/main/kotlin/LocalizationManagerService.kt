@@ -185,6 +185,7 @@ class LocalizationManagerService(
                         files = scheme.files,
                         updatedAtEpochMs = now + index,
                         usageScanSettings = scheme.usageScanSettings,
+                        localeNotes = scheme.localeNotes,
                     )
                 }
             val schemes = mutableState.value.schemes + newSchemes
@@ -393,6 +394,7 @@ class LocalizationManagerService(
             require(!Files.exists(Path.of(change.filePath))) { backendMessage("locale.version.target.exists", change.filePath) }
         }
 
+        val targetLocaleNote = LocaleMetadataSupport.normalizeNote(request.targetLocaleNote)
         val previousState = mutableState.value
         val createdFiles = mutableListOf<Path>()
         try {
@@ -407,6 +409,7 @@ class LocalizationManagerService(
                 scheme.copy(
                     files = (scheme.files + createdFiles.map(Path::toString)).distinct(),
                     updatedAtEpochMs = System.currentTimeMillis(),
+                    localeNotes = if (targetLocaleNote.isBlank()) scheme.localeNotes else scheme.localeNotes + (request.targetLocale to targetLocaleNote),
                 )
             mutableState.value =
                 previousState.copy(
@@ -503,6 +506,7 @@ class LocalizationManagerService(
         scheme: LanguageSchemeDto,
         request: LocaleVersionRequestDto,
     ): ChangePreviewDto {
+        LocaleMetadataSupport.normalizeNote(request.targetLocaleNote)
         val targets = LanguageLocaleVersionSupport.buildTargets(parseDocuments(scheme), request.sourceLocale, request.targetLocale)
         val emptyHash = contentSha256("")
         return ChangePreviewDto(

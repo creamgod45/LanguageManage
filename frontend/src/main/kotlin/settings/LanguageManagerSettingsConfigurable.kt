@@ -387,6 +387,8 @@ private fun DisplayLanguage.messageKey(): String =
         DisplayLanguage.SIMPLIFIED_CHINESE -> "settings.language.simplified.chinese"
         DisplayLanguage.JAPANESE -> "settings.language.japanese"
         DisplayLanguage.KOREAN -> "settings.language.korean"
+        DisplayLanguage.SPANISH -> "settings.language.spanish"
+        DisplayLanguage.THAI -> "settings.language.thai"
     }
 
 private fun DefaultBasePathMode.messageKey(): String =

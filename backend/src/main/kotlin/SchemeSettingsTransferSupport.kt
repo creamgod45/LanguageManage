@@ -11,10 +11,12 @@ internal data class ResolvedImportedScheme(
     val name: String,
     val files: List<String>,
     val usageScanSettings: UsageScanSettingsDto,
+    val localeNotes: Map<String, String>,
 )
 
 internal object SchemeSettingsTransferSupport {
-    private const val FORMAT_VERSION = 1
+    private const val FORMAT_VERSION = 2
+    private val SUPPORTED_FORMAT_VERSIONS = 1..FORMAT_VERSION
     private const val MAX_CONTENT_LENGTH = 1_000_000
     private const val MAX_SCHEMES = 100
     private const val MAX_FILES = 2_000
@@ -48,6 +50,7 @@ internal object SchemeSettingsTransferSupport {
                                     ?.let { portablePath(it, root) }
                                     .orEmpty(),
                         ),
+                    localeNotes = LocaleMetadataSupport.normalizeNotes(scheme.localeNotes),
                 )
             }
         return json.encodeToString(SchemeSettingsTransferDto(FORMAT_VERSION, portable)) + "\n"
@@ -96,6 +99,7 @@ internal object SchemeSettingsTransferSupport {
                 name = scheme.name.trim(),
                 files = files,
                 usageScanSettings = UsageScanSupport.normalize(scheme.usageScanSettings.copy(basePath = basePath)),
+                localeNotes = LocaleMetadataSupport.normalizeNotes(scheme.localeNotes),
             )
         }
     }
@@ -107,12 +111,13 @@ internal object SchemeSettingsTransferSupport {
         val transfer =
             runCatching { json.decodeFromString<SchemeSettingsTransferDto>(content) }
                 .getOrElse { throw IllegalArgumentException(backendMessage("scheme.transfer.json.invalid", safeDetail(it))) }
-        require(transfer.formatVersion == FORMAT_VERSION) { backendMessage("scheme.transfer.version.invalid", transfer.formatVersion) }
+        require(transfer.formatVersion in SUPPORTED_FORMAT_VERSIONS) { backendMessage("scheme.transfer.version.invalid", transfer.formatVersion) }
         require(transfer.schemes.size in 1..MAX_SCHEMES) { backendMessage("scheme.transfer.scheme.count", MAX_SCHEMES) }
         require(transfer.schemes.sumOf { it.files.size } <= MAX_FILES) { backendMessage("scheme.transfer.file.count", MAX_FILES) }
         transfer.schemes.forEach { scheme ->
             require(scheme.name.trim().length in 1..80 && scheme.name.none(Char::isISOControl)) { backendMessage("scheme.name.length") }
             require(scheme.files.isNotEmpty()) { backendMessage("scheme.files.required") }
+            LocaleMetadataSupport.normalizeNotes(scheme.localeNotes)
         }
         return transfer
     }

@@ -30,6 +30,8 @@ internal enum class DisplayLanguage(
     SIMPLIFIED_CHINESE(Locale.SIMPLIFIED_CHINESE),
     JAPANESE(Locale.JAPANESE),
     KOREAN(Locale.KOREAN),
+    SPANISH(Locale.forLanguageTag("es")),
+    THAI(Locale.forLanguageTag("th")),
 }
 
 internal enum class DefaultBasePathMode { PROJECT_DIRECTORY, PARENT_LEVELS }

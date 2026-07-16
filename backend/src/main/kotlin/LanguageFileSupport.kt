@@ -29,7 +29,7 @@ internal data class ParsedLanguageFile(
     val issues: MutableList<LanguageIssueDto> = mutableListOf(),
 )
 
-private val PROPERTIES_LOCALE_SUFFIX = Regex("^(.+)_([a-z]{2,3}(?:_[A-Z]{2})?)$")
+private val PROPERTIES_LOCALE_SUFFIX = Regex("^(.+)_([a-z]{2,3}(?:[-_](?:[A-Za-z]{2,4}|[0-9]{3}))*)$")
 
 private fun propertiesIdentity(path: Path): Pair<String, String> {
     val stem = path.nameWithoutExtension

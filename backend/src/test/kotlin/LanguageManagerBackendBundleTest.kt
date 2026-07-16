@@ -16,7 +16,7 @@ class LanguageManagerBackendBundleTest {
     @Test
     fun `all localized backend bundles have identical keys`() {
         val english = load("LanguageManagerBackendBundle.properties")
-        listOf("zh_TW", "zh_CN", "ja", "ko").forEach { locale ->
+        listOf("zh_TW", "zh_CN", "ja", "ko", "es", "th").forEach { locale ->
             val localized = load("LanguageManagerBackendBundle_$locale.properties")
             assertEquals(english.keys, localized.keys, locale)
             assertNotEquals(english.getProperty("preview.changed"), localized.getProperty("preview.changed"), locale)

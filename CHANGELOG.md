@@ -1,5 +1,15 @@
 # Language Manager Changelog
 
+## 1.5.2
+
+- 插件顯示語言新增西班牙文（`es`）與泰文（`th`）明確選項及自動 IDE locale 識別，並補齊插件中繼資料、frontend UI、backend 診斷與七語言字典一致性測試。
+- 「新增語言版本」改用一般文字欄位搭配明確開啟的語言代碼建議 Popup；輸入或刪除文字時不再重建 ComboBox model、搶選第一筆候選或自動回填，只有使用者選取候選才套用代碼。
+- 修正「新增語言版本」在 Darcula／Dark Theme 開啟時，editable locale ComboBox 尚未安裝 UI editor，導致 `BasicComboBoxUI.getDisplaySize()` 於 EDT 拋出 NullPointerException。
+- 「新增語言版本」的目標 locale 改為可自由輸入的自動完成欄位，列出 ISO 639 與常用 BCP 47 語言／地區／文字系代碼；使用者仍可輸入專案自訂代碼。
+- 新增每個 locale 的選填語言備註，例如「墨西哥西班牙文、正式語氣」；備註保存於方案、支援匯入／匯出，並以受限 JSON 欄位帶入 AI 翻譯 Prompt 作為語言、地區、術語與語氣背景。
+- Properties bundle locale 推導支援 `zh-Hant`、`sr-Latn`、`es-419` 等 BCP 47 script／numeric region tag，確保推薦代碼建立後仍能正確重新載入。
+- 擴充中英文使用者手冊的 AI Provider、批量翻譯、Diff、多輪意見、語言代碼、安全限制與疑難排解說明。
+
 ## 1.5.1
 
 - 修正部分 OpenAI-compatible 與 Anthropic 模型因固定傳送 `temperature=0.1` 而回傳 HTTP 400；Temperature 改為選填設定，預設留空時完全省略參數並使用 Provider／模型預設值，需要時才依 Provider 有效範圍送出。

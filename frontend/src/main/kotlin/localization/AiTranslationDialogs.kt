@@ -28,14 +28,31 @@ internal class AiTranslationRequestDialog(
     project: Project,
     private val locales: List<String>,
     private val rows: List<JoinedTranslationRow>,
+    private val localeNotes: Map<String, String> = emptyMap(),
 ) : DialogWrapper(project) {
-    private val sourceChoices = listOf(AiSourceChoice(null)) + locales.map { AiSourceChoice(it) }
+    private val sourceChoices = listOf(AiSourceChoice(null)) + locales.map { AiSourceChoice(it, localeNotes[it].orEmpty()) }
     private val source = ComboBox(sourceChoices.toTypedArray())
     private val targetModel = DefaultListModel<String>()
     private val target =
         JBList(targetModel).apply {
             selectionMode = ListSelectionModel.MULTIPLE_INTERVAL_SELECTION
             visibleRowCount = 5
+            cellRenderer =
+                object : javax.swing.DefaultListCellRenderer() {
+                    override fun getListCellRendererComponent(
+                        list: javax.swing.JList<*>?,
+                        value: Any?,
+                        index: Int,
+                        isSelected: Boolean,
+                        cellHasFocus: Boolean,
+                    ) = super.getListCellRendererComponent(
+                        list,
+                        value?.toString()?.let { locale -> localeLabel(locale, localeNotes[locale].orEmpty()) },
+                        index,
+                        isSelected,
+                        cellHasFocus,
+                    )
+                }
         }
     private val previewModel = AiSourcePreviewTableModel(rows)
 
@@ -259,9 +276,12 @@ internal fun aiMetadataColumnName(column: Int): String =
 
 private data class AiSourceChoice(
     val locale: String?,
+    val note: String = "",
 ) {
-    override fun toString(): String = locale ?: message("dialog.ai.source.key")
+    override fun toString(): String = locale?.let { localeLabel(it, note) } ?: message("dialog.ai.source.key")
 }
+
+private fun localeLabel(locale: String, note: String): String = if (note.isBlank()) locale else "$locale — $note"
 
 private class AiSourcePreviewTableModel(
     private val rows: List<JoinedTranslationRow>,

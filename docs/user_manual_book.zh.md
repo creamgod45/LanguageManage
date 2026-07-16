@@ -28,6 +28,8 @@
 - 简体中文
 - 日本語
 - 한국어
+- Español
+- ไทย
 
 ## 2. 安裝插件
 
@@ -146,10 +148,11 @@ LanguageManagerBundle_zh_TW.properties  -> locale: zh_TW, namespace: LanguageMan
 
 1. 點擊「操作 ▾」→「新增語言版本」。
 2. 選擇來源語言，例如 `en`。
-3. 輸入新語言代碼，例如西班牙文 `es`。
-4. 插件會依來源語言的全部檔案建立目標清單：Laravel `en/auth.php` 會對應為 `es/auth.php`；`en.json` 會對應為 `es.json`。
-5. 一般翻譯 value 會清空以等待翻譯；JSON array 會保留原結構，避免產生無法解析的檔案。
-6. 在 Diff 視窗逐一確認新檔案，按下套用後才會建立檔案並加入目前方案。
+3. 可自由輸入新語言代碼，或點擊欄位右側建議按鈕開啟 ISO 639 語言及常用 BCP 47 變體，例如 `es`、`th`、`es-MX`、`zh-Hant`、`es-419`。輸入與刪除期間不會自動選取或插入候選；只有在 Popup 明確選取後才會取代欄位內容，通過 locale 驗證的專案自訂代碼仍可保留。
+4. 可選填語言備註，例如「墨西哥西班牙文、正式語氣」。備註上限 500 字元，會保存於方案、包含於方案匯入／匯出，並帶入日後針對該 locale 的 AI 請求；備註不會改變語言檔路徑。
+5. 插件會依來源語言的全部檔案建立目標清單：Laravel `en/auth.php` 會對應為 `es/auth.php`；`en.json` 會對應為 `es.json`。
+6. 一般翻譯 value 會清空以等待翻譯；JSON array 會保留原結構，避免產生無法解析的檔案。
+7. 在 Diff 視窗逐一確認新檔案；按下套用後才會建立檔案、保存備註並加入目前方案。
 
 若目標 locale 已存在、目標檔案已存在、來源檔案解析失敗或多個來源對應到同一路徑，插件會停止建立，不會覆寫既有檔案。
 
@@ -171,13 +174,47 @@ LanguageManagerBundle_zh_TW.properties  -> locale: zh_TW, namespace: LanguageMan
 
 ### AI 翻譯所選項目
 
-1. 前往 **Settings → Tools → LanguageManager**，選擇「OpenAI 相容 API」或「Anthropic Claude API」，填入完整請求端點、模型及 API Token。Token 儲存在 JetBrains PasswordSafe，不會包含於方案匯出檔。**Temperature** 預設留空，此時不傳送參數並採用 Provider／模型預設值；只有模型支援覆寫時才填寫（OpenAI-compatible 範圍 0–2、Anthropic 範圍 0–1）。
-2. 選擇 1–100 個翻譯 row，點擊「操作 ▾ → AI 翻譯所選項目」。Modal 有 `en` 時預設以 `en` 為來源，否則使用 Key；可切換來源、逐列編輯自動帶入的原文，並多選一個以上目標覆蓋語言。原文修改只用於這次 AI 請求，不會改寫來源語言檔。
-3. 插件會對每個目標語言各送出一個批量請求，避免回傳值錯配語言；提示詞要求保留 key、placeholder、ICU／MessageFormat、HTML、Markdown、跳脫及換行。
-4. 產生結果以每個目標語言一欄合併顯示，逐格檢查或編輯後再檢視同一份檔案層級 Diff；只有「套用」會寫檔。「取消」不產生修改；「提出其他意見 AI」會帶入已編輯原文與上一輪各語言的已檢視翻譯，新結果仍須重新檢視與確認 Diff。
-5. 單筆翻譯仍可執行，但會顯示 Toast，提醒多筆資料可一起選擇，以降低重複對話與 token 浪費。
+#### 設定 AI Provider
 
-除本機 `http://localhost`、`127.0.0.1`、`::1` 相容服務外，端點只接受 HTTPS；不跟隨 redirect，回應上限 2 MB。請求格式依據官方 [OpenAI Chat Completions API](https://developers.openai.com/api/reference/resources/chat) 與 [Anthropic Messages API](https://platform.claude.com/docs/en/api/messages)。
+前往 **Settings → Tools → LanguageManager**，設定下列欄位：
+
+| 設定 | 行為 |
+| --- | --- |
+| Provider | 選擇「OpenAI 相容 API」或「Anthropic Claude API」。 |
+| API 端點 | 必須填入完整請求端點，不能只填 Provider 的 base URL；非本機端點必須使用 HTTPS。 |
+| 模型 | 填入該端點實際支援的模型名稱。 |
+| API Token | 儲存在 JetBrains PasswordSafe，不會寫入語言檔或包含於方案匯出檔。 |
+| Temperature | 建議留空，插件會省略參數並使用 Provider／模型預設值。只有模型支援覆寫時才填寫：OpenAI-compatible 0–2；Anthropic 0–1。 |
+
+除本機 `http://localhost`、`127.0.0.1`、`::1` 相容服務外，端點只接受 HTTPS；插件不跟隨 redirect，每次請求 timeout 為 90 秒，回應上限為 2 MB。請求格式依據官方 [OpenAI Chat Completions API](https://developers.openai.com/api/reference/resources/chat) 與 [Anthropic Messages API](https://platform.claude.com/docs/en/api/messages)。
+
+#### 批量翻譯與檢視
+
+1. 在 JOIN 翻譯表選擇 1–100 個 row，點擊「操作 ▾ → AI 翻譯所選項目」。單筆也能執行，但插件會建議把相關資料一起選取，以減少重複對話與 token 用量。
+2. 選擇原文來源。若已納管 locale 包含 `en`，預設使用 `en`；否則使用 Key。若某個所選 row 在該來源沒有 value，必須先補上其可編輯原文儲存格才能繼續。也可以改選其他已納管語言，並在送出前逐列編輯原文。這些修改只存在於本次請求，不會改寫來源語言檔。
+3. 多選一個或多個目標語言。來源語言不能同時成為目標；目標 locale 必須在該 namespace 有已納管檔案，確保套用時具有明確寫入位置。
+4. 插件會對每個目標 locale 各送出一個批量請求。已保存的來源／目標語言備註會作為語言、地區、術語及語氣背景加入請求；提示詞明確規定備註不可改變回應格式，並要求保留 placeholder、ICU／MessageFormat、HTML、Markdown、跳脫、換行與前後空白，禁止翻譯 key 或 item ID。
+5. 結果會 JOIN 到同一張檢視表：Namespace 與 Key 用於辨識 row，每個目標 locale 各有一個可編輯 value 欄。此時編輯的只是待套用建議。
+6. 繼續檢查合併後的檔案層級 Diff。「套用」會先做 SHA-256 衝突檢查再寫入全部修改；「取消」會離開且不寫入。
+7. 點擊「提出其他意見 AI」可說明需要如何調整；新請求會包含已編輯原文及該 locale 上一輪已檢視結果。在意見視窗點擊「返回」會回到原本 Diff，不會結束整個 AI 流程。送出意見後仍會重新顯示結果表與 Diff，不會自動套用。
+
+例如選擇 1 個 row、3 個目標 locale，會建立 3 次翻譯請求與 3 個待套用 mutation。批次中每個原文上限 10,000 字元、總原文上限 60,000 字元。AI 回傳的 ID 必須與請求 row 完全一致；缺失、重複、額外、格式錯誤或過大的回應會在進入 Diff 前被拒絕。
+
+#### 語言代碼建議
+
+插件會把從納管檔名識別到的 locale 原樣放入 `source_locale` 與 `target_locale`，目前不會把自訂代碼轉換成語言名稱。因此使用標準 ISO 639／BCP 47 代碼最穩定：
+
+| 目標語言或變體 | 建議代碼 |
+| --- | --- |
+| 中性西班牙文 | `es` |
+| 西班牙／墨西哥／拉丁美洲西班牙文 | `es-ES`／`es-MX`／`es-419` |
+| 泰文 | `th` |
+| 繁體中文 | `zh-TW` 或 `zh-Hant` |
+| 簡體中文 | `zh-CN` 或 `zh-Hans` |
+| 巴西／葡萄牙葡萄牙文 | `pt-BR`／`pt-PT` |
+| 塞爾維亞文西里爾／拉丁文字 | `sr-Cyrl`／`sr-Latn` |
+
+既有 `zh_TW` 等底線形式仍可使用，但 BCP 47 的連字號形式通常更容易讓 Provider 明確理解。避免使用 `jp`、`kr`、`cn`、`tw`、`zht` 等國家或自訂縮寫；應改用 `ja`、`ko`、`zh-CN`、`zh-TW` 或其他明確標準代碼。`es`、`pt`、`zh`、`sr` 等通用代碼可能產生中性版本，或由 Provider 自行選擇地區／文字系；若術語或書寫系統很重要，請指定更精確的 locale。
 
 ### 複製 key 到指定語言數值
 
@@ -282,7 +319,7 @@ LanguageManagerBundle_zh_TW.properties  -> locale: zh_TW, namespace: LanguageMan
 
 新方案預設限制為：單一語言檔 2,048 KB、方案語言內容總計 20 MB、單檔 20,000 筆翻譯、方案總計 100,000 筆翻譯。每個既有方案也能獨立調整這四項。插件會先檢查檔案大小才配置 parser 內容；翻譯筆數會在 parser 建立 map 時立即限制，JSON／PHP 巢狀結構最多 128 層。超限內容會略過並列為問題，不會保留在表格或快取。安全硬上限為單檔 10 MB、單一方案 100 MB、單檔 100,000 筆與單一方案 250,000 筆。若本次結果太大，仍可使用目前記憶體狀態，但不會再序列化成過大的磁碟 cache。
 
-此快捷入口直接依插件設定元件定位，不依賴 IDE 顯示語言；英文、繁體中文、簡體中文、日文或韓文介面都會開啟同一個設定頁。
+此快捷入口直接依插件設定元件定位，不依賴 IDE 顯示語言；英文、繁體中文、簡體中文、日文、韓文、西班牙文或泰文介面都會開啟同一個設定頁。
 
 ### 掃描基準路徑
 
@@ -377,6 +414,21 @@ Vue／JavaScript `$t()` 可加入例如：
 - 在 Tool Window 選擇方案後點擊「方案設定」，確認 base path、Regex 與排除清單。
 - 掃描會跳過方案排除清單中的資料夾；新方案預設會排除 `.git`、`.github`、`docs`、`vendor` 與常見 AI／IDE 設定目錄。
 - 「0」代表掃描未找到，不等同確定未使用。
+
+### AI 翻譯回傳 HTTP 400 或沒有進入檢視表
+
+- 確認 **API 端點** 是完整的 OpenAI-compatible chat-completions 或 Anthropic messages 請求端點，而不是只有 base URL。
+- 確認該端點存在設定的模型，且 Token 具有使用權限。
+- 若錯誤指出不支援 Temperature，請清空 **Temperature**；留空時插件會完全省略該參數。
+- Provider 必須回傳要求的 JSON 翻譯物件。Markdown 說明文字、缺失／重複／額外 ID、無效 JSON 或超過 2 MB 的回應都會被拒絕，不會進入 Diff。
+- Timeout 或網路錯誤不會寫入檔案；確認端點後可減少 row 或目標 locale 數量再試。
+
+### AI 翻譯使用了錯誤的地區語言
+
+- 使用 `es-MX`、`pt-BR`、`zh-Hant`、`sr-Latn` 等明確標準 locale，不要使用模糊或自訂縮寫。
+- 檢查可編輯原文預覽。只使用 Key 可能缺乏語境；可改選有內容的來源語言，或把本次暫時原文描述得更明確。
+- 可直接修改結果表，或使用「提出其他意見 AI」。在意見視窗按「返回」會保留並重新開啟目前 Diff。
+- 務必確認目標 locale 欄與最終 Diff；AI 輸出在點擊「套用」前都只是建議。
 
 ## 13. 回報問題
 

@@ -32,6 +32,8 @@ class AiTranslationSupportTest {
                     request(AiProviderType.OPENAI_COMPATIBLE, server.address.port).copy(
                         previousSuggestions = listOf(AiTranslationSuggestionDto("item0", "Hola")),
                         userFeedback = "Use a formal tone",
+                        sourceLocaleNote = "US English",
+                        targetLocaleNote = "Mexican Spanish, formal tone",
                     ),
                 )
             assertEquals("Bearer test-token", authorization.get())
@@ -39,6 +41,8 @@ class AiTranslationSupportTest {
             assertContains(requestBody.get(), "Hello {name}")
             assertContains(requestBody.get(), "previous_translations")
             assertContains(requestBody.get(), "Use a formal tone")
+            assertContains(requestBody.get(), "source_locale_note")
+            assertContains(requestBody.get(), "Mexican Spanish, formal tone")
             assertFalse(requestBody.get().contains("\"temperature\""))
             assertEquals("Hola {name}", result.suggestions.single().translatedValue)
         } finally {
@@ -93,6 +97,11 @@ class AiTranslationSupportTest {
         }
         assertFailsWith<IllegalArgumentException> {
             AiTranslationSupport.validate(request(AiProviderType.ANTHROPIC, 443).copy(temperature = 1.1))
+        }
+        assertFailsWith<IllegalArgumentException> {
+            AiTranslationSupport.validate(
+                request(AiProviderType.OPENAI_COMPATIBLE, 443).copy(targetLocaleNote = "x".repeat(501)),
+            )
         }
     }
 

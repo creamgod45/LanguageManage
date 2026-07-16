@@ -37,6 +37,7 @@ import java.awt.Component
 import java.awt.Container
 import java.awt.Dimension
 import java.awt.FlowLayout
+import java.awt.GridLayout
 import java.awt.LayoutManager2
 import java.awt.Toolkit
 import java.awt.datatransfer.DataFlavor
@@ -477,15 +478,32 @@ internal class LocalizationManagerPanel(
                 .sorted()
         if (locales.isEmpty()) return showError(message("error.locale.version.no.source"))
         val sourceLocale = ComboBox(locales.toTypedArray())
-        val targetLocale = JBTextField().apply { emptyText.text = message("field.locale.version.example") }
+        val targetLocale = LocaleCodeField().apply { toolTipText = message("field.locale.version.autocomplete.help") }
+        val targetLocaleNote = JBTextField().apply { emptyText.text = message("field.locale.version.note.example") }
         val panel =
             JPanel().apply {
                 layout = BoxLayout(this, BoxLayout.Y_AXIS)
                 add(JBLabel(message("field.locale.version.source")))
                 add(sourceLocale)
                 add(Box.createVerticalStrut(6))
-                add(JBLabel(message("field.locale.version.target")))
-                add(targetLocale)
+                add(
+                    JPanel(GridLayout(1, 2, JBUI.scale(8), 0)).apply {
+                        add(
+                            JPanel(BorderLayout(0, JBUI.scale(4))).apply {
+                                add(JBLabel(message("field.locale.version.target")), BorderLayout.NORTH)
+                                add(targetLocale, BorderLayout.CENTER)
+                            },
+                        )
+                        add(
+                            JPanel(BorderLayout(0, JBUI.scale(4))).apply {
+                                add(JBLabel(message("field.locale.version.note")), BorderLayout.NORTH)
+                                add(targetLocaleNote, BorderLayout.CENTER)
+                            },
+                        )
+                    },
+                )
+                add(Box.createVerticalStrut(4))
+                add(JBLabel(message("field.locale.version.autocomplete.help")))
             }
         if (JOptionPane.showConfirmDialog(
                 this,
@@ -497,7 +515,7 @@ internal class LocalizationManagerPanel(
         ) {
             return
         }
-        val request = LocaleVersionRequestDto(sourceLocale.selectedItem.toString(), targetLocale.text.trim())
+        val request = LocaleVersionRequestDto(sourceLocale.selectedItem.toString(), targetLocale.localeCode, targetLocaleNote.text.trim())
         runAction {
             val preview = repository.previewLocaleVersion(scheme.id, request)
             val accepted =
@@ -582,6 +600,7 @@ internal class LocalizationManagerPanel(
     }
 
     private fun translateSelectedWithAi() {
+        val scheme = activeScheme() ?: return showError(message("error.no.active.scheme"))
         val rows = selectedRows()
         if (rows.isEmpty()) return showError(message("error.select.entry"))
         if (rows.size > 100) return showError(message("error.ai.batch.limit", 100))
@@ -592,7 +611,7 @@ internal class LocalizationManagerPanel(
         }
         val locales = entryModel.locales()
         if (locales.isEmpty()) return showError(message("error.ai.locales.required"))
-        val dialog = AiTranslationRequestDialog(project, locales, rows)
+        val dialog = AiTranslationRequestDialog(project, locales, rows, scheme.localeNotes)
         if (!dialog.showAndGet()) return
         if (rows.size == 1) {
             NotificationGroupManager
@@ -616,6 +635,8 @@ internal class LocalizationManagerPanel(
                     targetLocale,
                     items,
                     temperature = settings.aiTemperature.toDoubleOrNull(),
+                    sourceLocaleNote = dialog.sourceLocale?.let(scheme.localeNotes::get).orEmpty(),
+                    targetLocaleNote = scheme.localeNotes[targetLocale].orEmpty(),
                 )
             }
         runAction {
@@ -637,7 +658,7 @@ internal class LocalizationManagerPanel(
                                 ?: error(message("error.locale.file.not.found", targetLocale))
                         }
                     }
-                val schemeId = activeId()
+                val schemeId = scheme.id
                 val preview = repository.previewEntryMutations(schemeId, mutations)
                 if (preview.files.isEmpty()) return@runAction
                 previewLoop@ while (true) {

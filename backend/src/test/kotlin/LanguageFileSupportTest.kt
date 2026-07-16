@@ -340,6 +340,20 @@ class LanguageFileSupportTest {
     }
 
     @Test
+    fun `properties locale detection supports BCP 47 script and numeric region tags`() {
+        val traditional = temp.resolve("Messages_zh-Hant.properties").apply { writeText("hello=哈囉\n") }
+        val latinAmerica = temp.resolve("Messages_es-419.properties").apply { writeText("hello=Hola\n") }
+
+        val traditionalDocument = LanguageFileCodec.parse(traditional, "scheme")
+        val latinAmericaDocument = LanguageFileCodec.parse(latinAmerica, "scheme")
+
+        assertEquals("zh-Hant", traditionalDocument.locale)
+        assertEquals("Messages", traditionalDocument.namespace)
+        assertEquals("es-419", latinAmericaDocument.locale)
+        assertEquals("Messages", latinAmericaDocument.namespace)
+    }
+
+    @Test
     fun `new JSON locale keeps array structure while clearing scalar translations`() {
         val source =
             temp.resolve("en.json").apply {

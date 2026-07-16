@@ -17,7 +17,7 @@ class LanguageManagerFrontendBundleTest {
     @Test
     fun `all localized frontend bundles have identical keys`() {
         val english = load("LanguageManagerFrontendBundle.properties")
-        listOf("zh_TW", "zh_CN", "ja", "ko").forEach { locale ->
+        listOf("zh_TW", "zh_CN", "ja", "ko", "es", "th").forEach { locale ->
             val localized = load("LanguageManagerFrontendBundle_$locale.properties")
             assertEquals(english.keys, localized.keys, locale)
             assertNotEquals(english.getProperty("tab.issues"), localized.getProperty("tab.issues"), locale)
@@ -40,10 +40,15 @@ class LanguageManagerFrontendBundleTest {
         val english = LanguageManagerBundle.messageForLanguage(DisplayLanguage.ENGLISH, "tab.issues")
         val traditionalChinese = LanguageManagerBundle.messageForLanguage(DisplayLanguage.TRADITIONAL_CHINESE, "tab.issues")
         val japanese = LanguageManagerBundle.messageForLanguage(DisplayLanguage.JAPANESE, "tab.issues")
+        val spanish = LanguageManagerBundle.messageForLanguage(DisplayLanguage.SPANISH, "tab.issues")
+        val thai = LanguageManagerBundle.messageForLanguage(DisplayLanguage.THAI, "tab.issues")
 
         assertEquals("Issues and Suggestions", english)
         assertNotEquals(english, traditionalChinese)
         assertNotEquals(english, japanese)
+        assertNotEquals(english, spanish)
+        assertNotEquals(english, thai)
         assertNotEquals(traditionalChinese, japanese)
+        assertNotEquals(spanish, thai)
     }
 }

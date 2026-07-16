@@ -57,6 +57,7 @@ const val HARD_MAX_LANGUAGE_FILE_KB = 10_240
 const val HARD_MAX_LANGUAGE_SCHEME_MB = 100
 const val HARD_MAX_ENTRIES_PER_FILE = 100_000
 const val HARD_MAX_ENTRIES_PER_SCHEME = 250_000
+const val MAX_LOCALE_NOTE_CHARS = 500
 
 @Serializable
 data class UsageScanSettingsDto(
@@ -76,6 +77,7 @@ data class LanguageSchemeDto(
     val files: List<String>,
     val updatedAtEpochMs: Long,
     val usageScanSettings: UsageScanSettingsDto = UsageScanSettingsDto(),
+    val localeNotes: Map<String, String> = emptyMap(),
 )
 
 @Serializable
@@ -141,6 +143,8 @@ data class AiTranslationRequestDto(
     val previousSuggestions: List<AiTranslationSuggestionDto> = emptyList(),
     val userFeedback: String = "",
     val temperature: Double? = null,
+    val sourceLocaleNote: String = "",
+    val targetLocaleNote: String = "",
 )
 
 @Serializable
@@ -178,6 +182,7 @@ data class ChangePreviewDto(
 data class LocaleVersionRequestDto(
     val sourceLocale: String,
     val targetLocale: String,
+    val targetLocaleNote: String = "",
 )
 
 @Serializable
@@ -204,6 +209,7 @@ data class PortableLanguageSchemeDto(
     val name: String,
     val files: List<String>,
     val usageScanSettings: UsageScanSettingsDto = UsageScanSettingsDto(),
+    val localeNotes: Map<String, String> = emptyMap(),
 )
 
 @Serializable

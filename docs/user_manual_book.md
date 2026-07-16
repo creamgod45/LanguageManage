@@ -28,6 +28,8 @@ The plugin follows the IDE display language by default and includes:
 - Simplified Chinese
 - Japanese
 - Korean
+- Spanish
+- Thai
 
 ## 2. Installing the Plugin
 
@@ -146,10 +148,11 @@ Open **Actions ▾** to access the following commands.
 
 1. Choose **Actions ▾ → Add Locale Version**.
 2. Select a source locale such as `en`.
-3. Enter a new locale code such as `es`.
-4. The plugin maps every source file to a target: `en/auth.php` becomes `es/auth.php`, and `en.json` becomes `es.json`.
-5. Normal translation values are cleared for translation. JSON arrays retain their structure to keep files parseable.
-6. Review every new file in the Diff and apply before files are created and added to the scheme.
+3. Type a new locale code freely, or click the field's suggestion button to open ISO 639 languages and common BCP 47 variants such as `es`, `th`, `es-MX`, `zh-Hant`, and `es-419`. Typing and deleting never selects or inserts a suggestion automatically; only an explicit popup choice replaces the field value. Any project-specific code that passes locale validation remains supported.
+4. Optionally enter a language note such as `Mexican Spanish, formal tone`. The note is limited to 500 characters, saved with the scheme, included in scheme export/import, and supplied to later AI requests for that locale. It never changes the locale file path.
+5. The plugin maps every source file to a target: `en/auth.php` becomes `es/auth.php`, and `en.json` becomes `es.json`.
+6. Normal translation values are cleared for translation. JSON arrays retain their structure to keep files parseable.
+7. Review every new file in the Diff and apply before files are created, the note is saved, and the files are added to the scheme.
 
 Creation stops without overwriting if the target locale or file already exists, a source cannot be parsed, or multiple sources map to the same target.
 
@@ -171,13 +174,47 @@ Creation stops without overwriting if the target locale or file already exists, 
 
 ### AI translate selected
 
-1. Open **Settings → Tools → LanguageManager**, choose **OpenAI-compatible API** or **Anthropic Claude API**, then enter the complete request endpoint, model, and API token. The token is stored in JetBrains PasswordSafe and is not included in scheme exports. Leave **Temperature** blank to omit the parameter and use the provider/model default; enter it only when the selected model supports an override (OpenAI-compatible range 0–2, Anthropic range 0–1).
-2. Select 1–100 translation rows and choose **Actions ▾ → AI Translate Selected**. The modal uses `en` as the source when available, otherwise **Key**. Choose any source, edit each populated source value when needed, and multi-select one or more target locales. Source edits are request-only and never modify the source language file.
-3. The plugin sends one batch request per target locale so returned values cannot be assigned to the wrong language. It preserves keys, placeholders, ICU/MessageFormat syntax, HTML, Markdown, escapes, and line breaks in its instruction.
-4. Review and edit generated values in one joined table with a separate column for every target locale, then inspect the combined file-level Diff. Only **Apply** writes files. **Cancel** writes nothing; **Give AI More Feedback** starts new requests containing the edited source values plus each locale's reviewed translations. The revised results return to review and Diff again.
-5. Selecting only one row is supported, but a Toast recommends batching multiple rows to reduce repeated conversation overhead and token usage.
+#### Configure the provider
 
-Only HTTPS endpoints are accepted, except `http://localhost`, `127.0.0.1`, and `::1` for local compatible servers. Redirects are not followed and responses are capped at 2 MB. Provider request shapes follow the official [OpenAI Chat Completions API](https://developers.openai.com/api/reference/resources/chat) and [Anthropic Messages API](https://platform.claude.com/docs/en/api/messages).
+Open **Settings → Tools → LanguageManager** and configure:
+
+| Setting | Behavior |
+| --- | --- |
+| Provider | Choose **OpenAI-compatible API** or **Anthropic Claude API**. |
+| API endpoint | Enter the complete request endpoint, not only the provider's base URL. Non-local endpoints must use HTTPS. |
+| Model | Enter a model supported by the configured endpoint. |
+| API token | Stored in JetBrains PasswordSafe. It is never written to language files or included in scheme exports. |
+| Temperature | Leave blank to omit the parameter and use the provider/model default. Enter a value only when the model supports it: OpenAI-compatible 0–2; Anthropic 0–1. |
+
+Only HTTPS endpoints are accepted, except `http://localhost`, `127.0.0.1`, and `::1` for local compatible servers. Redirects are not followed, each request has a 90-second timeout, and responses are capped at 2 MB. Provider request shapes follow the official [OpenAI Chat Completions API](https://developers.openai.com/api/reference/resources/chat) and [Anthropic Messages API](https://platform.claude.com/docs/en/api/messages).
+
+#### Translate and review a batch
+
+1. Select 1–100 JOINed translation rows and choose **Actions ▾ → AI Translate Selected**. Selecting one row is supported, but the plugin recommends batching related rows to reduce repeated conversations and token usage.
+2. Choose the source. The dialog defaults to `en` when `en` is among the managed locales; otherwise it uses **Key**. If a selected row has no value for that source, fill its editable source cell before continuing. You can also select another managed locale and edit every source value before sending. These edits are request-only and never modify the source file.
+3. Multi-select one or more target locales. The source locale cannot also be a target. A target locale must have a managed file for the row's namespace so the accepted value has a deterministic destination.
+4. The plugin sends one batch request for each target locale. Saved source/target locale notes are added as descriptive language, region, terminology, and tone context. The instruction tells the provider that notes cannot change the response format, and to preserve placeholders, ICU/MessageFormat syntax, HTML, Markdown, escapes, line breaks, and whitespace without translating keys or item IDs.
+5. Review the result in one table. Namespace and Key identify the row; every requested target locale has its own editable value column. Editing here changes only the pending suggestion.
+6. Continue to the combined file-level Diff. **Apply** writes all reviewed mutations after SHA-256 conflict checks. **Cancel** exits without writing.
+7. Choose **Give AI More Feedback** to describe a correction. The next request includes the edited source values and that locale's reviewed suggestions. Choosing **Back** in the feedback dialog returns to the same Diff instead of ending the AI workflow. Submitted feedback produces another review table and Diff; it never applies automatically.
+
+One selected row multiplied by three target locales creates three translation requests and three pending mutations. A batch accepts at most 10,000 source characters per item and 60,000 in total. Returned IDs must exactly match the requested rows; malformed, duplicate, missing, or oversized results are rejected before the Diff stage.
+
+#### Locale code guidance
+
+The plugin sends the locale code detected from the managed filename directly as `source_locale` and `target_locale`. It does not currently convert a custom code into a language name. Standard ISO 639/BCP 47 codes therefore produce the most predictable result:
+
+| Intended language or variant | Recommended code |
+| --- | --- |
+| Spanish, neutral | `es` |
+| Spanish for Spain / Mexico / Latin America | `es-ES` / `es-MX` / `es-419` |
+| Thai | `th` |
+| Traditional Chinese | `zh-TW` or `zh-Hant` |
+| Simplified Chinese | `zh-CN` or `zh-Hans` |
+| Brazilian / European Portuguese | `pt-BR` / `pt-PT` |
+| Serbian Cyrillic / Latin | `sr-Cyrl` / `sr-Latn` |
+
+Existing underscore forms such as `zh_TW` remain supported, but hyphenated BCP 47 tags are clearer to providers. Avoid country-only or custom abbreviations such as `jp`, `kr`, `cn`, `tw`, or `zht`; use `ja`, `ko`, `zh-CN`, `zh-TW`, or another explicit standard tag. A generic code such as `es`, `pt`, `zh`, or `sr` may produce a neutral or provider-selected regional/script variant, so use a more specific tag when terminology or writing system matters.
 
 ### Copy key to target locale values
 
@@ -377,6 +414,21 @@ Schemes and caches are stored under:
 - Select the scheme and open **Scheme Settings** to verify base path, Regex, and exclusions.
 - Excluded directories are skipped. New schemes exclude `.git`, `.github`, `docs`, `vendor`, and common AI/IDE configuration folders by default.
 - Zero means the bounded scan found nothing; it does not prove that a key is unused.
+
+### AI translation returns HTTP 400 or no review table
+
+- Verify that **API endpoint** is the complete OpenAI-compatible chat-completions or Anthropic messages endpoint rather than only a base URL.
+- Confirm that the configured model exists on that endpoint and that the token can use it.
+- If the response says Temperature is unsupported, clear **Temperature**. A blank field omits the parameter entirely.
+- The provider must return the requested JSON translation object. Markdown prose, missing IDs, duplicate IDs, extra IDs, invalid JSON, or a response larger than 2 MB is rejected and never reaches the Diff.
+- A timeout or network error writes nothing. Retry with fewer rows or target locales after checking the endpoint.
+
+### AI translation uses the wrong regional language
+
+- Use a specific standard locale such as `es-MX`, `pt-BR`, `zh-Hant`, or `sr-Latn` instead of a generic or custom abbreviation.
+- Check the editable source preview. A Key-only source may not contain enough context; select a populated source locale or rewrite the temporary source text more explicitly.
+- Correct generated values in the review table, or use **Give AI More Feedback**. Pressing **Back** from the feedback dialog preserves and reopens the current Diff.
+- Always inspect the target locale column and final Diff. AI output is a suggestion until **Apply** is selected.
 
 ## 13. Reporting an Issue
 

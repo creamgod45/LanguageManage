@@ -4,7 +4,7 @@
 
 LanguageManager is a localization file management plugin with JetBrains IDE split-mode support. It manages JSON, YAML/YML, Laravel PHP, and JetBrains/Java ResourceBundle Properties files. The plugin only processes files that the user explicitly selects in a scheme. It never automatically enrolls or rewrites other project files.
 
-The UI and diagnostics are available in English, Traditional Chinese, Simplified Chinese, Japanese, and Korean. The display language follows the IDE by default and can be overridden in the plugin settings.
+The UI and diagnostics are available in English, Traditional Chinese, Simplified Chinese, Japanese, Korean, Spanish, and Thai. The display language follows the IDE by default and can be overridden in the plugin settings.
 
 ## Features
 
@@ -15,7 +15,7 @@ The UI and diagnostics are available in English, Traditional Chinese, Simplified
 - Add or edit every locale value in one scrollable form, save the locale mutations as one validated batch, bulk delete, rename keys across locales, copy and paste cells, and launch the IDE-native Find in Files action.
 - Batch-translate up to 100 selected rows through an OpenAI-compatible or Anthropic Claude endpoint. The modal defaults editable source text to `en` when available (otherwise the key), supports multiple target locales, and reviews each target in its own editable column before one combined file Diff. API tokens stay in JetBrains PasswordSafe, and optional Temperature is omitted by default. Only **Apply** writes files; **Give AI More Feedback** carries the edited source values, reviewed suggestions, and feedback into a new request round.
 - Copy selected keys into one target locale's values, and add framework-specific usage Regex recommendations for major PHP frameworks, Spring/Java/Kotlin, ResourceBundle, and IntelliJ Platform plugins.
-- Create a complete new locale from an existing locale—for example, copy the key structure from `en/*.php` into `es/*.php`—then review a Diff before adding the files to the scheme.
+- Create a complete new locale from an existing locale—for example, copy the key structure from `en/*.php` into `es/*.php`—using a freely editable code field and an explicit ISO/BCP 47 suggestion popup. The popup never rewrites text while typing. An optional locale note is saved with the scheme and supplied to AI as language, region, terminology, and tone context; every new file is reviewed in a Diff first.
 - Configure the plugin display language, issue visibility, and defaults for new schemes in IDE Settings. Existing scheme base paths, Regex patterns, and exclusions are edited independently from the Tool Window.
 - Detect parser errors, empty values, duplicate keys, duplicate values, missing locales, and possibly unused keys. Duplicate-value and possibly-unused suggestions can be hidden in settings.
 - Accumulate usage occurrences detected by multiple Regex patterns. Repeated calls on one line are counted separately, while overlapping patterns that capture the same key at the same source position are deduplicated.
@@ -92,7 +92,7 @@ The root project uses the IntelliJ Platform Gradle Plugin to assemble three cont
 
 | File | Purpose |
 | --- | --- |
-| `LocalizationModels.kt` | Scheme, entry, issue, usage defaults, row filters, folder recognition, mutation, and Diff preview DTOs |
+| `LocalizationModels.kt` | Scheme, locale-note, entry, issue, usage-default, row-filter, folder-recognition, AI-request, mutation, and Diff-preview DTOs |
 | `LocalizationManagerRpcApi.kt` | Shared `@Rpc` contract; every remote call identifies its project with `ProjectId` |
 | `EntrySearch.kt` | Pure search, `namespace + key` JOIN, missing/zero-usage filters, and pagination capped at 100 rows |
 
@@ -126,8 +126,8 @@ The root project uses the IntelliJ Platform Gradle Plugin to assemble three cont
 | `UsageScanSupport.kt` | Usage setting validation, Regex key extraction, base path scanning, exclusions, and resource limits |
 | `LanguageLoadBudget.kt` | Applies pre-parse file-size and post-parse entry budgets across one isolated scheme |
 | `EntryMutationSupport.kt` | Applies validated multi-locale add/edit mutations to parsed documents before coordinated atomic writes |
-| `AiTranslationSupport.kt` | Validates endpoints and batch limits, sends OpenAI-compatible/Anthropic requests, and strictly validates returned IDs and values |
-| `SchemeSettingsTransferSupport.kt` | Versioned scheme JSON, relative path conversion, import limits, and security validation |
+| `AiTranslationSupport.kt` | Validates endpoints, locale-note context, and batch limits; sends OpenAI-compatible/Anthropic requests and strictly validates returned IDs and values |
+| `SchemeSettingsTransferSupport.kt` | Versioned scheme JSON including locale notes, relative path conversion, import limits, and security validation |
 | `TranslationInputValidation.kt` | Allows spaces, Unicode, and punctuation in keys while rejecting blank, control-character, and oversized input |
 | `LocalizationAnalysis.kt` | Builds diagnostics for empty values, duplicate keys/values, missing translations, and unused keys |
 | `LanguageManagerBackendBundle.kt` | Backend resource bundle access |
@@ -164,7 +164,7 @@ The root project uses the IntelliJ Platform Gradle Plugin to assemble three cont
 | `importSchemeSettings(...)` | Revalidates files and scan settings before creating new schemes | No; writes plugin scheme data only |
 | `saveEntry(...)` | Adds or edits one entry; retained for single-cell paste and compatibility | Yes |
 | `saveEntries(...)` | Validates and writes all locale values from the scrollable translation form as one batch | Yes |
-| `translateWithAi(...)` | Sends transient provider credentials and up to 100 source values to the configured endpoint; returns suggestions only | No |
+| `translateWithAi(...)` | Sends transient provider credentials, bounded source/target locale notes, and up to 100 source values to the configured endpoint; returns suggestions only | No |
 | `previewEntryMutations(...)` | Renders proposed translation mutations into file-level before/after content and source SHA-256 | No |
 | `applyPreviewedEntryMutations(...)` | Rebuilds translation mutations, verifies every preview hash, and atomically writes unchanged sources | Yes |
 | `deleteEntries(...)` | Deletes entries by entry ID | Yes |
@@ -299,8 +299,8 @@ build/distributions/LanguageManage-{version}.zip
 Test coverage includes:
 
 - `shared`: search, JOIN, locale/translation filters, usage defaults, Find in Files queries, and pagination.
-- `backend`: JSON/YAML/PHP/Properties parse/render, safe paths, arrays, sentence-style keys, usage Regex/exclusions/counts, analysis, read-only previews, and five-language bundle parity.
-- `frontend`: setting defaults/migration, issue visibility, Tool Window API compatibility, explicit locale selection, and five-language bundle parity.
+- `backend`: JSON/YAML/PHP/Properties parse/render, safe paths, arrays, sentence-style keys, usage Regex/exclusions/counts, analysis, read-only previews, and seven-language bundle parity.
+- `frontend`: setting defaults/migration, issue visibility, Tool Window API compatibility, explicit locale selection, controlled locale suggestions, and seven-language bundle parity.
 
 ## Version and License
 
