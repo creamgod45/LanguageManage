@@ -32,6 +32,7 @@ The UI and diagnostics are available in English, Traditional Chinese, Simplified
 - [Project Instructions](AGENTS.md): engineering principles, architecture boundaries, localization requirements, tests, and Git conventions.
 - [Compatibility Verification](docs/compatibility.md): verified IDE versions and the supported build range.
 - [Changelog](CHANGELOG.md)
+- Marketplace “What’s New”: generated from the current version section in [CHANGELOG.md](CHANGELOG.md) and injected into `plugin.xml` during the build.
 
 ## Usage
 
@@ -82,7 +83,7 @@ The root project uses the IntelliJ Platform Gradle Plugin to assemble three cont
 | --- | --- |
 | `src/main/resources/META-INF/plugin.xml` | Plugin ID, name, description, vendor, and the three content module declarations |
 | `src/main/resources/messages/LanguageManagerBundle*.properties` | Five-language dictionaries for the plugin name and description |
-| `build.gradle.kts` | IntelliJ IDEA 2025.3.5 minimum compatibility baseline, split mode, plugin modules, and test framework |
+| `build.gradle.kts` | IntelliJ IDEA 2025.3.5 minimum compatibility baseline, split mode, plugin modules, tests, and Marketplace change-note injection |
 | `gradle.properties` | Release version and Gradle/Kotlin build options |
 | `CHANGELOG.md` | Release features and fixes |
 | `AGENTS.md` | Product, architecture, security, localization, test, and Git rules |
@@ -196,7 +197,7 @@ Every service mutation is serialized with one coroutine `Mutex` per project. The
 4. `loadScheme()` computes a `lastModifiedTime XOR size` fingerprint for each file.
 5. If the cache format and all fingerprints match, `cache-{schemeId}.json` is loaded directly.
 6. On a cache miss, files are parsed independently and entries/parser issues are published before the usage scan finishes.
-7. The backend applies the scheme base path, Regex patterns, and exclusions to at most 2,000 source files of no more than 512 KB each.
+7. The backend applies the scheme base path, Regex patterns, and exclusions to every regular file under the scan root, regardless of extension or IDE file type. Managed language files are excluded so definitions are not counted as usages.
 8. Quality analysis runs, the disk cache is updated, and the complete state is emitted through `StateFlow`.
 
 ### 3. Table display and interaction
@@ -249,10 +250,10 @@ sequenceDiagram
 ## Format Rules
 
 - A JSON root must be an object. Nested objects are flattened into dotted keys.
-- JSON arrays are shown as JSON text in value cells and keep their array type when written back.
+- JSON arrays are expanded into ordinary rows such as `sections.0.items.3.title`. Each item supports the same JOIN, search, edit, delete, usage, missing-value, and AI translation actions as a scalar value, while writing reconstructs the original array shape.
 - Literal dots in sentence-style JSON keys are preserved through `keyPaths` and do not create accidental nesting.
 - YAML supports space-indented `key: value` pairs and nested maps; tab indentation is rejected.
-- PHP parses only strings, numbers, booleans, and nested arrays inside `return [...]` or `return array(...)`. Functions and arbitrary expressions are never executed.
+- PHP parses only strings, numbers, booleans, and nested arrays inside `return [...]` or `return array(...)`. Functions and arbitrary expressions are never executed. When files are grouped below a language directory, `en/components/pagination.php` is identified as locale `en` and namespace `components.pagination`.
 - Properties supports Java ResourceBundle comments, separators, continuations, and escaping. The base bundle is treated as English; `Bundle_zh_TW.properties` derives locale `zh_TW` and namespace `Bundle`.
 - `lang/en.json` derives locale `en` with an empty namespace.
 - `lang/en/messages.php` derives locale `en` and namespace `messages`.
@@ -305,4 +306,5 @@ Test coverage includes:
 ## Version and License
 
 - Releases: [CHANGELOG.md](CHANGELOG.md)
+- Marketplace “What’s New”: generated from the matching version in [CHANGELOG.md](CHANGELOG.md)
 - License: [LICENSE](LICENSE)

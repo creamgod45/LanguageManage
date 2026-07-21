@@ -2,10 +2,12 @@
     <id>cg.creamgod45.LanguageManage</id>
     <name>LanguageManager</name>
     <vendor url="https://github.com/creamgod45">creamgod45</vendor>
-    <description><![CDATA[LanguageManager helps you manage JSON, YAML, and Laravel PHP localization files in JetBrains IDEs.
-        <p>Create isolated file schemes, search and edit translations in a joined table, detect malformed files, and review missing values, duplicates, missing locales, and usage suggestions.</p>
+    <description><![CDATA[LanguageManager helps you safely manage JSON, YAML, Laravel PHP, and Java ResourceBundle localization files in JetBrains IDEs.
+        <p>Create isolated file schemes, compare every locale in a joined table, search and edit translations, review changes before writing, detect malformed files, and analyze missing values, duplicates, missing locales, and usage.</p>
+        <p>Nested JSON arrays are expanded into ordinary translation rows. PHP language files may be grouped in category subdirectories below each language-code directory without executing PHP code. Optional OpenAI-compatible and Anthropic providers can propose batch translations through a diff-before-apply workflow.</p>
         <h3>繁體中文說明</h3>
-        <p>管理專案中的 JSON、YAML 與 Laravel PHP 在地化語言檔。可建立彼此獨立的檔案方案，使用表格搜尋與編輯翻譯，檢查格式錯誤、缺失值、重複翻譯、缺少語言及使用率建議。</p>
+        <p>安全管理專案中的 JSON、YAML、Laravel PHP 與 Java ResourceBundle 語言檔。可建立彼此隔離的方案，在 JOIN 表格比較所有語言、搜尋與編輯翻譯，並於寫入前檢視差異。</p>
+        <p>支援將巢狀 JSON array 展開為一般翻譯列，以及語言代碼目錄下依分類建立子目錄的 PHP 語言檔；PHP 僅做靜態解析、不會執行。亦可選用 OpenAI-compatible 或 Anthropic Provider 批量產生翻譯建議。</p>
     ]]></description>
     <resource-bundle>messages.LanguageManagerBundle</resource-bundle>
     <depends>com.intellij.modules.platform</depends>

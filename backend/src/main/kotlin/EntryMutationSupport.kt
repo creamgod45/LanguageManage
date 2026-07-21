@@ -22,6 +22,16 @@ internal object EntryMutationSupport {
         val documentsByPath = documents.associateBy { it.path.toAbsolutePath().normalize() }
         val entriesById = currentEntries.associateBy(LanguageEntryDto::id)
         val changed = linkedMapOf<Path, ParsedLanguageFile>()
+        val knownArrayDepths =
+            documents
+                .flatMap { document ->
+                    document.values.keys.flatMap { key ->
+                        val keyPath = document.keyPaths[key] ?: key.split('.').filter(String::isNotBlank)
+                        document.jsonArrayPaths
+                            .filter { arrayPath -> keyPath.take(arrayPath.size) == arrayPath }
+                            .map { arrayPath -> (document.namespace to key) to arrayPath.size }
+                    }
+                }.groupBy({ it.first }, { it.second })
 
         mutations.forEach { mutation ->
             val targetPath = Path.of(mutation.filePath).toAbsolutePath().normalize()
@@ -29,6 +39,7 @@ internal object EntryMutationSupport {
             var structuredValue = false
             var originalKey: String? = null
             var originalKeyPath: List<String>? = null
+            var originalArrayPaths: Set<List<String>> = emptySet()
 
             mutation.id?.takeIf(String::isNotBlank)?.let { id ->
                 val original = entriesById[id] ?: error(backendMessage("entry.not.found"))
@@ -37,6 +48,10 @@ internal object EntryMutationSupport {
                 originalKey = original.key
                 structuredValue = original.key in originalDocument.structuredValueKeys
                 originalKeyPath = originalDocument.keyPaths.remove(original.key)
+                originalArrayPaths =
+                    originalDocument.jsonArrayPaths.filterTo(linkedSetOf()) { arrayPath ->
+                        originalKeyPath?.take(arrayPath.size) == arrayPath
+                    }
                 originalDocument.values.remove(original.key)
                 originalDocument.structuredValueKeys.remove(original.key)
                 changed[originalPath] = originalDocument
@@ -52,6 +67,13 @@ internal object EntryMutationSupport {
                     mutation.key.any(Char::isWhitespace) -> listOf(mutation.key)
                     else -> mutation.key.split('.').filter(String::isNotBlank)
                 }
+            val targetKeyPath = targetDocument.keyPaths.getValue(mutation.key)
+            val arrayDepths = originalArrayPaths.map(List<String>::size) + knownArrayDepths[(mutation.namespace to mutation.key)].orEmpty()
+            arrayDepths.distinct().forEach { arrayDepth ->
+                if (targetKeyPath.size > arrayDepth) {
+                    targetDocument.jsonArrayPaths += targetKeyPath.take(arrayDepth)
+                }
+            }
             changed[targetPath] = targetDocument
         }
         return changed.values.toList()

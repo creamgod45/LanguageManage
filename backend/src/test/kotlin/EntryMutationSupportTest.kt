@@ -3,9 +3,11 @@ package cg.creamgod45
 import cg.creamgod45.localization.EntryMutationDto
 import cg.creamgod45.localization.LanguageEntryDto
 import java.nio.file.Files
+import kotlin.io.path.writeText
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertTrue
 
 class EntryMutationSupportTest {
     @Test
@@ -51,6 +53,32 @@ class EntryMutationSupportTest {
             assertEquals(emptyMap(), document.values)
         } finally {
             Files.deleteIfExists(path)
+        }
+    }
+
+    @Test
+    fun `adds a missing locale row with the array shape learned from another locale`() {
+        val root = Files.createTempDirectory("language-manager-array-missing")
+        try {
+            val enPath = root.resolve("en.json").apply { writeText("""{"records":[{"label":"First"},{"label":"Second"}]}""") }
+            val zhPath = root.resolve("zh_TW.json").apply { writeText("""{"records":[{"label":"第一個"}]}""") }
+            val en = LanguageFileCodec.parse(enPath, "scheme")
+            val zh = LanguageFileCodec.parse(zhPath, "scheme")
+
+            EntryMutationSupport.apply(
+                listOf(en, zh),
+                emptyList(),
+                listOf(EntryMutationDto(null, zhPath.toString(), "zh_TW", "", "records.1.label", "第二個")),
+                String::trim,
+            )
+            LanguageFileCodec.write(zh)
+            val reread = LanguageFileCodec.parse(zhPath, "scheme")
+
+            assertTrue(reread.issues.isEmpty())
+            assertEquals("第二個", reread.values["records.1.label"])
+            assertTrue(listOf("records") in reread.jsonArrayPaths)
+        } finally {
+            root.toFile().deleteRecursively()
         }
     }
 }

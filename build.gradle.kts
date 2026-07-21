@@ -4,6 +4,7 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
     application
+    id("org.jetbrains.changelog") version "2.5.0"
     id("org.jetbrains.intellij.platform")
     id("org.jetbrains.kotlin.jvm")
     id("rpc") apply false

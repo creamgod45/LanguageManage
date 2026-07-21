@@ -20,27 +20,6 @@ internal object UsageScanSupport {
     private const val MAX_REGEX_LENGTH = 512
     private const val MAX_EXCLUSIONS = 100
     private const val MAX_EXCLUSION_LENGTH = 200
-    private const val MAX_LINE_LENGTH = 4096
-    private const val MAX_FILES = 2000
-    private const val MAX_FILE_BYTES = 512_000
-    private val sourceExtensions =
-        setOf(
-            "php",
-            "js",
-            "ts",
-            "tsx",
-            "jsx",
-            "vue",
-            "java",
-            "kt",
-            "kts",
-            "py",
-            "rb",
-            "go",
-            "rs",
-            "html",
-            "twig",
-        )
     private val log = Logger.getInstance(UsageScanSupport::class.java)
 
     fun normalize(settings: UsageScanSettingsDto): UsageScanSettingsDto {
@@ -145,25 +124,16 @@ internal object UsageScanSupport {
                         file: Path,
                         attrs: BasicFileAttributes,
                     ): FileVisitResult {
-                        if (visitedFiles >= MAX_FILES) return FileVisitResult.TERMINATE
-                        val extension =
-                            file.fileName
-                                .toString()
-                                .substringAfterLast('.', "")
-                                .lowercase()
-                        if (extension !in sourceExtensions || attrs.size() > MAX_FILE_BYTES || file.toString() in normalizedLanguageFiles) {
+                        if (!attrs.isRegularFile || file.toString() in normalizedLanguageFiles) {
                             return FileVisitResult.CONTINUE
                         }
                         visitedFiles++
                         runCatching {
-                            Files.newBufferedReader(file, StandardCharsets.UTF_8).useLines { lines ->
-                                lines.forEach { rawLine ->
-                                    val occurrences = extractCandidateOccurrences(rawLine.take(MAX_LINE_LENGTH), patterns)
-                                    occurrences.forEach { occurrence ->
-                                        needleOwners[occurrence.candidate].orEmpty().forEach { id ->
-                                            counts[id] = counts.getValue(id) + 1
-                                        }
-                                    }
+                            val content = Files.newInputStream(file).reader(StandardCharsets.UTF_8).use { it.readText() }
+                            val occurrences = extractCandidateOccurrences(content, patterns)
+                            occurrences.forEach { occurrence ->
+                                needleOwners[occurrence.candidate].orEmpty().forEach { id ->
+                                    counts[id] = counts.getValue(id) + 1
                                 }
                             }
                         }

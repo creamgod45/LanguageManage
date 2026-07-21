@@ -1,14 +1,23 @@
 package cg.creamgod45
 
+import cg.creamgod45.localization.EntrySearch
 import cg.creamgod45.localization.IssueSeverity
+import cg.creamgod45.localization.LanguageEntryDto
 import cg.creamgod45.localization.UsageScanSettingsDto
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import java.nio.file.Files
+import java.nio.file.Path
 import kotlin.io.path.createDirectories
 import kotlin.io.path.writeText
-import kotlin.test.*
+import kotlin.test.AfterTest
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 class LanguageFileSupportTest {
     private val temp = Files.createTempDirectory("language-manager-test")
@@ -36,7 +45,7 @@ class LanguageFileSupportTest {
     }
 
     @Test
-    fun `preserves json arrays as structured editable values`() {
+    fun `expands json arrays into ordinary editable translation rows`() {
         val file =
             temp.resolve("en.json").apply {
                 writeText(
@@ -49,16 +58,82 @@ class LanguageFileSupportTest {
                 )
             }
         val parsed = LanguageFileCodec.parse(file, "scheme")
-        assertTrue("welcome_features" in parsed.structuredValueKeys)
-        assertTrue("nested.steps" in parsed.structuredValueKeys)
-        assertTrue(parsed.values.getValue("welcome_features").startsWith("["))
+        assertEquals("Fast", parsed.values["welcome_features.0"])
+        assertEquals("Safe", parsed.values["welcome_features.1.title"])
+        assertEquals("true", parsed.values["welcome_features.1.enabled"])
+        assertEquals("null", parsed.values["welcome_features.2"])
+        assertEquals("2", parsed.values["nested.steps.1"])
+        assertTrue(listOf("welcome_features") in parsed.jsonArrayPaths)
+        assertTrue(listOf("nested", "steps") in parsed.jsonArrayPaths)
 
-        parsed.values["nested.steps"] = "[3, 2, 1]"
+        parsed.values["nested.steps.1"] = "updated"
         LanguageFileCodec.write(parsed)
         val reread = LanguageFileCodec.parse(file, "scheme")
-        assertEquals(Json.parseToJsonElement("[3,2,1]"), Json.parseToJsonElement(reread.values.getValue("nested.steps")))
-        assertTrue("welcome_features" in reread.structuredValueKeys)
+        assertEquals("updated", reread.values["nested.steps.1"])
+        assertEquals("null", reread.values["welcome_features.2"])
+        assertEquals(
+            3,
+            Json
+                .parseToJsonElement(file.toFile().readText())
+                .jsonObject
+                .getValue("welcome_features")
+                .jsonArray.size,
+        )
         assertTrue(reread.issues.isEmpty())
+    }
+
+    @Test
+    fun `round trips multiple ten-level arrays containing one hundred objects each`() {
+        fun deepObject(
+            example: Int,
+            item: Int,
+        ): String {
+            var value = "{\"title\":\"Example $example item $item\"}"
+            repeat(8) { level -> value = "{\"level${8 - level}\":$value}" }
+            return value
+        }
+        val source =
+            (1..3).joinToString(prefix = "{", postfix = "}") { example ->
+                "\"example$example\":" + (0 until 100).joinToString(prefix = "[", postfix = "]") { deepObject(example, it) }
+            }
+        val file = temp.resolve("en.json").apply { writeText(source) }
+
+        val parsed = LanguageFileCodec.parse(file, "scheme")
+
+        assertTrue(parsed.issues.isEmpty())
+        assertEquals(300, parsed.values.size)
+        assertEquals("Example 2 item 99", parsed.values["example2.99.level1.level2.level3.level4.level5.level6.level7.level8.title"])
+        parsed.values["example3.42.level1.level2.level3.level4.level5.level6.level7.level8.title"] = "Changed"
+        LanguageFileCodec.write(parsed)
+        val reread = LanguageFileCodec.parse(file, "scheme")
+        assertTrue(reread.issues.isEmpty())
+        assertEquals(300, reread.values.size)
+        assertEquals("Changed", reread.values["example3.42.level1.level2.level3.level4.level5.level6.level7.level8.title"])
+    }
+
+    @Test
+    fun `large single file with many objects missing in another locale stays bounded and analyzable`() {
+        val objectCount = 10_000
+        val en =
+            temp.resolve("en.json").apply {
+                writeText((0 until objectCount).joinToString(prefix = "{\"records\":[", postfix = "]}") { "{\"label\":\"Value $it\"}" })
+            }
+        val zh = temp.resolve("zh_TW.json").apply { writeText("""{"records":[{"label":"值 0"}]}""") }
+        val documents = listOf(LanguageFileCodec.parse(en, "scheme"), LanguageFileCodec.parse(zh, "scheme"))
+        val entries =
+            documents.flatMap { document ->
+                document.values.map { (key, value) ->
+                    LanguageEntryDto("${document.locale}:$key", "scheme", document.path.toString(), document.locale, "", key, value)
+                }
+            }
+
+        val issues = LocalizationAnalysis.analyze("scheme", entries)
+        val joinedRows = EntrySearch.join(entries)
+
+        assertEquals(objectCount + 1, entries.size)
+        assertEquals(objectCount, joinedRows.size)
+        assertTrue(documents.all { it.issues.isEmpty() })
+        assertTrue(issues.any { it.code == "MISSING_TRANSLATION" })
     }
 
     @Test
@@ -131,6 +206,61 @@ class LanguageFileSupportTest {
         assertEquals("messages", parsed.namespace)
         assertEquals("Invalid", parsed.values["auth.failed"])
         assertEquals("2", parsed.values["count"])
+    }
+
+    @Test
+    fun `recognizes locale directories above nested category folders`() {
+        val locales = listOf("en", "zh_CN", "zh_HK", "zh_TW")
+        val componentNames = listOf("button", "copyable", "modal", "pagination")
+        locales.forEach { locale ->
+            componentNames.forEach { component ->
+                temp.resolve("$locale/components").createDirectories().resolve("$component.php").writeText(
+                    if (component == "pagination") {
+                        """<?php return ['fields' => ['records_per_page' => ['label' => '$locale per page']], 'actions' => ['next' => ['label' => '$locale next']]];"""
+                    } else {
+                        """<?php return ['messages' => ['label' => '$locale $component']];"""
+                    },
+                )
+            }
+        }
+        val source = temp.resolve("en/components/pagination.php")
+        val translated = temp.resolve("zh_TW/components/pagination.php")
+
+        val sourceDocument = LanguageFileCodec.parse(source, "scheme")
+        val translatedDocument = LanguageFileCodec.parse(translated, "scheme")
+        val discovery = LanguageFolderDiscovery.discover(temp.toString())
+
+        assertTrue(sourceDocument.issues.isEmpty())
+        assertEquals("en", sourceDocument.locale)
+        assertEquals("zh_TW", translatedDocument.locale)
+        assertEquals("components.pagination", sourceDocument.namespace)
+        assertEquals("en per page", sourceDocument.values["fields.records_per_page.label"])
+        assertEquals(16, discovery.files.size)
+        assertTrue(discovery.files.all { it.recognized })
+        assertEquals(locales.toSet(), discovery.files.map { it.locale }.toSet())
+        assertEquals(componentNames.map { "components.$it" }.toSet(), discovery.files.map { it.namespace }.toSet())
+        val target = LanguageLocaleVersionSupport.buildTargets(listOf(sourceDocument, translatedDocument), "en", "es").single()
+        assertEquals(temp.resolve("es/components/pagination.php").toAbsolutePath().normalize(), target.path)
+    }
+
+    @Test
+    fun `recognizes every file in the provided nested PHP fixture`() {
+        val fixture =
+            generateSequence(Path.of(System.getProperty("user.dir")).toAbsolutePath()) { it.parent }
+                .map { it.resolve("example-for-php-filament") }
+                .first(Files::isDirectory)
+
+        val discovery = LanguageFolderDiscovery.discover(fixture.toString())
+
+        assertEquals(16, discovery.files.size)
+        assertTrue(discovery.files.all { it.recognized })
+        assertEquals(setOf("en", "zh_CN", "zh_HK", "zh_TW"), discovery.files.map { it.locale }.toSet())
+        assertEquals(
+            setOf("components.button", "components.copyable", "components.modal", "components.pagination"),
+            discovery.files.map { it.namespace }.toSet(),
+        )
+        assertEquals(9, discovery.files.single { it.locale == "en" && it.namespace == "components.pagination" }.entryCount)
+        assertEquals(7, discovery.files.single { it.locale == "zh_CN" && it.namespace == "components.pagination" }.entryCount)
     }
 
     @Test
@@ -354,7 +484,7 @@ class LanguageFileSupportTest {
     }
 
     @Test
-    fun `new JSON locale keeps array structure while clearing scalar translations`() {
+    fun `new JSON locale keeps expanded array structure while clearing every translation`() {
         val source =
             temp.resolve("en.json").apply {
                 writeText("""{"title":"Welcome","features":["Fast","Safe"]}""")
@@ -370,11 +500,9 @@ class LanguageFileSupportTest {
         target.path.writeText(target.content)
         val parsed = LanguageFileCodec.parse(target.path, "scheme")
         assertEquals("", parsed.values["title"])
-        assertEquals(
-            Json.parseToJsonElement("[\"Fast\",\"Safe\"]"),
-            Json.parseToJsonElement(parsed.values.getValue("features")),
-        )
-        assertTrue("features" in parsed.structuredValueKeys)
+        assertEquals("", parsed.values["features.0"])
+        assertEquals("", parsed.values["features.1"])
+        assertTrue(listOf("features") in parsed.jsonArrayPaths)
     }
 
     @Test

@@ -1,5 +1,13 @@
 # Language Manager Changelog
 
+## 1.5.3
+
+- Expand every JSON array scalar into an ordinary translation row (for example, `sections.0.items.3.title`) so table JOIN, search, editing, deletion, missing-value analysis, usage counts, and AI translation behave the same as scalar dictionary entries.
+- Preserve and rebuild nested JSON array shapes on write, including empty arrays and arrays missing items in another locale; creating a locale now clears each expanded array translation independently.
+- Add round-trip coverage for three 10-level examples with 100 objects each, plus a 10,000-object asymmetric-locale stress test to prevent crashes when one large language file is mostly missing from another locale.
+- Support PHP language files organized in category subdirectories, such as `en/components/pagination.php`; locale detection identifies the parent language-code directory, namespaces retain the relative category path, and new locales preserve the same subdirectory structure.
+- Align usage scanning with scheme Regex scope by removing hidden extension/file-type, 2,000-file, 512 KB, and 4,096-character line filters; custom and multiline patterns now run against complete regular-file content while managed language files and configured exclusions remain skipped.
+
 ## 1.5.2
 
 - 插件顯示語言新增西班牙文（`es`）與泰文（`th`）明確選項及自動 IDE locale 識別，並補齊插件中繼資料、frontend UI、backend 診斷與七語言字典一致性測試。

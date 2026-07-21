@@ -7,7 +7,14 @@ import cg.creamgod45.localization.LanguageFileCandidateDto
 import cg.creamgod45.localization.LanguageIssueDto
 import cg.creamgod45.localization.LanguageLoadBudget
 import cg.creamgod45.localization.UsageScanSettingsDto
-import kotlinx.serialization.json.*
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.doubleOrNull
 import java.nio.charset.StandardCharsets
 import java.nio.file.FileVisitResult
 import java.nio.file.Files
@@ -26,10 +33,38 @@ internal data class ParsedLanguageFile(
     val values: LinkedHashMap<String, String>,
     val structuredValueKeys: MutableSet<String> = linkedSetOf(),
     val keyPaths: MutableMap<String, List<String>> = linkedMapOf(),
+    val jsonArrayPaths: MutableSet<List<String>> = linkedSetOf(),
     val issues: MutableList<LanguageIssueDto> = mutableListOf(),
 )
 
 private val PROPERTIES_LOCALE_SUFFIX = Regex("^(.+)_([a-z]{2,3}(?:[-_](?:[A-Za-z]{2,4}|[0-9]{3}))*)$")
+private val PHP_LOCALE_DIRECTORY = Regex("^[A-Za-z]{2,3}(?:[-_](?:[A-Za-z]{2,4}|[0-9]{3}))*$")
+
+private data class PhpFileIdentity(
+    val locale: String,
+    val namespace: String,
+    val localeDirectory: Path,
+    val relativePath: Path,
+)
+
+private fun phpIdentity(path: Path): PhpFileIdentity {
+    val localeDirectory =
+        generateSequence(path.parent) { it.parent }
+            .firstOrNull { directory -> directory.fileName?.toString()?.matches(PHP_LOCALE_DIRECTORY) == true }
+            ?: path.parent
+            ?: error(backendMessage("locale.version.path.invalid"))
+    val relativePath = localeDirectory.relativize(path)
+    val namespaceParts =
+        relativePath.mapIndexed { index, part ->
+            if (index == relativePath.nameCount - 1) part.toString().substringBeforeLast('.') else part.toString()
+        }
+    return PhpFileIdentity(
+        locale = localeDirectory.fileName.toString(),
+        namespace = namespaceParts.joinToString("."),
+        localeDirectory = localeDirectory,
+        relativePath = relativePath,
+    )
+}
 
 private fun propertiesIdentity(path: Path): Pair<String, String> {
     val stem = path.nameWithoutExtension
@@ -222,10 +257,11 @@ internal object LanguageLocaleVersionSupport {
                 val targetPath =
                     when (source.path.extension.lowercase()) {
                         "php" -> {
-                            val localeRoot = source.path.parent?.parent ?: error(backendMessage("locale.version.path.invalid"))
+                            val identity = phpIdentity(source.path)
+                            val localeRoot = identity.localeDirectory.parent ?: error(backendMessage("locale.version.path.invalid"))
                             localeRoot
                                 .resolve(targetLocale)
-                                .resolve(source.path.fileName)
+                                .resolve(identity.relativePath)
                                 .toAbsolutePath()
                                 .normalize()
                         }
@@ -261,6 +297,7 @@ internal object LanguageLocaleVersionSupport {
                         values = values,
                         structuredValueKeys = source.structuredValueKeys.toMutableSet(),
                         keyPaths = source.keyPaths.toMutableMap(),
+                        jsonArrayPaths = source.jsonArrayPaths.toMutableSet(),
                     )
                 LocaleVersionTarget(targetPath, LanguageFileCodec.render(targetDocument))
             }
@@ -289,10 +326,7 @@ internal object LanguageFileCodec {
         val (locale, namespace) =
             when (path.extension.lowercase()) {
                 "php" -> {
-                    path.parent
-                        ?.fileName
-                        ?.toString()
-                        .orEmpty() to path.nameWithoutExtension
+                    phpIdentity(path).let { it.locale to it.namespace }
                 }
 
                 "properties" -> {
@@ -307,15 +341,16 @@ internal object LanguageFileCodec {
             val text = SafeLanguageFileAccess.read(path)
             val structuredKeys = linkedSetOf<String>()
             val keyPaths = linkedMapOf<String, List<String>>()
+            val jsonArrayPaths = linkedSetOf<List<String>>()
             val values =
                 when (path.extension.lowercase()) {
-                    "json" -> parseJson(text, structuredKeys, keyPaths, maxEntries)
+                    "json" -> parseJson(text, structuredKeys, keyPaths, jsonArrayPaths, maxEntries)
                     "yaml", "yml" -> parseYaml(text, maxEntries)
                     "php" -> PhpArrayParser(text, maxEntries).parse()
                     "properties" -> parseProperties(text, keyPaths, maxEntries)
                     else -> error(backendMessage("format.unsupported"))
                 }
-            ParsedLanguageFile(path, locale, namespace, values, structuredKeys, keyPaths)
+            ParsedLanguageFile(path, locale, namespace, values, structuredKeys, keyPaths, jsonArrayPaths)
         } catch (e: Exception) {
             ParsedLanguageFile(
                 path,
@@ -342,7 +377,7 @@ internal object LanguageFileCodec {
 
     fun render(document: ParsedLanguageFile): String =
         when (document.path.extension.lowercase()) {
-            "json" -> writeJson(document.values, document.structuredValueKeys, document.keyPaths)
+            "json" -> writeJson(document.values, document.structuredValueKeys, document.keyPaths, document.jsonArrayPaths)
             "yaml", "yml" -> writeYaml(document.values)
             "php" -> writePhp(document.values)
             "properties" -> writeProperties(document.values)
@@ -513,13 +548,14 @@ internal object LanguageFileCodec {
         text: String,
         structuredKeys: MutableSet<String>,
         keyPaths: MutableMap<String, List<String>>,
+        arrayPaths: MutableSet<List<String>>,
         maxEntries: Int,
     ): LinkedHashMap<String, String> {
         requireJsonNestingDepth(text)
         val root = json.parseToJsonElement(text)
         require(root is JsonObject) { backendMessage("json.root.object") }
         return linkedMapOf<String, String>().also {
-            flattenJson(root, emptyList(), it, structuredKeys, keyPaths, maxEntries)
+            flattenJson(root, emptyList(), it, structuredKeys, keyPaths, arrayPaths, maxEntries)
         }
     }
 
@@ -529,13 +565,22 @@ internal object LanguageFileCodec {
         out: LinkedHashMap<String, String>,
         structuredKeys: MutableSet<String>,
         keyPaths: MutableMap<String, List<String>>,
+        arrayPaths: MutableSet<List<String>>,
         maxEntries: Int,
     ) {
         val displayKey = path.joinToString(".")
         when (element) {
+            JsonNull -> {
+                require(displayKey !in out) { backendMessage("json.path.conflict", displayKey) }
+                require(out.size < maxEntries) { backendMessage("parser.entry.limit", maxEntries) }
+                structuredKeys += displayKey
+                out[displayKey] = "null"
+                keyPaths[displayKey] = path
+            }
+
             is JsonObject -> {
                 element.forEach { (key, child) ->
-                    flattenJson(child, path + key, out, structuredKeys, keyPaths, maxEntries)
+                    flattenJson(child, path + key, out, structuredKeys, keyPaths, arrayPaths, maxEntries)
                 }
             }
 
@@ -551,11 +596,10 @@ internal object LanguageFileCodec {
             }
 
             is JsonArray -> {
-                require(displayKey !in out) { backendMessage("json.path.conflict", displayKey) }
-                require(out.size < maxEntries) { backendMessage("parser.entry.limit", maxEntries) }
-                structuredKeys += displayKey
-                out[displayKey] = json.encodeToString(JsonElement.serializer(), element)
-                keyPaths[displayKey] = path
+                arrayPaths += path
+                element.forEachIndexed { index, child ->
+                    flattenJson(child, path + index.toString(), out, structuredKeys, keyPaths, arrayPaths, maxEntries)
+                }
             }
         }
     }
@@ -594,7 +638,9 @@ internal object LanguageFileCodec {
         values: Map<String, String>,
         structuredKeys: Set<String>,
         keyPaths: Map<String, List<String>>,
+        arrayPaths: Set<List<String>>,
     ): String {
+        if (arrayPaths.isNotEmpty()) return writeExpandedJson(values, structuredKeys, keyPaths, arrayPaths)
         val root =
             tree(values, keyPaths) { key, value ->
                 if (key in structuredKeys) {
@@ -611,6 +657,59 @@ internal object LanguageFileCodec {
                 else -> JsonPrimitive(value.toString())
             }
         return json.encodeToString(JsonElement.serializer(), convert(root)) + "\n"
+    }
+
+    private fun writeExpandedJson(
+        values: Map<String, String>,
+        structuredKeys: Set<String>,
+        keyPaths: Map<String, List<String>>,
+        arrayPaths: Set<List<String>>,
+    ): String {
+        class JsonNode {
+            var leaf: JsonElement? = null
+            var array: Boolean = false
+            val children = linkedMapOf<String, JsonNode>()
+        }
+
+        val root = JsonNode()
+
+        fun nodeAt(path: List<String>): JsonNode = path.fold(root) { node, part -> node.children.getOrPut(part, ::JsonNode) }
+
+        arrayPaths.forEach { nodeAt(it).array = true }
+        values.forEach { (key, value) ->
+            val path =
+                (keyPaths[key] ?: key.split('.').filter(String::isNotBlank)).also {
+                    require(it.isNotEmpty()) { backendMessage("key.empty") }
+                }
+            nodeAt(path).leaf =
+                if (key in structuredKeys) {
+                    json.parseToJsonElement(value)
+                } else {
+                    JsonPrimitive(value)
+                }
+        }
+
+        fun convert(
+            node: JsonNode,
+            path: List<String>,
+        ): JsonElement {
+            node.leaf?.let { return it }
+            return if (node.array) {
+                JsonArray(
+                    node.children
+                        .map { (name, child) ->
+                            val index = name.toIntOrNull()
+                            require(index != null && index >= 0) { backendMessage("json.array.invalid", path.joinToString(".")) }
+                            Triple(index, name, child)
+                        }.sortedBy { it.first }
+                        .map { (_, name, child) -> convert(child, path + name) },
+                )
+            } else {
+                JsonObject(node.children.mapValues { (name, child) -> convert(child, path + name) })
+            }
+        }
+
+        return json.encodeToString(JsonElement.serializer(), convert(root, emptyList())) + "\n"
     }
 
     private fun tree(

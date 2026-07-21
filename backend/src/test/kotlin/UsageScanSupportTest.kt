@@ -135,6 +135,31 @@ class UsageScanSupportTest {
         assertEquals(1, counts[entries[1].id])
     }
 
+    @Test
+    fun `scan follows scheme regex without extension size line or multiline filters`() {
+        temp.resolve("src/template.svelte").apply {
+            parent.createDirectories()
+            writeText("tr(\"auth.failed\")")
+        }
+        temp.resolve("src/extensionless").writeText("tr(\"auth.failed\")")
+        temp.resolve("src/large.custom-data").writeText("x".repeat(600_000) + "tr(\"auth.failed\")")
+        temp.resolve("src/multiline.unrecognized").writeText("begin\nauth.failed\nend")
+        val entry = entry("auth", "failed")
+        val settings =
+            UsageScanSettingsDto(
+                regexPatterns =
+                    listOf(
+                        """tr\(\"(?<key>[^\"]+)\"\)""",
+                        """begin\s+(?<key>auth\.failed)\s+end""",
+                    ),
+                excludedDirectories = emptyList(),
+            )
+
+        val counts = UsageScanSupport.counts(temp, listOf(entry), emptyList(), settings)
+
+        assertEquals(4, counts[entry.id])
+    }
+
     private fun entry(
         namespace: String,
         key: String,

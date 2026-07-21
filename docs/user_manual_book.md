@@ -151,7 +151,7 @@ Open **Actions ▾** to access the following commands.
 3. Type a new locale code freely, or click the field's suggestion button to open ISO 639 languages and common BCP 47 variants such as `es`, `th`, `es-MX`, `zh-Hant`, and `es-419`. Typing and deleting never selects or inserts a suggestion automatically; only an explicit popup choice replaces the field value. Any project-specific code that passes locale validation remains supported.
 4. Optionally enter a language note such as `Mexican Spanish, formal tone`. The note is limited to 500 characters, saved with the scheme, included in scheme export/import, and supplied to later AI requests for that locale. It never changes the locale file path.
 5. The plugin maps every source file to a target: `en/auth.php` becomes `es/auth.php`, and `en.json` becomes `es.json`.
-6. Normal translation values are cleared for translation. JSON arrays retain their structure to keep files parseable.
+6. Normal values and each expanded JSON array item are cleared independently for translation. The array structure is retained so the new file remains parseable.
 7. Review every new file in the Diff and apply before files are created, the note is saved, and the files are added to the scheme.
 
 Creation stops without overwriting if the target locale or file already exists, a source cannot be parsed, or multiple sources map to the same target.
@@ -283,7 +283,7 @@ Click **Handle** in the final column. Depending on issue type, the action previe
 
 - The root must be an object.
 - Nested objects appear as dotted keys in the table.
-- Arrays are displayed as JSON text and remain arrays when written back.
+- Arrays are expanded into ordinary translation rows such as `sections.0.items.3.title`. Every item can be searched, edited, deleted, analyzed, or AI-translated like a scalar value, and the array is reconstructed when written.
 - Dots inside sentence-style keys remain literal and do not create nested objects.
 
 ### YAML
@@ -296,6 +296,7 @@ Click **Handle** in the final column. Depending on issue type, the action previe
 
 - Only an optional `declare(strict_types=1);` and a static return array are accepted.
 - Strings, numbers, booleans, and nested arrays are supported.
+- Category subdirectories below a language directory are supported: `en/components/pagination.php` uses locale `en` and namespace `components.pagination`; adding `es` creates `es/components/pagination.php` and preserves the relative directory structure.
 - Other `declare` directives, calls, variables, concatenation, and arbitrary expressions are rejected.
 - PHP is never executed.
 
@@ -352,6 +353,8 @@ Example for Vue/JavaScript `$t()`:
 ```
 
 Every distinct match is counted, so repeated calls on the same line and matches from different Regex formats accumulate. If multiple Regex patterns capture the same key at the same source position, that occurrence is counted once to avoid inflating the result. Dynamically concatenated keys usually cannot be detected reliably.
+
+The scanner applies the scheme Regex to the complete content of every regular file under the base path. It does not restrict scanning by extension, filename, or IDE file type, and therefore supports custom templates, extensionless scripts, generated source formats, long lines, and multiline Regex. Only directories explicitly listed in the scheme exclusions and the scheme's managed language files are skipped. This intentionally keeps usage definitions out of the count while leaving source-file scope under scheme control.
 
 ### Excluded directories
 
@@ -443,3 +446,7 @@ Choose the appropriate Issue type:
 - Format compatibility: a minimal JSON, YAML, Laravel PHP, or ResourceBundle Properties parse/round-trip example.
 
 Before submitting, remove passwords, tokens, client names, and other sensitive content from logs, paths, and language files.
+
+## 14. Viewing Release Notes
+
+After a Marketplace update is uploaded, the current version section from [CHANGELOG.md](../CHANGELOG.md) is displayed in the plugin page’s **What’s New** section and in the IDE Plugin Manager. The build generates this metadata directly from the matching version instead of maintaining a separate summary.

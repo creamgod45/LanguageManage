@@ -151,7 +151,7 @@ LanguageManagerBundle_zh_TW.properties  -> locale: zh_TW, namespace: LanguageMan
 3. 可自由輸入新語言代碼，或點擊欄位右側建議按鈕開啟 ISO 639 語言及常用 BCP 47 變體，例如 `es`、`th`、`es-MX`、`zh-Hant`、`es-419`。輸入與刪除期間不會自動選取或插入候選；只有在 Popup 明確選取後才會取代欄位內容，通過 locale 驗證的專案自訂代碼仍可保留。
 4. 可選填語言備註，例如「墨西哥西班牙文、正式語氣」。備註上限 500 字元，會保存於方案、包含於方案匯入／匯出，並帶入日後針對該 locale 的 AI 請求；備註不會改變語言檔路徑。
 5. 插件會依來源語言的全部檔案建立目標清單：Laravel `en/auth.php` 會對應為 `es/auth.php`；`en.json` 會對應為 `es.json`。
-6. 一般翻譯 value 會清空以等待翻譯；JSON array 會保留原結構，避免產生無法解析的檔案。
+6. 一般翻譯 value 與展開後的每個 JSON array 項目都會各自清空以等待翻譯；array 結構會保留，避免產生無法解析的檔案。
 7. 在 Diff 視窗逐一確認新檔案；按下套用後才會建立檔案、保存備註並加入目前方案。
 
 若目標 locale 已存在、目標檔案已存在、來源檔案解析失敗或多個來源對應到同一路徑，插件會停止建立，不會覆寫既有檔案。
@@ -283,7 +283,7 @@ LanguageManagerBundle_zh_TW.properties  -> locale: zh_TW, namespace: LanguageMan
 
 - 根節點必須是 object。
 - 巢狀 object 在表格中以點號 key 顯示。
-- Array value 在 cell 中以 JSON 文字顯示，寫回時仍保持 array。
+- Array 會展開為 `sections.0.items.3.title` 形式的一般翻譯列；每個項目皆可像單一文字一樣搜尋、編輯、刪除、分析或使用 AI 翻譯，寫回時會重建 array。
 - 完整句子作為 key 時，句點會保留為字面 key，不會自動變成巢狀 object。
 
 ### YAML
@@ -296,6 +296,7 @@ LanguageManagerBundle_zh_TW.properties  -> locale: zh_TW, namespace: LanguageMan
 
 - 僅接受可選的 `declare(strict_types=1);` 與靜態 return array。
 - 支援字串、數字、布林與巢狀 array。
+- 支援語言目錄下的分類子目錄：`en/components/pagination.php` 會使用 locale `en` 與 namespace `components.pagination`；新增 `es` 時會建立 `es/components/pagination.php`，並保留相同的相對目錄結構。
 - 不支援其他 `declare` 指令、函式呼叫、變數、字串串接或任意 expression。
 - 插件不會執行 PHP。
 
@@ -352,6 +353,8 @@ Vue／JavaScript `$t()` 可加入例如：
 ```
 
 每個不同 match 都會計數，因此同一行的重複呼叫，以及不同 Regex 格式各自命中的使用位置都會累加。若多個 Regex 捕獲到同一來源位置的相同 key，該位置只計一次，避免重疊規則灌高結果。動態串接的 key 通常無法可靠識別。
+
+掃描器會把方案 Regex 套用到 base path 下每個一般檔案的完整內容，不會依副檔名、檔名或 IDE 檔案類型額外限制，因此自訂模板、無副檔名腳本、產生碼格式、超長單行與跨行 Regex 都能依方案規則計算。只會略過方案排除清單明確指定的目錄，以及方案本身列管的語言檔；後者用於避免把翻譯定義誤算成使用次數，其餘來源範圍完全由方案控制。
 
 ### 排除資料夾
 
@@ -443,3 +446,7 @@ Vue／JavaScript `$t()` 可加入例如：
 - 格式相容性：JSON、YAML、Laravel PHP、ResourceBundle Properties 無法 parse／round-trip 的最小案例。
 
 提交前請移除 log、路徑與語言檔中的密碼、token、客戶名稱及其他敏感資料。
+
+## 14. 查看版本更新說明
+
+上傳 Marketplace 更新後，插件頁面的 **What’s New** 與 IDE 插件管理器會顯示 [CHANGELOG.md](../CHANGELOG.md) 中與目前版本相同的區段。建置會直接產生這份 metadata，不再另外維護容易不同步的摘要。
