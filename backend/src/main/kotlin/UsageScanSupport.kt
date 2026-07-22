@@ -7,6 +7,7 @@ import cg.creamgod45.localization.HARD_MAX_LANGUAGE_SCHEME_MB
 import cg.creamgod45.localization.LanguageEntryDto
 import cg.creamgod45.localization.UsageScanSettingsDto
 import com.intellij.openapi.diagnostic.Logger
+import kotlinx.coroutines.CancellationException
 import java.nio.charset.StandardCharsets
 import java.nio.file.FileVisitResult
 import java.nio.file.Files
@@ -83,11 +84,14 @@ internal object UsageScanSupport {
         entries: List<LanguageEntryDto>,
         languageFiles: List<String>,
         settings: UsageScanSettingsDto,
+        cancellationCheck: () -> Unit = {},
     ): Map<String, Int> {
+        cancellationCheck()
         val scanRoot = root.toRealPath()
         val counts = entries.associate { it.id to 0 }.toMutableMap()
         val needleOwners = mutableMapOf<String, MutableSet<String>>()
         entries.forEach { entry ->
+            cancellationCheck()
             setOf(entry.key, if (entry.namespace.isBlank()) entry.key else "${entry.namespace}.${entry.key}").forEach { needle ->
                 needleOwners.getOrPut(needle) { linkedSetOf() } += entry.id
             }
@@ -99,7 +103,7 @@ internal object UsageScanSupport {
                 runCatching { SafeLanguageFileAccess.validate(it).toString() }.getOrDefault(it)
             }
         var visitedFiles = 0
-        runCatching {
+        try {
             Files.walkFileTree(
                 scanRoot,
                 object : SimpleFileVisitor<Path>() {
@@ -107,6 +111,7 @@ internal object UsageScanSupport {
                         dir: Path,
                         attrs: BasicFileAttributes,
                     ): FileVisitResult {
+                        cancellationCheck()
                         if (dir == scanRoot) return FileVisitResult.CONTINUE
                         val relative = scanRoot.relativize(dir).joinToString("/") { it.toString() }.lowercase()
                         val excluded =
@@ -124,24 +129,34 @@ internal object UsageScanSupport {
                         file: Path,
                         attrs: BasicFileAttributes,
                     ): FileVisitResult {
+                        cancellationCheck()
                         if (!attrs.isRegularFile || file.toString() in normalizedLanguageFiles) {
                             return FileVisitResult.CONTINUE
                         }
                         visitedFiles++
-                        runCatching {
-                            val content = Files.newInputStream(file).reader(StandardCharsets.UTF_8).use { it.readText() }
-                            val occurrences = extractCandidateOccurrences(content, patterns)
+                        try {
+                            val content = readTextCancellable(file, cancellationCheck)
+                            val occurrences = extractCandidateOccurrences(content, patterns, cancellationCheck)
                             occurrences.forEach { occurrence ->
+                                cancellationCheck()
                                 needleOwners[occurrence.candidate].orEmpty().forEach { id ->
                                     counts[id] = counts.getValue(id) + 1
                                 }
                             }
+                        } catch (error: CancellationException) {
+                            throw error
+                        } catch (error: Exception) {
+                            log.debug("Unable to scan source file '$file'", error)
                         }
                         return FileVisitResult.CONTINUE
                     }
                 },
             )
-        }.onFailure { log.debug("Usage scan stopped early", it) }
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Exception) {
+            log.debug("Usage scan stopped early", error)
+        }
         log.info("Usage scan checked $visitedFiles source files for ${entries.size} localization entries")
         return counts
     }
@@ -149,16 +164,35 @@ internal object UsageScanSupport {
     private fun extractCandidateOccurrences(
         line: String,
         patterns: List<Regex>,
+        cancellationCheck: () -> Unit,
     ): Set<CandidateOccurrence> =
         buildSet {
             patterns.forEach { pattern ->
+                cancellationCheck()
                 pattern.findAll(line).forEach { match ->
+                    cancellationCheck()
                     val named = runCatching { match.groups["key"] }.getOrNull()
                     val capturedGroup = named ?: (1 until match.groups.size).firstNotNullOfOrNull { match.groups[it] }
                     val captured = capturedGroup?.value ?: match.value
                     if (captured.length in 1..256) {
                         add(CandidateOccurrence(captured, capturedGroup?.range ?: match.range))
                     }
+                }
+            }
+        }
+
+    private fun readTextCancellable(
+        file: Path,
+        cancellationCheck: () -> Unit,
+    ): String =
+        Files.newInputStream(file).reader(StandardCharsets.UTF_8).buffered().use { reader ->
+            val buffer = CharArray(DEFAULT_BUFFER_SIZE)
+            buildString {
+                while (true) {
+                    cancellationCheck()
+                    val count = reader.read(buffer)
+                    if (count < 0) break
+                    append(buffer, 0, count)
                 }
             }
         }

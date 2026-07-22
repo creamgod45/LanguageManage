@@ -296,8 +296,10 @@ Click **Handle** in the final column. Depending on issue type, the action previe
 
 - Only an optional `declare(strict_types=1);` and a static return array are accepted.
 - Strings, numbers, booleans, and nested arrays are supported.
+- Static string concatenation such as `'first'."\n\n".'second'` is combined into one ordinary translation value instead of producing a false “missing comma” parser error.
+- Multiline heredoc and nowdoc values are supported. `TEXT` is only an example: any matching valid PHP identifier such as `EOT`, `HTML`, or `MESSAGE_2026` can be used in `<<<LABEL`, `<<<"LABEL"`, or `<<<'LABEL'`. The identifier must start with a letter or underscore, may then contain letters, numbers, or underscores, cannot be empty, and only marks the string boundary—it does not define a content type.
 - Category subdirectories below a language directory are supported: `en/components/pagination.php` uses locale `en` and namespace `components.pagination`; adding `es` creates `es/components/pagination.php` and preserves the relative directory structure.
-- Other `declare` directives, calls, variables, concatenation, and arbitrary expressions are rejected.
+- Other `declare` directives, calls, variables, interpolated heredoc or strings, non-string concatenation, and arbitrary expressions are rejected.
 - PHP is never executed.
 
 ### JetBrains/Java ResourceBundle Properties
@@ -333,6 +335,8 @@ The settings shortcut targets the registered plugin settings component rather th
 Both the new-scheme defaults and active-scheme settings display the complete placeholder explanation below the Regex list. The Add/Edit dialog also shows a directly usable double-quote example such as `(?:backendMessage|message)\(\s*"(?<key>[^"\r\n]{1,256})"\s*\)`. Replace the function names with those used by the project. Prefer a function-specific prefix over matching every quoted string, because an earlier string or character literal on the same line can consume a non-overlapping match before the localization call is reached.
 
 Use **Recommended Formats** beside the Regex list to add presets for Laravel, Symfony, webman, Laminas/Zend, CodeIgniter, CakePHP, Yii, Phalcon, FuelPHP, generic Slim/Pixie/custom translators, Spring `MessageSource`, Java/Kotlin `ResourceBundle`, or IntelliJ Platform bundle methods. Slim and Pixie do not have a verified built-in translation API, so their preset intentionally targets common custom helper names and should be edited to match the project.
+
+Laravel provides two recommendations. **Laravel** captures the complete helper argument and is the higher-precision choice. **Laravel - Key only (ignore namespace/group prefix)** ignores an optional package namespace and the group before the first dot: `__('filament::components/button.messages.uploading_file')` yields `messages.uploading_file`, while `__('components/filament.someLangKey1')` yields `someLangKey1`. This improves recall when the prefix cannot be mapped reliably, but identical keys in unrelated packages/groups may become false positives, so it is opt-in rather than a default. If the calls being counted live below a normally excluded `vendor` directory, either select that package's source directory as the usage base path or deliberately adjust the active scheme exclusion list.
 
 Each Regex match extracts a candidate key in this order:
 
@@ -384,6 +388,7 @@ Schemes and caches are stored under:
 ```
 
 - Normal scheme switching uses cache when fingerprints are unchanged.
+- Scheme switching and **Reload** appear in the IDE background-task indicator and can be cancelled there. Starting another switch or reload cancels the previous read; cooperative parser and source-scan checkpoints release the old task, while a generation check blocks stale rows, issues, and cache writes. The Tool Window status is recomputed from backend busy state and currently tracked UI operations, then returns to the entry/issue summary when the latest task finishes.
 - **Reload** forces parsing.
 - A source change, cache format upgrade, or fingerprint mismatch rebuilds the cache.
 - Do not edit cache manually. Deleting cache never deletes source language files.

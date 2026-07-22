@@ -1,5 +1,13 @@
 # Language Manager Changelog
 
+## 1.5.4
+
+- Show scheme switching and manual reloads as cancellable JetBrains background tasks. Starting a newer scheme load cancels the obsolete request, parser and usage-scan checkpoints stop work cooperatively, and a generation guard prevents stale rows, issues, or cache data from replacing the latest scheme. Tool Window status text now derives from backend busy state plus tracked UI operations, so completed or superseded jobs cannot leave a false loading indicator.
+- Fix valid PHP language files being incorrectly reported as “missing a comma between PHP array items” when a translation uses static string concatenation such as `'first'."\n\n".'second'`; all string segments are now combined into one editable translation value.
+- Add multiline PHP heredoc and nowdoc translation support. Delimiters are not limited to `TEXT`: any matching valid PHP identifier such as `EOT`, `HTML`, `MESSAGE_2026`, `<<<LABEL`, or `<<<'LABEL'` is supported and the content is treated as an ordinary translation value.
+- Keep PHP parsing static and safe: variables, heredoc interpolation, function calls, non-string concatenation, and executable expressions remain rejected and PHP is never evaluated or included.
+- Add an opt-in Laravel “Key only” recommended usage Regex that ignores uncertain package namespace and group prefixes. It captures `messages.uploading_file` from `__('filament::components/button.messages.uploading_file')` without changing table namespaces or existing exact-match behavior; projects should use it only when the increased recall is worth possible same-key false positives.
+
 ## 1.5.3
 
 - Expand every JSON array scalar into an ordinary translation row (for example, `sections.0.items.3.title`) so table JOIN, search, editing, deletion, missing-value analysis, usage counts, and AI translation behave the same as scalar dictionary entries.

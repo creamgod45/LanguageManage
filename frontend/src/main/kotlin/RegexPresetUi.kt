@@ -16,6 +16,13 @@ internal object RegexPresetUi {
     val presets =
         listOf(
             RegexPreset("PHP", "Laravel", listOf("""(?:__|trans|trans_choice)\(\s*(?<quote>[\"'])(?<key>[^\r\n]{1,256}?)\k<quote>""")),
+            RegexPreset(
+                "PHP",
+                message("settings.regex.preset.laravel.key.only"),
+                listOf(
+                    """(?:__|trans|trans_choice)\(\s*(?<quote>[\"'])(?:(?:[^\"'\r\n:]{1,128})::)?[^\"'\r\n.]{1,128}\.(?<key>[^\"'\r\n]{1,256}?)\k<quote>""",
+                ),
+            ),
             RegexPreset("PHP", "Symfony", listOf("""(?:->|\.)trans\(\s*(?<quote>[\"'])(?<key>[^\r\n]{1,256}?)\k<quote>""")),
             RegexPreset("PHP", "webman", listOf("""\btrans\(\s*(?<quote>[\"'])(?<key>[^\r\n]{1,256}?)\k<quote>""")),
             RegexPreset(

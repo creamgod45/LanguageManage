@@ -209,6 +209,104 @@ class LanguageFileSupportTest {
     }
 
     @Test
+    fun `parses concatenated PHP string literals and preserves newlines on write`() {
+        val localeDir = temp.resolve("en").createDirectories()
+        val file =
+            localeDir.resolve("api.php").apply {
+                writeText(
+                    """
+                    <?php
+
+                    return [
+                        'description' => 'First paragraph'."\n\n".
+                            'Second paragraph',
+                    ];
+                    """.trimIndent(),
+                )
+            }
+
+        val parsed = LanguageFileCodec.parse(file, "scheme")
+
+        assertTrue(parsed.issues.isEmpty())
+        assertEquals("First paragraph\n\nSecond paragraph", parsed.values["description"])
+        LanguageFileCodec.write(parsed)
+        val reread = LanguageFileCodec.parse(file, "scheme")
+        assertTrue(reread.issues.isEmpty())
+        assertEquals("First paragraph\n\nSecond paragraph", reread.values["description"])
+    }
+
+    @Test
+    fun `parses static PHP heredoc and nowdoc values`() {
+        val localeDir = temp.resolve("en").createDirectories()
+        val file =
+            localeDir.resolve("multiline.php").apply {
+                writeText(
+                    """
+                    <?php
+
+                    return [
+                        'heredoc' => <<<EOT
+                        First line\n
+                        Second line
+                        EOT,
+                        'quoted_heredoc' => <<<"HTML"
+                        <strong>Message</strong>
+                        HTML,
+                        'nowdoc' => <<<'MESSAGE_2026'
+                        Literal \n and ${'$'}name
+                        MESSAGE_2026,
+                    ];
+                    """.trimIndent(),
+                )
+            }
+
+        val parsed = LanguageFileCodec.parse(file, "scheme")
+
+        assertTrue(parsed.issues.isEmpty())
+        assertEquals("First line\n\nSecond line\n", parsed.values["heredoc"])
+        assertEquals("<strong>Message</strong>\n", parsed.values["quoted_heredoc"])
+        assertEquals("Literal \\n and ${'$'}name\n", parsed.values["nowdoc"])
+    }
+
+    @Test
+    fun `rejects dynamic PHP string expressions and heredoc interpolation`() {
+        val dynamicConcat = temp.resolve("dynamic-concat.php").apply { writeText("<?php return ['x' => 'safe' . getenv('X')];") }
+        val interpolated =
+            temp.resolve("interpolated.php").apply {
+                writeText("<?php return ['x' => <<<TEXT\nHello ${'$'}name\nTEXT,\n];")
+            }
+        val emptyIdentifier =
+            temp.resolve("empty-identifier.php").apply {
+                writeText("<?php return ['x' => <<<''\nInvalid\n,\n];")
+            }
+
+        assertEquals(
+            "PARSE_ERROR",
+            LanguageFileCodec
+                .parse(dynamicConcat, "scheme")
+                .issues
+                .single()
+                .code,
+        )
+        assertEquals(
+            "PARSE_ERROR",
+            LanguageFileCodec
+                .parse(interpolated, "scheme")
+                .issues
+                .single()
+                .code,
+        )
+        assertEquals(
+            "PARSE_ERROR",
+            LanguageFileCodec
+                .parse(emptyIdentifier, "scheme")
+                .issues
+                .single()
+                .code,
+        )
+    }
+
+    @Test
     fun `recognizes locale directories above nested category folders`() {
         val locales = listOf("en", "zh_CN", "zh_HK", "zh_TW")
         val componentNames = listOf("button", "copyable", "modal", "pagination")

@@ -7,6 +7,7 @@ import cg.creamgod45.localization.LanguageFileCandidateDto
 import cg.creamgod45.localization.LanguageIssueDto
 import cg.creamgod45.localization.LanguageLoadBudget
 import cg.creamgod45.localization.UsageScanSettingsDto
+import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -322,7 +323,15 @@ internal object LanguageFileCodec {
         path: Path,
         schemeId: String,
         maxEntries: Int = DEFAULT_MAX_ENTRIES_PER_FILE,
+    ): ParsedLanguageFile = parse(path, schemeId, maxEntries) {}
+
+    fun parse(
+        path: Path,
+        schemeId: String,
+        maxEntries: Int,
+        cancellationCheck: () -> Unit,
     ): ParsedLanguageFile {
+        cancellationCheck()
         val (locale, namespace) =
             when (path.extension.lowercase()) {
                 "php" -> {
@@ -344,13 +353,16 @@ internal object LanguageFileCodec {
             val jsonArrayPaths = linkedSetOf<List<String>>()
             val values =
                 when (path.extension.lowercase()) {
-                    "json" -> parseJson(text, structuredKeys, keyPaths, jsonArrayPaths, maxEntries)
-                    "yaml", "yml" -> parseYaml(text, maxEntries)
-                    "php" -> PhpArrayParser(text, maxEntries).parse()
-                    "properties" -> parseProperties(text, keyPaths, maxEntries)
+                    "json" -> parseJson(text, structuredKeys, keyPaths, jsonArrayPaths, maxEntries, cancellationCheck)
+                    "yaml", "yml" -> parseYaml(text, maxEntries, cancellationCheck)
+                    "php" -> PhpArrayParser(text, maxEntries, cancellationCheck).parse()
+                    "properties" -> parseProperties(text, keyPaths, maxEntries, cancellationCheck)
                     else -> error(backendMessage("format.unsupported"))
                 }
+            cancellationCheck()
             ParsedLanguageFile(path, locale, namespace, values, structuredKeys, keyPaths, jsonArrayPaths)
+        } catch (error: CancellationException) {
+            throw error
         } catch (e: Exception) {
             ParsedLanguageFile(
                 path,
@@ -388,9 +400,11 @@ internal object LanguageFileCodec {
         text: String,
         keyPaths: MutableMap<String, List<String>>,
         maxEntries: Int,
+        cancellationCheck: () -> Unit,
     ): LinkedHashMap<String, String> {
         val out = linkedMapOf<String, String>()
         propertiesLogicalLines(text).forEach { (lineNumber, rawLine) ->
+            cancellationCheck()
             val line = rawLine.trimStart()
             if (line.isEmpty() || line.startsWith('#') || line.startsWith('!')) return@forEach
             val (rawKey, rawValue) = splitProperty(line)
@@ -550,12 +564,15 @@ internal object LanguageFileCodec {
         keyPaths: MutableMap<String, List<String>>,
         arrayPaths: MutableSet<List<String>>,
         maxEntries: Int,
+        cancellationCheck: () -> Unit,
     ): LinkedHashMap<String, String> {
+        cancellationCheck()
         requireJsonNestingDepth(text)
         val root = json.parseToJsonElement(text)
+        cancellationCheck()
         require(root is JsonObject) { backendMessage("json.root.object") }
         return linkedMapOf<String, String>().also {
-            flattenJson(root, emptyList(), it, structuredKeys, keyPaths, arrayPaths, maxEntries)
+            flattenJson(root, emptyList(), it, structuredKeys, keyPaths, arrayPaths, maxEntries, cancellationCheck)
         }
     }
 
@@ -567,7 +584,9 @@ internal object LanguageFileCodec {
         keyPaths: MutableMap<String, List<String>>,
         arrayPaths: MutableSet<List<String>>,
         maxEntries: Int,
+        cancellationCheck: () -> Unit,
     ) {
+        cancellationCheck()
         val displayKey = path.joinToString(".")
         when (element) {
             JsonNull -> {
@@ -580,7 +599,7 @@ internal object LanguageFileCodec {
 
             is JsonObject -> {
                 element.forEach { (key, child) ->
-                    flattenJson(child, path + key, out, structuredKeys, keyPaths, arrayPaths, maxEntries)
+                    flattenJson(child, path + key, out, structuredKeys, keyPaths, arrayPaths, maxEntries, cancellationCheck)
                 }
             }
 
@@ -598,7 +617,7 @@ internal object LanguageFileCodec {
             is JsonArray -> {
                 arrayPaths += path
                 element.forEachIndexed { index, child ->
-                    flattenJson(child, path + index.toString(), out, structuredKeys, keyPaths, arrayPaths, maxEntries)
+                    flattenJson(child, path + index.toString(), out, structuredKeys, keyPaths, arrayPaths, maxEntries, cancellationCheck)
                 }
             }
         }
@@ -779,10 +798,12 @@ internal object LanguageFileCodec {
     private fun parseYaml(
         text: String,
         maxEntries: Int,
+        cancellationCheck: () -> Unit,
     ): LinkedHashMap<String, String> {
         val out = linkedMapOf<String, String>()
         val parents = mutableListOf<Pair<Int, String>>()
         text.lineSequence().forEachIndexed { index, raw ->
+            cancellationCheck()
             if (raw.isBlank() || raw.trimStart().startsWith('#')) return@forEachIndexed
             require(!raw.contains('\t')) { backendMessage("yaml.tabs", index + 1) }
             val indent = raw.indexOfFirst { !it.isWhitespace() }.coerceAtLeast(0)
@@ -878,13 +899,12 @@ internal object LanguageFileCodec {
         value
             .replace("\\", "\\\\")
             .replace("'", "\\'")
-            .replace("\r", "\\r")
-            .replace("\n", "\\n")
 }
 
 internal class PhpArrayParser(
     private val source: String,
     private val maxEntries: Int = DEFAULT_MAX_ENTRIES_PER_FILE,
+    private val cancellationCheck: () -> Unit = {},
 ) {
     companion object {
         private val STRICT_TYPES_DECLARE = Regex("declare\\s*\\(\\s*strict_types\\s*=\\s*1\\s*\\)\\s*;")
@@ -895,6 +915,7 @@ internal class PhpArrayParser(
     private val out = linkedMapOf<String, String>()
 
     fun parse(): LinkedHashMap<String, String> {
+        cancellationCheck()
         if (source.startsWith('\uFEFF')) index++
         skipTrivia()
         if (peek("<?php")) index += 5
@@ -940,6 +961,7 @@ internal class PhpArrayParser(
             }
         skipTrivia()
         while (index < source.length && source[index] != closing) {
+            cancellationCheck()
             val key = parseString()
             skipTrivia()
             require(peek("=>")) { backendMessage("php.missing.arrow") }
@@ -970,8 +992,8 @@ internal class PhpArrayParser(
     }
 
     private fun parseScalar(): String =
-        if (index < source.length && source[index] in charArrayOf('\'', '"')) {
-            parseString()
+        if (isStringStart()) {
+            parseStringExpression()
         } else {
             val start = index
             while (index < source.length && source[index] !in charArrayOf(',', ']', ')')) index++
@@ -980,6 +1002,23 @@ internal class PhpArrayParser(
             }
         }
 
+    private fun parseStringExpression(): String =
+        buildString {
+            append(parseStringAtom())
+            skipTrivia()
+            while (peek(".")) {
+                index++
+                skipTrivia()
+                require(isStringStart()) { backendMessage("php.scalar.only") }
+                append(parseStringAtom())
+                skipTrivia()
+            }
+        }
+
+    private fun isStringStart(): Boolean = index < source.length && (source[index] in charArrayOf('\'', '"') || peek("<<<"))
+
+    private fun parseStringAtom(): String = if (peek("<<<")) parseHeredoc() else parseString()
+
     private fun parseString(): String {
         require(index < source.length && source[index] in charArrayOf('\'', '"')) { backendMessage("php.quoted.key.value") }
         val quote = source[index++]
@@ -987,25 +1026,147 @@ internal class PhpArrayParser(
         while (index < source.length) {
             val c = source[index++]
             if (c == quote) return result.toString()
-            if (c ==
-                '\\'
-            ) {
+            if (c == '\\') {
                 require(index < source.length)
                 val next = source[index++]
-                result.append(
-                    when (next) {
-                        'n' -> '\n'
-                        'r' -> '\r'
-                        't' -> '\t'
-                        else -> next
-                    },
-                )
+                if (quote == '\'') {
+                    if (next == '\\' || next == '\'') {
+                        result.append(next)
+                    } else {
+                        result.append('\\').append(next)
+                    }
+                } else {
+                    appendDoubleQuotedEscape(result, next)
+                }
             } else {
+                if (quote == '"' && c == '$' && startsInterpolation(index)) {
+                    error(backendMessage("php.scalar.only"))
+                }
                 result.append(c)
             }
         }
         error(backendMessage("php.unclosed.string"))
     }
+
+    private fun parseHeredoc(): String {
+        index += 3
+        while (index < source.length && source[index] in charArrayOf(' ', '\t')) index++
+        val quote = source.getOrNull(index)?.takeIf { it == '\'' || it == '"' }
+        if (quote != null) index++
+        val identifierStart = index
+        require(source.getOrNull(index)?.let { it == '_' || it.isLetter() } == true) {
+            backendMessage("php.scalar.only")
+        }
+        index++
+        while (index < source.length && (source[index] == '_' || source[index].isLetterOrDigit())) index++
+        val identifier = source.substring(identifierStart, index)
+        if (quote != null) {
+            require(source.getOrNull(index) == quote) { backendMessage("php.scalar.only") }
+            index++
+        }
+        while (index < source.length && source[index] in charArrayOf(' ', '\t')) index++
+        require(consumeLineBreak()) { backendMessage("php.scalar.only") }
+
+        val contentStart = index
+        var lineStart = contentStart
+        while (lineStart <= source.length) {
+            var markerStart = lineStart
+            while (markerStart < source.length && source[markerStart] in charArrayOf(' ', '\t')) markerStart++
+            if (source.regionMatches(markerStart, identifier, 0, identifier.length)) {
+                val markerEnd = markerStart + identifier.length
+                val following = source.getOrNull(markerEnd)
+                if (following == null || following.isWhitespace() || following in charArrayOf(',', '.', ';', ']', ')')) {
+                    val indentation = source.substring(lineStart, markerStart)
+                    val rawBody = source.substring(contentStart, lineStart)
+                    index = markerEnd
+                    val body = stripHeredocIndentation(rawBody, indentation)
+                    return if (quote == '\'') body else decodeHeredoc(body)
+                }
+            }
+            val newline = source.indexOf('\n', lineStart)
+            if (newline < 0) break
+            lineStart = newline + 1
+        }
+        error(backendMessage("php.unclosed.string"))
+    }
+
+    private fun consumeLineBreak(): Boolean =
+        when {
+            peek("\r\n") -> {
+                index += 2
+                true
+            }
+
+            peek("\n") || peek("\r") -> {
+                index++
+                true
+            }
+
+            else -> {
+                false
+            }
+        }
+
+    private fun stripHeredocIndentation(
+        body: String,
+        indentation: String,
+    ): String {
+        if (indentation.isEmpty()) return body
+        return buildString {
+            var position = 0
+            while (position < body.length) {
+                val newline = body.indexOf('\n', position)
+                val lineEnd = if (newline >= 0) newline else body.length
+                val line = body.substring(position, lineEnd).removeSuffix("\r")
+                if (line.isNotEmpty()) {
+                    if (line.isBlank()) {
+                        append(line.drop(indentation.length.coerceAtMost(line.length)))
+                    } else {
+                        require(line.startsWith(indentation)) { backendMessage("php.scalar.only") }
+                        append(line.removePrefix(indentation))
+                    }
+                }
+                if (lineEnd < body.length) append('\n')
+                position = lineEnd + 1
+            }
+        }
+    }
+
+    private fun decodeHeredoc(body: String): String =
+        buildString {
+            var position = 0
+            while (position < body.length) {
+                val character = body[position++]
+                when {
+                    character == '\\' && position < body.length -> appendDoubleQuotedEscape(this, body[position++])
+                    character == '$' && startsInterpolation(body, position) -> error(backendMessage("php.scalar.only"))
+                    else -> append(character)
+                }
+            }
+        }
+
+    private fun appendDoubleQuotedEscape(
+        target: StringBuilder,
+        escaped: Char,
+    ) {
+        when (escaped) {
+            'n' -> target.append('\n')
+            'r' -> target.append('\r')
+            't' -> target.append('\t')
+            'v' -> target.append('\u000B')
+            'e' -> target.append('\u001B')
+            'f' -> target.append('\u000C')
+            '\\', '"', '$' -> target.append(escaped)
+            else -> target.append('\\').append(escaped)
+        }
+    }
+
+    private fun startsInterpolation(position: Int): Boolean = startsInterpolation(source, position)
+
+    private fun startsInterpolation(
+        text: String,
+        position: Int,
+    ): Boolean = text.getOrNull(position)?.let { it == '{' || it == '_' || it.isLetter() } == true
 
     private fun skipTrivia() {
         while (index <

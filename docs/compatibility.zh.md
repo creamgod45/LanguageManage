@@ -4,39 +4,50 @@
 
 ## 支援產品
 
-`plugin.xml` 只宣告所有產品共用的 `com.intellij.modules.platform` 依賴，因此 JetBrains Marketplace 會依具備此共用模組的 IntelliJ Platform 產品自動推導相容清單；descriptor 不需要也不應維護寫死的產品名稱。Split mode 的 frontend／backend 模組依賴仍分別保留於各自 content descriptor。
+`plugin.xml` 只宣告共用的 `com.intellij.modules.platform` 相依性，因此 JetBrains Marketplace 會依各產品是否提供這個共用模組，自動判斷 IntelliJ Platform 系列產品的相容性；descriptor 不會硬編碼產品名稱清單。Split mode 的 frontend 與 backend 模組相依性仍分別保留在各自的 content descriptor。
 
-AppCode 不列為目標產品；Marketplace 未列出 AppCode 時，不能透過在 `plugin.xml` 加入產品名稱強制啟用。
+AppCode 並未宣告為目標產品。Marketplace 未將它列入支援產品時，不能藉由在 `plugin.xml` 加入產品名稱來強制覆寫。
 
-LanguageManager `1.5.2` 的插件描述設定如下：
+已核准的 LanguageManager `1.5.3` 與目前 `1.5.4` 原始碼使用以下 descriptor 設定：
 
 - 最低版本：JetBrains Platform build `253.5`（IntelliJ IDEA 2025.3.5）
-- 最高版本：未限制
+- 最高版本：不限制
 - 編譯與最低版本測試平台：IntelliJ IDEA 2025.3.5
 - JVM bytecode target：Java 21
 
-## 1.5.1 Marketplace 驗證結果
+## 1.5.3 Marketplace 發布狀態
 
-以下 LanguageManager `1.5.1` 結果由 JetBrains Marketplace Compatibility Verification 於 2026-07-16 提供：
+| 欄位 | 結果 |
+|---|---|
+| 狀態 | 已核准（Approved） |
+| 核准日期 | 2026 年 7 月 21 日 |
+| 相容範圍 | `253.5+` |
+| Marketplace 安裝包大小 | 791.4 KB |
+| 上傳者 | Laifu來福（來福Laifu） |
+| 報告當時版本下載次數 | 0 |
 
-| 狀態 | 產品 | 版本 | 日期與時間 | Verifier | 結果 |
+## 1.5.3 Marketplace 相容性驗證結果
+
+JetBrains Marketplace Compatibility Verification 於 2026 年 7 月 21 日回報以下 LanguageManager `1.5.3` 結果：
+
+| 狀態 | 產品 | 版本 | 日期與時間 | 驗證器 | 結果 |
 |---|---|---|---|---|---|
-| Success | IntelliJ IDEA | 2026.2 RC (`262.8665.176`) | 2026-07-16 11:27 | IDE | 安裝插件後執行 IDE，未發生問題 |
-| Success | IntelliJ IDEA | 2026.2 RC (`262.8665.176`) | 2026-07-16 11:28 | Plugin Verifier `1.408` | Compatible |
-| Success | PhpStorm | 2026.2 RC (`262.8665.184`) | 2026-07-16 11:27 | Plugin Verifier `1.408` | Compatible |
-| Success | IntelliJ IDEA | 2026.1.4 | 2026-07-16 11:26 | Plugin Verifier `1.408` | Compatible |
-| Success | PhpStorm | 2026.1.4 | 2026-07-16 11:27 | Plugin Verifier `1.408` | Compatible |
-| Success | IntelliJ IDEA | 2026.1.3 | 2026-07-16 11:26 | Plugin Verifier `1.408` | Compatible |
-| Success | PhpStorm | 2026.1.3 | 2026-07-16 11:27 | Plugin Verifier `1.408` | Compatible |
-| Success | IntelliJ IDEA | 2026.1.2 | 2026-07-16 11:26 | Plugin Verifier `1.408` | Compatible |
-| Success | PhpStorm | 2026.1.2 | 2026-07-16 11:27 | Plugin Verifier `1.408` | Compatible |
-| Success | IntelliJ IDEA | 2026.1.1 | 2026-07-16 11:28 | Plugin Verifier `1.408` | Compatible |
-| Success | PhpStorm | 2026.1.1 | 2026-07-16 11:27 | Plugin Verifier `1.408` | Compatible |
-| Warning | IntelliJ IDEA | 2026.1 | 2026-07-16 11:26 | Plugin Verifier `1.408` | Compatible；使用 91 處 experimental API |
-| Warning | PhpStorm | 2026.1 | 2026-07-16 11:27 | Plugin Verifier `1.408` | Compatible；使用 91 處 experimental API |
-| Success | IntelliJ IDEA | 2025.3.6 | 2026-07-16 11:27 | Plugin Verifier `1.408` | Compatible |
-| Success | PhpStorm | 2025.3.6 | 2026-07-16 11:25 | Plugin Verifier `1.408` | Compatible |
+| Success | IntelliJ IDEA | 2026.2 | 2026-07-21 12:40 | IDE | 安裝插件後執行 IDE，未發生問題 |
+| Success | IntelliJ IDEA | 2026.2 | 2026-07-21 12:36 | Plugin Verifier `1.408` | Compatible |
+| Success | IntelliJ IDEA | 2026.2 RC (`262.8665.176`) | 2026-07-21 12:36 | Plugin Verifier `1.408` | Compatible |
+| Success | PhpStorm | 2026.2 | 2026-07-21 12:36 | Plugin Verifier `1.408` | Compatible |
+| Success | PhpStorm | 2026.2 RC (`262.8665.184`) | 2026-07-21 12:37 | Plugin Verifier `1.408` | Compatible |
+| Success | IntelliJ IDEA | 2026.1.4 | 2026-07-21 12:35 | Plugin Verifier `1.408` | Compatible |
+| Success | PhpStorm | 2026.1.4 | 2026-07-21 12:36 | Plugin Verifier `1.408` | Compatible |
+| Success | IntelliJ IDEA | 2026.1.3 | 2026-07-21 12:36 | Plugin Verifier `1.408` | Compatible |
+| Success | PhpStorm | 2026.1.3 | 2026-07-21 12:37 | Plugin Verifier `1.408` | Compatible |
+| Success | IntelliJ IDEA | 2026.1.2 | 2026-07-21 12:36 | Plugin Verifier `1.408` | Compatible |
+| Success | PhpStorm | 2026.1.2 | 2026-07-21 12:36 | Plugin Verifier `1.408` | Compatible |
+| Success | IntelliJ IDEA | 2026.1.1 | 2026-07-21 12:36 | Plugin Verifier `1.408` | Compatible |
+| Success | PhpStorm | 2026.1.1 | 2026-07-21 12:36 | Plugin Verifier `1.408` | Compatible |
+| Success | IntelliJ IDEA | 2025.3.6 | 2026-07-21 12:35 | Plugin Verifier `1.408` | Compatible |
+| Success | PhpStorm | 2025.3.6 | 2026-07-21 12:37 | Plugin Verifier `1.408` | Compatible |
 
-「Compatible」代表 Plugin Verifier 未發現該 IDE 版本的二進位相容性失敗。2026.1 的警告列仍判定相容，但使用了 91 處 experimental API，這些 API 的契約可能在後續 IDE 版本變更。IDE 實際執行驗證與 Plugin Verifier 是不同檢查。
+`Compatible` 表示 Plugin Verifier 未發現該 IDE 版本的 binary compatibility failure。IDE 那一列是實際安裝與執行檢查，其餘列則是 Plugin Verifier 的靜態驗證，兩者屬於不同檢查。
 
-未設定 `until-build` 可讓較新 IDE 嘗試安裝插件，但仍應在每次發布前對最新正式版與 EAP／RC 重新執行 Plugin Verifier 及 IDE 安裝測試。
+未設定 `until-build` 可讓較新的 IDE 版本嘗試安裝，但每次發布仍應以 Plugin Verifier 與實際安裝執行，驗證最新穩定版及相關 EAP／RC 版本。

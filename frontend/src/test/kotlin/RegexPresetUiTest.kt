@@ -37,4 +37,31 @@ class RegexPresetUiTest {
             Regex(pattern)
         }
     }
+
+    @Test
+    fun `Laravel key-only recommendation ignores uncertain namespace and group prefixes`() {
+        val preset =
+            RegexPresetUi.presets.single {
+                it.name == LanguageManagerBundle.message("settings.regex.preset.laravel.key.only")
+            }
+        val pattern = Regex(preset.patterns.single())
+        val cases =
+            mapOf(
+                "__('filament::components/button.messages.uploading_file')" to "messages.uploading_file",
+                "__('components/filament.someLangKey1')" to "someLangKey1",
+                "trans(\"auth.password.reset\")" to "password.reset",
+            )
+
+        cases.forEach { (source, expected) ->
+            assertEquals(
+                expected,
+                pattern
+                    .find(source)
+                    ?.groups
+                    ?.get("key")
+                    ?.value,
+                source,
+            )
+        }
+    }
 }

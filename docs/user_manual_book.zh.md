@@ -296,8 +296,10 @@ LanguageManagerBundle_zh_TW.properties  -> locale: zh_TW, namespace: LanguageMan
 
 - 僅接受可選的 `declare(strict_types=1);` 與靜態 return array。
 - 支援字串、數字、布林與巢狀 array。
+- 靜態字串串接（例如 `'第一段'."\n\n".'第二段'`）會合併成單一的一般翻譯值，不再誤報「PHP 陣列項目之間缺少逗號」。
+- 支援多行 heredoc 與 nowdoc。`TEXT` 只是範例，`EOT`、`HTML`、`MESSAGE_2026` 等任何前後一致的合法 PHP identifier，都可搭配 `<<<LABEL`、`<<<"LABEL"` 或 `<<<'LABEL'` 使用。識別字必須以字母或底線開頭，後續可包含字母、數字或底線且不可為空；名稱只標示字串邊界，不會限制內容類型。
 - 支援語言目錄下的分類子目錄：`en/components/pagination.php` 會使用 locale `en` 與 namespace `components.pagination`；新增 `es` 時會建立 `es/components/pagination.php`，並保留相同的相對目錄結構。
-- 不支援其他 `declare` 指令、函式呼叫、變數、字串串接或任意 expression。
+- 不支援其他 `declare` 指令、函式呼叫、變數、heredoc 或字串 interpolation、非字串串接或任意 expression。
 - 插件不會執行 PHP。
 
 ### JetBrains／Java ResourceBundle Properties
@@ -333,6 +335,8 @@ LanguageManagerBundle_zh_TW.properties  -> locale: zh_TW, namespace: LanguageMan
 「新建方案預設值」與目前方案設定都會在 Regex 清單下方固定顯示完整 placeholder 說明；新增／編輯視窗也會顯示可直接使用的雙引號範例，例如 `(?:backendMessage|message)\(\s*"(?<key>[^"\r\n]{1,256})"\s*\)`。請依專案實際函式名稱調整前綴。建議限定函式名稱，不要直接配對所有引號文字，因為同一行前面若有其他字串或字元常值，可能先消耗非重疊 match 而漏掉真正的在地化呼叫。
 
 Regex 清單旁的「推薦格式」可加入 Laravel、Symfony、webman、Laminas／Zend、CodeIgniter、CakePHP、Yii、Phalcon、FuelPHP、Slim／Pixie／自訂 translator、Spring `MessageSource`、Java／Kotlin `ResourceBundle` 與 IntelliJ Platform bundle 預設。Slim 與 Pixie 沒有可確認的內建翻譯 API，因此使用通用自訂 helper 格式，加入後應依專案實際函式名稱調整。
+
+Laravel 提供兩種推薦規則。「Laravel」會擷取 helper 的完整參數，精準度較高；「Laravel－僅擷取 key（忽略 namespace／group 前綴）」會忽略可選的 package namespace 與第一個句點以前的 group，例如 `__('filament::components/button.messages.uploading_file')` 擷取 `messages.uploading_file`，`__('components/filament.someLangKey1')` 擷取 `someLangKey1`。這能在前綴難以可靠映射時增加命中率，但不同 package／group 的同名 key 可能形成誤判，因此只作為選用推薦，不會加入預設。若要計數的呼叫位於預設排除的 `vendor` 目錄，請把使用率 base path 直接指向該 package 的來源目錄，或明確調整目前方案的排除清單。
 
 每個 Regex match 會依下列順序擷取候選 key：
 
@@ -384,6 +388,7 @@ Vue／JavaScript `$t()` 可加入例如：
 ```
 
 - 一般切換方案時，檔案 fingerprint 未改變就使用 cache。
+- 切換方案與「重新讀取」會出現在 IDE 背景任務指示器，並可由使用者取消。再次切換或重新讀取會取消前一次讀取；parser 與來源掃描透過合作式檢查停止舊工作，generation 檢查則阻止過時的 row、問題或 cache 寫回。Tool Window 狀態文字會依 backend busy 狀態與目前 UI 操作重新計算，最新任務完成後回到翻譯／問題數量摘要。
 - 點擊「重新讀取」會強制重新解析。
 - 來源檔變更、cache format 升級或 fingerprint 不符時會重建 cache。
 - 不建議手動編輯 cache；刪除 cache 不會刪除來源語言檔。

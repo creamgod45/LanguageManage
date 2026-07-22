@@ -3,6 +3,7 @@ package cg.creamgod45
 import cg.creamgod45.localization.LanguageEntryDto
 import cg.creamgod45.localization.UsageScanSettingsDto
 import java.nio.file.Files
+import kotlinx.coroutines.CancellationException
 import kotlin.io.path.createDirectories
 import kotlin.io.path.writeText
 import kotlin.test.AfterTest
@@ -86,6 +87,37 @@ class UsageScanSupportTest {
     }
 
     @Test
+    fun `Laravel key-only regex counts calls with uncertain package and group prefixes`() {
+        temp.resolve("src/laravel.php").apply {
+            parent.createDirectories()
+            writeText(
+                """
+                __('filament::components/button.messages.uploading_file');
+                __('components/filament.someLangKey1');
+                """.trimIndent(),
+            )
+        }
+        val entries =
+            listOf(
+                entry("components.button", "messages.uploading_file"),
+                entry("components.filament", "someLangKey1"),
+            )
+        val settings =
+            UsageScanSettingsDto(
+                regexPatterns =
+                    listOf(
+                        """(?:__|trans|trans_choice)\(\s*(?<quote>[\"'])(?:(?:[^\"'\r\n:]{1,128})::)?[^\"'\r\n.]{1,128}\.(?<key>[^\"'\r\n]{1,256}?)\k<quote>""",
+                    ),
+                excludedDirectories = emptyList(),
+            )
+
+        val counts = UsageScanSupport.counts(temp, entries, emptyList(), settings)
+
+        assertEquals(1, counts[entries[0].id])
+        assertEquals(1, counts[entries[1].id])
+    }
+
+    @Test
     fun `normalizes settings and rejects unsafe values`() {
         val normalized =
             UsageScanSupport.normalize(
@@ -158,6 +190,23 @@ class UsageScanSupportTest {
         val counts = UsageScanSupport.counts(temp, listOf(entry), emptyList(), settings)
 
         assertEquals(4, counts[entry.id])
+    }
+
+    @Test
+    fun `usage scan cooperatively stops when its task is cancelled`() {
+        repeat(20) { index -> temp.resolve("source-$index.txt").writeText("tr(\"auth.failed\")") }
+        var checkpoints = 0
+
+        assertFailsWith<CancellationException> {
+            UsageScanSupport.counts(
+                temp,
+                listOf(entry("auth", "failed")),
+                emptyList(),
+                UsageScanSettingsDto(regexPatterns = listOf("""tr\(\"(?<key>[^\"]+)\"\)"""), excludedDirectories = emptyList()),
+            ) {
+                if (++checkpoints > 8) throw CancellationException("test cancellation")
+            }
+        }
     }
 
     private fun entry(

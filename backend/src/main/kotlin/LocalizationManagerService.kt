@@ -6,7 +6,10 @@ import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.project.Project
 import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -60,6 +63,7 @@ class LocalizationManagerService(
             ignoreUnknownKeys = true
         }
     private val mutex = Mutex()
+    private val loadController = LatestLoadController()
     private val storageDir: Path = Path.of(project.basePath ?: System.getProperty("java.io.tmpdir"), ".idea", "language-manager")
     private val schemeFile = storageDir.resolve("schemes.json")
     private val mutableState = MutableStateFlow(LocalizationStateDto())
@@ -67,15 +71,19 @@ class LocalizationManagerService(
 
     init {
         coroutineScope.launch(Dispatchers.IO + CoroutineName("Language Manager initialization")) {
-            mutex.withLock {
-                runCatching {
-                    storageDir.createDirectories()
-                    val store = readSchemeStore()
-                    mutableState.value = LocalizationStateDto(schemes = store.schemes, activeSchemeId = store.activeSchemeId)
-                    store.activeSchemeId?.let { id -> store.schemes.firstOrNull { it.id == id }?.let { loadScheme(it, false) } }
-                }.onFailure {
-                    mutableState.value = mutableState.value.copy(busy = false, errorMessage = safeMessage(it))
-                    LOG.warn("Failed to initialize Language Manager", it)
+            loadController.run {
+                mutex.withLock {
+                    try {
+                        storageDir.createDirectories()
+                        val store = readSchemeStore()
+                        mutableState.value = LocalizationStateDto(schemes = store.schemes, activeSchemeId = store.activeSchemeId)
+                        store.activeSchemeId?.let { id -> store.schemes.firstOrNull { it.id == id }?.let { scheme -> loadScheme(scheme, false, it) } }
+                    } catch (error: CancellationException) {
+                        throw error
+                    } catch (error: Exception) {
+                        mutableState.value = mutableState.value.copy(busy = false, errorMessage = safeMessage(error))
+                        LOG.warn("Failed to initialize Language Manager", error)
+                    }
                 }
             }
         }
@@ -122,12 +130,15 @@ class LocalizationManagerService(
         }
 
     suspend fun activateScheme(id: String) =
-        mutex.withLock {
-            val scheme = mutableState.value.schemes.firstOrNull { it.id == id } ?: error(backendMessage("scheme.not.found"))
-            mutableState.value =
-                mutableState.value.copy(activeSchemeId = id, entries = emptyList(), issues = emptyList(), errorMessage = null)
-            persistSchemes()
-            loadScheme(scheme, false)
+        loadController.run { generation ->
+            mutex.withLock {
+                val scheme = mutableState.value.schemes.firstOrNull { it.id == id } ?: error(backendMessage("scheme.not.found"))
+                loadController.ensureCurrent(generation)
+                mutableState.value =
+                    mutableState.value.copy(activeSchemeId = id, entries = emptyList(), issues = emptyList(), errorMessage = null)
+                persistSchemes()
+                loadScheme(scheme, false, generation)
+            }
         }
 
     suspend fun updateSchemeUsageSettings(
@@ -143,10 +154,12 @@ class LocalizationManagerService(
         persistSchemes()
         if (mutableState.value.activeSchemeId == id) {
             coroutineScope.launch(Dispatchers.IO + CoroutineName("Language Manager usage settings reload")) {
-                mutex.withLock {
-                    mutableState.value.schemes
-                        .firstOrNull { it.id == id }
-                        ?.let { loadScheme(it, true) }
+                loadController.run { generation ->
+                    mutex.withLock {
+                        mutableState.value.schemes
+                            .firstOrNull { it.id == id }
+                            ?.let { loadScheme(it, true, generation) }
+                    }
                 }
             }
         }
@@ -155,9 +168,11 @@ class LocalizationManagerService(
     suspend fun reload(
         id: String,
         force: Boolean,
-    ) = mutex.withLock {
-        val scheme = requireScheme(id)
-        loadScheme(scheme, force)
+    ) = loadController.run { generation ->
+        mutex.withLock {
+            val scheme = requireScheme(id)
+            loadScheme(scheme, force, generation)
+        }
     }
 
     fun discoverLanguageFiles(
@@ -527,12 +542,15 @@ class LocalizationManagerService(
             .digest(content.toByteArray(StandardCharsets.UTF_8))
             .joinToString("") { "%02x".format(it) }
 
-    private fun loadScheme(
+    private suspend fun loadScheme(
         scheme: LanguageSchemeDto,
         force: Boolean,
+        generation: Long? = null,
     ) {
+        loadController.ensureCurrent(generation)
         mutableState.value = mutableState.value.copy(busy = true, errorMessage = null)
         try {
+            loadController.ensureCurrent(generation)
             val fingerprints = fingerprints(scheme)
             if (!force) {
                 readCache(scheme.id)
@@ -541,6 +559,7 @@ class LocalizationManagerService(
                             it.fingerprints == fingerprints &&
                             cacheFitsLimits(scheme, it)
                     }?.let { cache ->
+                        loadController.ensureCurrent(generation)
                         LOG.info("Loaded localization scheme '${scheme.name}' from cache (${cache.entries.size} entries)")
                         mutableState.value =
                             mutableState.value.copy(
@@ -552,9 +571,13 @@ class LocalizationManagerService(
                         return
                     }
             }
-            val documents = parseDocuments(scheme)
+            val context = currentCoroutineContext()
+            val cancellationCheck = { context.ensureActive() }
+            val documents = parseDocuments(scheme, cancellationCheck)
+            loadController.ensureCurrent(generation)
             val entriesWithoutUsage =
                 documents.flatMap { document ->
+                    cancellationCheck()
                     document.values.map { (key, value) ->
                         val namespace = document.namespace
                         LanguageEntryDto(
@@ -570,6 +593,7 @@ class LocalizationManagerService(
                 }
             // Publish parsed rows before the optional project-wide usage scan so
             // large/remote projects never leave the tool window looking idle.
+            loadController.ensureCurrent(generation)
             mutableState.value =
                 mutableState.value.copy(
                     activeSchemeId = scheme.id,
@@ -589,29 +613,44 @@ class LocalizationManagerService(
             val usages =
                 usageRoot
                     ?.let {
-                        UsageScanSupport.counts(it, entriesWithoutUsage, scheme.files, scheme.usageScanSettings)
+                        UsageScanSupport.counts(it, entriesWithoutUsage, scheme.files, scheme.usageScanSettings, cancellationCheck)
                     }.orEmpty()
+            loadController.ensureCurrent(generation)
             val entries = entriesWithoutUsage.map { it.copy(usageCount = usages[it.id] ?: 0) }
             val issues = documents.flatMap { it.issues } + LocalizationAnalysis.analyze(scheme.id, entries)
             val cache = CacheStore(CACHE_FORMAT_VERSION, fingerprints, entries, issues)
-            persistCacheIfSafe(scheme.id, cache)
+            if (loadController.isCurrent(generation)) persistCacheIfSafe(scheme.id, cache)
+            loadController.ensureCurrent(generation)
             mutableState.value = mutableState.value.copy(activeSchemeId = scheme.id, entries = entries, issues = issues, busy = false)
             LOG.info("Loaded localization scheme '${scheme.name}': ${entries.size} entries, ${issues.size} issues")
+        } catch (e: CancellationException) {
+            if (loadController.isCurrent(generation)) mutableState.value = mutableState.value.copy(busy = false)
+            LOG.debug("Cancelled obsolete localization scheme load '${scheme.name}'")
+            throw e
         } catch (e: Exception) {
-            mutableState.value = mutableState.value.copy(busy = false, errorMessage = safeMessage(e))
-            LOG.warn("Failed to load localization scheme '${scheme.name}'", e)
+            if (loadController.isCurrent(generation)) {
+                mutableState.value = mutableState.value.copy(busy = false, errorMessage = safeMessage(e))
+                LOG.warn("Failed to load localization scheme '${scheme.name}'", e)
+            }
         }
     }
 
-    private fun parseDocuments(scheme: LanguageSchemeDto): List<ParsedLanguageFile> {
+    private fun parseDocuments(
+        scheme: LanguageSchemeDto,
+        cancellationCheck: () -> Unit = {},
+    ): List<ParsedLanguageFile> {
         val budget = LanguageLoadBudget(scheme.usageScanSettings)
         return scheme.files.map { raw ->
+            cancellationCheck()
             try {
                 val path = SafeLanguageFileAccess.validate(raw)
                 budget.acceptFile(path)
-                val document = LanguageFileCodec.parse(path, scheme.id, scheme.usageScanSettings.maxEntriesPerFile)
+                val document = LanguageFileCodec.parse(path, scheme.id, scheme.usageScanSettings.maxEntriesPerFile, cancellationCheck)
                 budget.acceptEntries(path, document.values.size)
+                cancellationCheck()
                 document
+            } catch (error: CancellationException) {
+                throw error
             } catch (
                 e: Exception,
             ) {

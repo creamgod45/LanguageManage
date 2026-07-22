@@ -23,6 +23,7 @@ import com.intellij.openapi.fileChooser.FileSaverDescriptor
 import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.fileTypes.FileTypeManager
 import com.intellij.openapi.project.Project
+import com.intellij.platform.ide.progress.withBackgroundProgress
 import com.intellij.openapi.ui.ComboBox
 import com.intellij.openapi.ui.DialogWrapper
 import com.intellij.openapi.ui.Messages
@@ -74,6 +75,11 @@ internal class LocalizationManagerPanel(
     private var current = LocalizationStateDto()
     private var updatingSchemes = false
     private var currentPage = 0
+    private var schemeLoadJob: Job? = null
+    private var schemeLoadPending = false
+    private var schemeLoadObservedBusy = false
+    private var nextOperationId = 0L
+    private val runningOperations = mutableSetOf<Long>()
 
     companion object {
         private const val PAGE_SIZE = 100
@@ -101,7 +107,12 @@ internal class LocalizationManagerPanel(
                     add(schemeCreationDropdown())
                     add(button(message("button.scheme.delete"), ::deleteScheme))
                     add(button(message("button.scheme.settings"), ::editSchemeSettings))
-                    add(button(message("button.reload")) { runAction { repository.reload(activeId()) } })
+                    add(
+                        button(message("button.reload")) {
+                            val scheme = activeScheme() ?: return@button showError(message("error.no.active.scheme"))
+                            runSchemeLoad(message("progress.scheme.reloading", scheme.name)) { repository.reload(scheme.id) }
+                        },
+                    )
                     add(
                         button(message("button.repair.normalize")) {
                             previewAndApply(ChangePreviewRequestDto(normalizeAll = true), message("summary.repair.normalize"))
@@ -220,7 +231,9 @@ internal class LocalizationManagerPanel(
                     ?.takeIf {
                         it.id !=
                             current.activeSchemeId
-                    }?.let { scheme -> runAction { repository.activateScheme(scheme.id) } }
+                    }?.let { scheme ->
+                        runSchemeLoad(message("progress.scheme.loading", scheme.name)) { repository.activateScheme(scheme.id) }
+                    }
             }
         }
         searchMode.addActionListener { applyFilter() }
@@ -249,6 +262,8 @@ internal class LocalizationManagerPanel(
 
     private fun render(state: LocalizationStateDto) {
         current = state
+        if (state.busy && schemeLoadPending) schemeLoadObservedBusy = true
+        if (!state.busy && schemeLoadObservedBusy) schemeLoadPending = false
         updatingSchemes = true
         schemeBox.model = DefaultComboBoxModel(state.schemes.toTypedArray())
         schemeBox.renderer =
@@ -283,13 +298,19 @@ internal class LocalizationManagerPanel(
         val displayedIssues = displayedIssues(state.issues)
         issueModel.items = displayedIssues
         applyFilter()
-        val errors = displayedIssues.count { it.severity == IssueSeverity.ERROR }
+        refreshStatus(displayedIssues)
+    }
+
+    private fun refreshStatus(issues: List<LanguageIssueDto> = displayedIssues(current.issues)) {
+        val errors = issues.count { it.severity == IssueSeverity.ERROR }
         status.text =
-            state.errorMessage
+            current.errorMessage
                 ?: when {
-                    state.busy -> message("status.loading")
-                    state.activeSchemeId == null -> message("status.no.scheme")
-                    else -> message("status.summary", state.entries.size, displayedIssues.size, errors)
+                    current.busy -> message("status.loading")
+                    runningOperations.isNotEmpty() -> message("status.processing")
+                    schemeLoadPending -> message("status.loading")
+                    current.activeSchemeId == null -> message("status.no.scheme")
+                    else -> message("status.summary", current.entries.size, issues.size, errors)
                 }
     }
 
@@ -1038,7 +1059,9 @@ internal class LocalizationManagerPanel(
     }
 
     private fun runAction(action: suspend () -> Unit) {
-        status.text = message("status.processing")
+        val operationId = ++nextOperationId
+        runningOperations += operationId
+        refreshStatus()
         scope.launch {
             try {
                 action()
@@ -1049,8 +1072,48 @@ internal class LocalizationManagerPanel(
                     status.text =
                         message("error.action.failed")
                 }
+            } finally {
+                withContext(NonCancellable + Dispatchers.EDT) {
+                    runningOperations -= operationId
+                    refreshStatus()
+                }
             }
         }
+    }
+
+    private fun runSchemeLoad(
+        title: String,
+        action: suspend () -> Unit,
+    ) {
+        schemeLoadJob?.cancel(CancellationException("Superseded by a newer scheme load"))
+        schemeLoadPending = true
+        schemeLoadObservedBusy = false
+        refreshStatus()
+        val job =
+            scope.launch(start = CoroutineStart.LAZY) {
+                try {
+                    withBackgroundProgress(project, title, cancellable = true) { action() }
+                } catch (error: CancellationException) {
+                    throw error
+                } catch (error: Exception) {
+                    withContext(Dispatchers.EDT) {
+                        showError(error.message ?: message("error.action.failed"))
+                        status.text = message("error.action.failed")
+                    }
+                } finally {
+                    val completedJob = currentCoroutineContext()[Job]
+                    withContext(NonCancellable + Dispatchers.EDT) {
+                        if (schemeLoadJob === completedJob) {
+                            schemeLoadJob = null
+                            schemeLoadPending = false
+                            schemeLoadObservedBusy = false
+                            refreshStatus()
+                        }
+                    }
+                }
+            }
+        schemeLoadJob = job
+        job.start()
     }
 
     override fun dispose() {
