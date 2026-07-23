@@ -2,6 +2,7 @@
 
 ## 1.5.4
 
+- Replace the internal/experimental `reportRawProgress` integration with the stable `Task.Backgroundable` and `ProgressIndicator` APIs. Cancellable stage text, detail text, exact fractions, and superseded-task cancellation are preserved without `RawProgressReporterHandle` or `RawProgressReporter` bytecode references.
 - Raise each scheme's exclusion capacity from 100 to 1,000 entries and add comma/newline bulk entry. The Project file-tree context menu now contains **Localization Manager → Exclude Folders from Current Scheme Scan**, stores precise paths relative to the active scheme base path, disables itself without an active scheme, invalidates cache, and recounts safely.
 - Add determinate load progress to the JetBrains background task and Tool Window status. The backend first counts eligible source files, then reports `preparation + language files + table build + source files + analysis + cache` as an exact step total through a dedicated lightweight RPC Flow.
 - Add an on-demand **Usage Locations** table. Double-click a translation row's Usage cell to enable the tab and show only that key's cached source file, match offset, and occurrence records with 100-row pagination. Line and column are calculated only when a location is opened, cached afterward, and rejected if the source file changed after scanning.

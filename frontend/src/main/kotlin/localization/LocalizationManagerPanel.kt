@@ -24,8 +24,9 @@ import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.fileEditor.OpenFileDescriptor
 import com.intellij.openapi.fileTypes.FileTypeManager
 import com.intellij.openapi.project.Project
-import com.intellij.platform.ide.progress.withBackgroundProgress
-import com.intellij.platform.util.progress.reportRawProgress
+import com.intellij.openapi.progress.ProcessCanceledException
+import com.intellij.openapi.progress.ProgressIndicator
+import com.intellij.openapi.progress.Task
 import com.intellij.openapi.ui.ComboBox
 import com.intellij.openapi.ui.DialogWrapper
 import com.intellij.openapi.ui.Messages
@@ -95,6 +96,8 @@ internal class LocalizationManagerPanel(
     private var usageLocationTarget: Pair<String, String>? = null
     private var updatingEntryTable = false
     private var schemeLoadJob: Job? = null
+    private var schemeLoadIndicator: ProgressIndicator? = null
+    private var schemeLoadTaskId = 0L
     private var schemeLoadPending = false
     private var schemeLoadObservedBusy = false
     private var nextOperationId = 0L
@@ -1297,62 +1300,99 @@ internal class LocalizationManagerPanel(
         title: String,
         action: suspend () -> Unit,
     ) {
+        val taskId = ++schemeLoadTaskId
+        schemeLoadIndicator?.cancel()
+        schemeLoadIndicator = null
         schemeLoadJob?.cancel(CancellationException("Superseded by a newer scheme load"))
+        schemeLoadJob = null
         schemeLoadPending = true
         schemeLoadObservedBusy = false
         refreshStatus()
-        val job =
-            scope.launch(start = CoroutineStart.LAZY) {
-                try {
-                    withBackgroundProgress(project, title, cancellable = true) {
-                        reportRawProgress { reporter ->
+        object : Task.Backgroundable(project, title, true) {
+            override fun run(indicator: ProgressIndicator) {
+                if (taskId != schemeLoadTaskId) {
+                    indicator.cancel()
+                    return
+                }
+                schemeLoadIndicator = indicator
+                val job =
+                    scope.launch(start = CoroutineStart.LAZY) {
+                        try {
                             coroutineScope {
                                 val reportingJob =
                                     launch {
                                         loadProgressState
                                             .filter { it.schemeId == schemeId }
-                                            .collect { progress ->
-                                                reporter.text(progressStageText(progress.stage))
-                                                reporter.details(progressStatusText(progress))
-                                                reporter.fraction(
-                                                    progress.totalSteps.takeIf { it > 0 }?.let {
-                                                        progress.completedSteps.toDouble().div(it).coerceIn(0.0, 1.0)
-                                                    },
-                                                )
-                                            }
+                                            .collect { progress -> updateProgressIndicator(indicator, progress) }
+                                    }
+                                val cancellationJob =
+                                    launch {
+                                        while (isActive) {
+                                            indicator.checkCanceled()
+                                            delay(100)
+                                        }
                                     }
                                 try {
                                     action()
                                 } finally {
                                     reportingJob.cancelAndJoin()
+                                    cancellationJob.cancelAndJoin()
+                                }
+                            }
+                        } catch (error: ProcessCanceledException) {
+                            throw CancellationException("Scheme load cancelled", error)
+                        } catch (error: CancellationException) {
+                            throw error
+                        } catch (error: Exception) {
+                            withContext(Dispatchers.EDT) {
+                                showError(error.message ?: message("error.action.failed"))
+                                status.text = message("error.action.failed")
+                            }
+                        } finally {
+                            withContext(NonCancellable + Dispatchers.EDT) {
+                                if (taskId == schemeLoadTaskId) {
+                                    schemeLoadJob = null
+                                    schemeLoadIndicator = null
+                                    schemeLoadPending = false
+                                    schemeLoadObservedBusy = false
+                                    refreshStatus()
                                 }
                             }
                         }
                     }
-                } catch (error: CancellationException) {
-                    throw error
-                } catch (error: Exception) {
-                    withContext(Dispatchers.EDT) {
-                        showError(error.message ?: message("error.action.failed"))
-                        status.text = message("error.action.failed")
-                    }
-                } finally {
-                    val completedJob = currentCoroutineContext()[Job]
-                    withContext(NonCancellable + Dispatchers.EDT) {
-                        if (schemeLoadJob === completedJob) {
-                            schemeLoadJob = null
-                            schemeLoadPending = false
-                            schemeLoadObservedBusy = false
-                            refreshStatus()
-                        }
-                    }
+                if (taskId != schemeLoadTaskId) {
+                    job.cancel(CancellationException("Superseded before task start"))
+                    indicator.cancel()
+                    return
+                }
+                schemeLoadJob = job
+                job.start()
+                runBlocking { job.join() }
+                indicator.checkCanceled()
+            }
+
+            override fun onCancel() {
+                if (taskId == schemeLoadTaskId) {
+                    schemeLoadJob?.cancel(CancellationException("Cancelled from the progress indicator"))
                 }
             }
-        schemeLoadJob = job
-        job.start()
+        }.queue()
+    }
+
+    private fun updateProgressIndicator(
+        indicator: ProgressIndicator,
+        progress: LoadProgressDto,
+    ) {
+        indicator.text = progressStageText(progress.stage)
+        indicator.text2 = progressStatusText(progress)
+        indicator.isIndeterminate = progress.totalSteps <= 0
+        if (progress.totalSteps > 0) {
+            indicator.fraction = progress.completedSteps.toDouble().div(progress.totalSteps).coerceIn(0.0, 1.0)
+        }
     }
 
     override fun dispose() {
+        schemeLoadIndicator?.cancel()
         scope.cancel()
     }
 }
