@@ -10,6 +10,7 @@ import cg.creamgod45.localization.HARD_MAX_ENTRIES_PER_FILE
 import cg.creamgod45.localization.HARD_MAX_ENTRIES_PER_SCHEME
 import cg.creamgod45.localization.HARD_MAX_LANGUAGE_FILE_KB
 import cg.creamgod45.localization.HARD_MAX_LANGUAGE_SCHEME_MB
+import cg.creamgod45.localization.MAX_USAGE_EXCLUSIONS
 import cg.creamgod45.toolWindow.LanguageManagerToolWindowFactory
 import com.intellij.openapi.options.Configurable
 import com.intellij.openapi.options.ConfigurationException
@@ -276,7 +277,7 @@ class LanguageManagerSettingsConfigurable(
                 throw ConfigurationException(message("settings.default.regex.invalid", pattern.take(120)))
             }
         }
-        if (exclusions.size > 100 || exclusions.any(::unsafeExclusion)) {
+        if (exclusions.size > MAX_USAGE_EXCLUSIONS || exclusions.any(::unsafeExclusion)) {
             throw ConfigurationException(message("settings.default.exclusion.invalid"))
         }
         if (maxEntriesPerFile > maxEntriesPerScheme) {

@@ -9,6 +9,7 @@ The UI and diagnostics are available in English, Traditional Chinese, Simplified
 ## Features
 
 - Scheme switching and manual reloads run as cancellable JetBrains background tasks. A newer request supersedes an older load, and stale results are prevented from updating the table or cache.
+- Background loading displays an exact dynamic step total covering planning, each language file, table construction, each eligible source file, analysis, and cache writing.
 - Create isolated language management schemes from explicitly selected files or one or more folders. Folder mode parses files first, previews recognition results, and lets the user add more folders before confirming the managed files.
 - Import and export portable scheme settings as JSON from the Tool Window dropdown. Project paths are converted to relative paths when possible, and every imported file receives a parser and security preview.
 - JOIN translations with the same `namespace + key` into one table row, with a separate column for each locale.
@@ -18,8 +19,10 @@ The UI and diagnostics are available in English, Traditional Chinese, Simplified
 - Copy selected keys into one target locale's values, and add framework-specific usage Regex recommendations for major PHP frameworks, Spring/Java/Kotlin, ResourceBundle, and IntelliJ Platform plugins. An opt-in Laravel key-only preset can ignore uncertain package/group prefixes such as `filament::components/button.` when exact namespace matching is not practical.
 - Create a complete new locale from an existing locale—for example, copy the key structure from `en/*.php` into `es/*.php`—using a freely editable code field and an explicit ISO/BCP 47 suggestion popup. The popup never rewrites text while typing. An optional locale note is saved with the scheme and supplied to AI as language, region, terminology, and tone context; every new file is reviewed in a Diff first.
 - Configure the plugin display language, issue visibility, and defaults for new schemes in IDE Settings. Existing scheme base paths, Regex patterns, and exclusions are edited independently from the Tool Window.
+- Maintain up to 1,000 exclusions per scheme and bulk-add them with comma- or newline-separated input. From the Project file tree, use **Localization Manager → Exclude Folders from Current Scheme Scan** to add selected folders as precise paths relative to the active scheme base path; the action is disabled when no scheme is active.
 - Detect parser errors, empty values, duplicate keys, duplicate values, missing locales, and possibly unused keys. Duplicate-value and possibly-unused suggestions can be hidden in settings.
 - Accumulate usage occurrences detected by multiple Regex patterns. Repeated calls on one line are counted separately, while overlapping patterns that capture the same key at the same source position are deduplicated.
+- Double-click a translation row's Usage cell to enable the on-demand **Usage Locations** tab. It lists only that key's cached source matches with 100-row pagination; opening a row lazily resolves and caches its line/column before navigating the IDE caret.
 - The default usage-scan exclusions cover `.git`, `.github`, `docs`, `vendor`, `storage`, `database`, `gradle`, `.gradle`, `build`, `out`, `dist`, `target`, `node_modules`, and IDE-generated directories such as `.idea`, `.fleet`, `.vs`, `.settings`, `.metadata`, and `nbproject`. Users can customize the list.
 - Display an IDE two-pane Diff before repairing or deleting. SHA-256 is checked before applying a preview so external changes made after the preview are never overwritten silently.
 - Cache parsed state in memory and under `.idea/language-manager/` to reduce repeated parsing.
@@ -113,6 +116,7 @@ The root project uses the IntelliJ Platform Gradle Plugin to assemble three cont
 | `settings/LanguageManagerSettings.kt` | Persists display language, issue preferences, new-scheme base path, Regex, and exclusions; migrates old defaults |
 | `settings/LanguageManagerSettingsConfigurable.kt` | IDE Settings page for plugin language, issue preferences, and new-scheme defaults |
 | `localization/SchemeUsageSettingsDialog.kt` | Edits managed files, scan path, Regex patterns, and exclusions for the active scheme |
+| `localization/ProjectViewExclusionActions.kt` | Provides the Project-tree action group and active-scheme exclusion shortcut |
 | `LanguageManagerBundle.kt` | Frontend resource bundle access |
 | `resources/messages/LanguageManagerFrontendBundle*.properties` | Five-language UI dictionaries for buttons, tabs, fields, prompts, and Diff text |
 | `resources/icons/toolWindow*.svg` | LanguageManager Tool Window artwork in 16x16/20x20 Light and Dark variants selected automatically by the IDE |
@@ -126,6 +130,7 @@ The root project uses the IntelliJ Platform Gradle Plugin to assemble three cont
 | `LocalizationManagerService.kt` | Core workflow for schemes, state, cache, CRUD, repair previews, conflict checks, and usage scans |
 | `LanguageFileSupport.kt` | Safe path/folder validation, bounded discovery, UTF-8 IO, atomic writes, and JSON/YAML/PHP/Properties parsing/rendering |
 | `UsageScanSupport.kt` | Usage setting validation, Regex key extraction, base path scanning, exclusions, and resource limits |
+| `UsageExclusionSupport.kt` | Converts selected local folders into safe, precise exclusions relative to the scheme scan root |
 | `LanguageLoadBudget.kt` | Applies pre-parse file-size and post-parse entry budgets across one isolated scheme |
 | `EntryMutationSupport.kt` | Applies validated multi-locale add/edit mutations to parsed documents before coordinated atomic writes |
 | `AiTranslationSupport.kt` | Validates endpoints, locale-note context, and batch limits; sends OpenAI-compatible/Anthropic requests and strictly validates returned IDs and values |
@@ -160,6 +165,7 @@ The root project uses the IntelliJ Platform Gradle Plugin to assemble three cont
 | `activateScheme(...)` | Switches the active scheme and loads cache or reparses | No |
 | `reload(...)` | Reloads forcibly or according to fingerprints | No |
 | `updateSchemeUsageSettings(...)` | Validates and stores base path, Regex, and exclusions, invalidates cache, and recounts | No; writes plugin scheme data only |
+| `addActiveSchemeExcludedDirectories(...)` | Validates Project-tree folders against the active scheme base path, adds relative exclusions, invalidates cache, and recounts | No; writes plugin scheme data only |
 | `discoverLanguageFiles(...)` | Safely scans selected folders with the new-scheme loading budget, deduplicates files, and returns recognition results | No |
 | `exportSchemeSettings()` | Serializes every scheme into portable, versioned JSON | No |
 | `previewSchemeSettingsImport(...)` | Parses JSON, resolves relative paths, and reports file/parser status | No |
@@ -275,7 +281,7 @@ Plugin data is stored inside the project:
 ```text
 .idea/language-manager/
 ├── schemes.json              # Scheme list and active scheme
-└── cache-{schemeId}.json     # Fingerprints, entries, and issues
+└── cache-{schemeId}.json     # Fingerprints, entries, issues, usage counts, and usage locations
 ```
 
 The authoritative in-memory state is `LocalizationStateDto`/`StateFlow`. Disk cache only accelerates restart and scheme switching; a changed fingerprint or cache format forces a reparse.

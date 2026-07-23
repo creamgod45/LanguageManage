@@ -58,6 +58,7 @@ const val HARD_MAX_LANGUAGE_SCHEME_MB = 100
 const val HARD_MAX_ENTRIES_PER_FILE = 100_000
 const val HARD_MAX_ENTRIES_PER_SCHEME = 250_000
 const val MAX_LOCALE_NOTE_CHARS = 500
+const val MAX_USAGE_EXCLUSIONS = 1_000
 
 @Serializable
 data class UsageScanSettingsDto(
@@ -109,8 +110,49 @@ data class LocalizationStateDto(
     val activeSchemeId: String? = null,
     val entries: List<LanguageEntryDto> = emptyList(),
     val issues: List<LanguageIssueDto> = emptyList(),
+    val usageLocations: List<UsageLocationDto> = emptyList(),
+    val usageLocationsTruncated: Boolean = false,
     val busy: Boolean = false,
     val errorMessage: String? = null,
+)
+
+@Serializable
+data class ExclusionUpdateResultDto(
+    val schemeName: String,
+    val addedDirectories: List<String> = emptyList(),
+)
+
+@Serializable
+enum class LoadProgressStage {
+    IDLE,
+    PLANNING,
+    CACHE,
+    PARSING,
+    BUILDING_TABLE,
+    SCANNING_USAGE,
+    ANALYZING,
+    WRITING_CACHE,
+    COMPLETED,
+}
+
+@Serializable
+data class LoadProgressDto(
+    val schemeId: String? = null,
+    val stage: LoadProgressStage = LoadProgressStage.IDLE,
+    val completedSteps: Int = 0,
+    val totalSteps: Int = 0,
+    val detail: String = "",
+)
+
+@Serializable
+data class UsageLocationDto(
+    val entryId: String,
+    val filePath: String,
+    val offset: Int,
+    val sourceModifiedAtEpochMs: Long,
+    val line: Int = 0,
+    val column: Int = 0,
+    val occurrenceCount: Int,
 )
 
 @Serializable

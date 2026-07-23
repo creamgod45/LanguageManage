@@ -360,6 +360,10 @@ Every distinct match is counted, so repeated calls on the same line and matches 
 
 The scanner applies the scheme Regex to the complete content of every regular file under the base path. It does not restrict scanning by extension, filename, or IDE file type, and therefore supports custom templates, extensionless scripts, generated source formats, long lines, and multiline Regex. Only directories explicitly listed in the scheme exclusions and the scheme's managed language files are skipped. This intentionally keeps usage definitions out of the count while leaving source-file scope under scheme control.
 
+### Inspect usage locations
+
+The **Usage Locations** tab is disabled and empty by default, so ordinary scheme loading does not build a Swing table for unused location records. Double-click the **Usage** cell of one translation row to select that logical `namespace + key`, enable the tab, and display only its matched source records. The table shows source file, line, column, and occurrences with at most 100 rows per page. Initially line and column say **On open**: the scan caches only the character offset and source modification time. Double-click a location or click **Open Location** to calculate line/column in the backend, cache the result, and navigate the IDE caret. If the source changed after scanning, the plugin refuses the stale offset and asks for a reload.
+
 ### Excluded directories
 
 Defaults include:
@@ -373,9 +377,10 @@ When upgrading, an untouched old default list is migrated with new defaults. A c
 
 - A single name such as `vendor` excludes every directory with that name.
 - A relative path such as `tests/fixtures` excludes only that branch under the base path.
-- Use **Add/Edit/Delete** to prevent fixtures, tests, or generated code from inflating counts.
+- Use **Add/Edit/Delete** to prevent fixtures, tests, or generated code from inflating counts. **Bulk Add** accepts directory names and relative paths separated by commas or new lines, removes blanks and duplicates, and leaves final safety validation to the backend.
+- In the Project file tree, select one or more folders and open **Localization Manager → Exclude Folders from Current Scheme Scan**. The plugin stores precise paths relative to the active scheme base path, then invalidates the cache and recounts. The command is disabled without an active scheme or when the selection contains a file; the scan root itself and folders outside it are rejected.
 
-Applying settings persists modified schemes, invalidates their caches, and recounts the active scheme in the background. A scheme supports at most 20 Regex patterns of 512 characters each and 100 exclusions.
+Applying settings persists modified schemes, invalidates their caches, and recounts the active scheme in the background. A scheme supports at most 20 Regex patterns of 512 characters each and 1,000 exclusions.
 
 ## 11. Cache and Reload
 
@@ -388,7 +393,7 @@ Schemes and caches are stored under:
 ```
 
 - Normal scheme switching uses cache when fingerprints are unchanged.
-- Scheme switching and **Reload** appear in the IDE background-task indicator and can be cancelled there. Starting another switch or reload cancels the previous read; cooperative parser and source-scan checkpoints release the old task, while a generation check blocks stale rows, issues, and cache writes. The Tool Window status is recomputed from backend busy state and currently tracked UI operations, then returns to the entry/issue summary when the latest task finishes.
+- Scheme switching and **Reload** appear in the IDE background-task indicator and can be cancelled there. The task first counts eligible source files, then displays an exact total of preparation, language-file parsing, table build, source-file scanning, analysis, and cache steps. Starting another switch or reload cancels the previous read; cooperative parser and source-scan checkpoints release the old task, while a generation check blocks stale rows, issues, and cache writes. The Tool Window status uses the same dynamic completed/total values and returns to the entry/issue summary when the latest task finishes.
 - **Reload** forces parsing.
 - A source change, cache format upgrade, or fingerprint mismatch rebuilds the cache.
 - Do not edit cache manually. Deleting cache never deletes source language files.

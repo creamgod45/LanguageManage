@@ -18,4 +18,14 @@
                 icon="cg.creamgod45.LanguageManagerIcons.ToolWindow"/>
         <notificationGroup id="LanguageManager" displayType="BALLOON"/>
     </extensions>
+
+    <actions>
+        <group id="cg.creamgod45.localization.ProjectViewGroup"
+               class="cg.creamgod45.localization.ui.LanguageManagerProjectViewActionGroup"
+               popup="true">
+            <action id="cg.creamgod45.localization.ExcludeFoldersFromActiveScheme"
+                    class="cg.creamgod45.localization.ui.ExcludeFoldersFromActiveSchemeAction"/>
+            <add-to-group group-id="ProjectViewPopupMenu" anchor="last"/>
+        </group>
+    </actions>
 </idea-plugin>

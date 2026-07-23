@@ -21,9 +21,11 @@ import com.intellij.openapi.fileChooser.FileChooserDescriptor
 import com.intellij.openapi.fileChooser.FileChooserFactory
 import com.intellij.openapi.fileChooser.FileSaverDescriptor
 import com.intellij.openapi.fileEditor.FileEditorManager
+import com.intellij.openapi.fileEditor.OpenFileDescriptor
 import com.intellij.openapi.fileTypes.FileTypeManager
 import com.intellij.openapi.project.Project
 import com.intellij.platform.ide.progress.withBackgroundProgress
+import com.intellij.platform.util.progress.reportRawProgress
 import com.intellij.openapi.ui.ComboBox
 import com.intellij.openapi.ui.DialogWrapper
 import com.intellij.openapi.ui.Messages
@@ -33,6 +35,8 @@ import com.intellij.ui.components.*
 import com.intellij.ui.table.JBTable
 import com.intellij.util.ui.JBUI
 import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.filter
 import java.awt.BorderLayout
 import java.awt.Component
 import java.awt.Container
@@ -44,6 +48,8 @@ import java.awt.Toolkit
 import java.awt.datatransfer.DataFlavor
 import java.awt.datatransfer.StringSelection
 import java.awt.event.ActionEvent
+import java.awt.event.MouseAdapter
+import java.awt.event.MouseEvent
 import java.nio.file.Path
 import javax.swing.*
 import javax.swing.event.DocumentEvent
@@ -64,17 +70,30 @@ internal class LocalizationManagerPanel(
     private val localeBox = ComboBox<String>()
     private val rowFilterBox = ComboBox(TranslationRowFilter.entries.toTypedArray())
     private val entryModel = EntryTableModel()
-    private val entryTable = RowHighlightTable(entryModel)
+    private val entryTable =
+        RowHighlightTable(entryModel) { modelColumn ->
+            message("tooltip.usage.locations").takeIf { modelColumn == entryModel.columnCount - 1 }
+        }
     private val issueModel = IssueTableModel()
     private val issueTable = JBTable(issueModel)
+    private val usageLocationModel = UsageLocationTableModel()
+    private val usageLocationTable = JBTable(usageLocationModel)
     private val tabs = JTabbedPane()
     private val previousPageButton = JButton(message("button.previous"))
     private val nextPageButton = JButton(message("button.next"))
     private val pageLabel = JBLabel()
+    private val usagePreviousPageButton = JButton(message("button.previous"))
+    private val usageNextPageButton = JButton(message("button.next"))
+    private val usagePageLabel = JBLabel()
+    private val usageLocationWarning = JBLabel()
     private val status = JBLabel(message("status.initial"))
+    private val loadProgressState = MutableStateFlow(LoadProgressDto())
     private var current = LocalizationStateDto()
     private var updatingSchemes = false
     private var currentPage = 0
+    private var currentUsagePage = 0
+    private var usageLocationTarget: Pair<String, String>? = null
+    private var updatingEntryTable = false
     private var schemeLoadJob: Job? = null
     private var schemeLoadPending = false
     private var schemeLoadObservedBusy = false
@@ -83,6 +102,7 @@ internal class LocalizationManagerPanel(
 
     companion object {
         private const val PAGE_SIZE = 100
+        private const val USAGE_LOCATIONS_TAB_INDEX = 2
         private const val ISSUE_REPORT_URL = "https://github.com/creamgod45/LanguageManage/issues/new"
     }
 
@@ -93,6 +113,14 @@ internal class LocalizationManagerPanel(
         add(status, BorderLayout.SOUTH)
         wireEvents()
         scope.launch { repository.state.collect { state -> withContext(Dispatchers.EDT) { render(state) } } }
+        scope.launch {
+            repository.loadProgress.collect { progress ->
+                loadProgressState.value = progress
+                withContext(Dispatchers.EDT) {
+                    if (progress.schemeId == current.activeSchemeId || progress.stage == LoadProgressStage.IDLE) refreshStatus()
+                }
+            }
+        }
     }
 
     private fun createHeader() =
@@ -110,7 +138,7 @@ internal class LocalizationManagerPanel(
                     add(
                         button(message("button.reload")) {
                             val scheme = activeScheme() ?: return@button showError(message("error.no.active.scheme"))
-                            runSchemeLoad(message("progress.scheme.reloading", scheme.name)) { repository.reload(scheme.id) }
+                            runSchemeLoad(scheme.id, message("progress.scheme.reloading", scheme.name)) { repository.reload(scheme.id) }
                         },
                     )
                     add(
@@ -222,6 +250,42 @@ internal class LocalizationManagerPanel(
                 cellRenderer = IssueActionButtonRenderer()
                 cellEditor = IssueActionButtonEditor(issueTable) { issue -> handleIssue(issue) }
             }
+            usageLocationTable.autoCreateRowSorter = true
+            usageLocationTable.autoResizeMode = JTable.AUTO_RESIZE_OFF
+            usageLocationTable.cellSelectionEnabled = true
+            usageLocationTable.rowSelectionAllowed = true
+            usageLocationTable.columnSelectionAllowed = true
+            usageLocationTable.selectionModel.selectionMode = ListSelectionModel.SINGLE_SELECTION
+            installClipboardActions(usageLocationTable, allowPaste = false)
+            usageLocationTable.addMouseListener(
+                object : MouseAdapter() {
+                    override fun mouseClicked(event: MouseEvent) {
+                        if (event.clickCount == 2 && SwingUtilities.isLeftMouseButton(event)) openSelectedUsageLocation()
+                    }
+                },
+            )
+            val usageLocationsPanel =
+                JPanel(BorderLayout()).apply {
+                    add(JBScrollPane(usageLocationTable), BorderLayout.CENTER)
+                    add(
+                        JPanel(BorderLayout()).apply {
+                            add(usageLocationWarning, BorderLayout.WEST)
+                            add(
+                                JPanel(FlowLayout(FlowLayout.RIGHT, 8, 3)).apply {
+                                    add(button(message("button.usage.location.open"), ::openSelectedUsageLocation))
+                                    add(JBLabel(message("pagination.limit", PAGE_SIZE)))
+                                    add(usagePreviousPageButton)
+                                    add(usagePageLabel)
+                                    add(usageNextPageButton)
+                                },
+                                BorderLayout.EAST,
+                            )
+                        },
+                        BorderLayout.SOUTH,
+                    )
+                }
+            addTab(message("tab.usage.locations"), usageLocationsPanel)
+            setEnabledAt(USAGE_LOCATIONS_TAB_INDEX, false)
         }
 
     private fun wireEvents() {
@@ -232,13 +296,35 @@ internal class LocalizationManagerPanel(
                         it.id !=
                             current.activeSchemeId
                     }?.let { scheme ->
-                        runSchemeLoad(message("progress.scheme.loading", scheme.name)) { repository.activateScheme(scheme.id) }
+                        runSchemeLoad(scheme.id, message("progress.scheme.loading", scheme.name)) { repository.activateScheme(scheme.id) }
                     }
             }
         }
         searchMode.addActionListener { applyFilter() }
         localeBox.addActionListener { applyFilter() }
         rowFilterBox.addActionListener { applyFilter() }
+        entryTable.selectionModel.addListSelectionListener { event ->
+            if (!event.valueIsAdjusting && !updatingEntryTable) {
+                val selected = selectedRows()
+                if (selected.isNotEmpty() && selected.none { (it.namespace to it.key) == usageLocationTarget }) clearUsageLocationTarget()
+            }
+        }
+        entryTable.addMouseListener(
+            object : MouseAdapter() {
+                override fun mouseClicked(event: MouseEvent) {
+                    if (event.clickCount != 2 || !SwingUtilities.isLeftMouseButton(event)) return
+                    val viewRow = entryTable.rowAtPoint(event.point)
+                    val viewColumn = entryTable.columnAtPoint(event.point)
+                    if (viewRow < 0 || viewColumn < 0 || entryTable.convertColumnIndexToModel(viewColumn) != entryModel.columnCount - 1) return
+                    val row = entryModel.items.getOrNull(entryTable.convertRowIndexToModel(viewRow)) ?: return
+                    usageLocationTarget = row.namespace to row.key
+                    currentUsagePage = 0
+                    tabs.setEnabledAt(USAGE_LOCATIONS_TAB_INDEX, true)
+                    updateUsageLocationTable()
+                    tabs.selectedIndex = USAGE_LOCATIONS_TAB_INDEX
+                }
+            },
+        )
         searchField.document.addDocumentListener(
             object : DocumentListener {
                 override fun insertUpdate(e: DocumentEvent?) = applyFilter()
@@ -258,9 +344,20 @@ internal class LocalizationManagerPanel(
             currentPage++
             applyFilter(resetPage = false)
         }
+        usagePreviousPageButton.addActionListener {
+            if (currentUsagePage > 0) {
+                currentUsagePage--
+                updateUsageLocationTable(resetPage = false)
+            }
+        }
+        usageNextPageButton.addActionListener {
+            currentUsagePage++
+            updateUsageLocationTable(resetPage = false)
+        }
     }
 
     private fun render(state: LocalizationStateDto) {
+        if (current.activeSchemeId != state.activeSchemeId) clearUsageLocationTarget()
         current = state
         if (state.busy && schemeLoadPending) schemeLoadObservedBusy = true
         if (!state.busy && schemeLoadObservedBusy) schemeLoadPending = false
@@ -298,21 +395,47 @@ internal class LocalizationManagerPanel(
         val displayedIssues = displayedIssues(state.issues)
         issueModel.items = displayedIssues
         applyFilter()
+        updateUsageLocationTable()
         refreshStatus(displayedIssues)
     }
 
     private fun refreshStatus(issues: List<LanguageIssueDto> = displayedIssues(current.issues)) {
         val errors = issues.count { it.severity == IssueSeverity.ERROR }
+        val progress = loadProgressState.value.takeIf { it.schemeId == current.activeSchemeId }
         status.text =
             current.errorMessage
                 ?: when {
-                    current.busy -> message("status.loading")
+                    current.busy -> progress?.let(::progressStatusText) ?: message("status.loading")
                     runningOperations.isNotEmpty() -> message("status.processing")
                     schemeLoadPending -> message("status.loading")
                     current.activeSchemeId == null -> message("status.no.scheme")
                     else -> message("status.summary", current.entries.size, issues.size, errors)
                 }
     }
+
+    private fun progressStatusText(progress: LoadProgressDto): String {
+        val stage = progressStageText(progress.stage)
+        return if (progress.totalSteps > 0) {
+            message("status.progress", stage, progress.completedSteps, progress.totalSteps, progress.detail)
+        } else {
+            message("status.progress.indeterminate", stage, progress.detail)
+        }
+    }
+
+    private fun progressStageText(stage: LoadProgressStage): String =
+        message(
+            when (stage) {
+                LoadProgressStage.IDLE -> "progress.stage.idle"
+                LoadProgressStage.PLANNING -> "progress.stage.planning"
+                LoadProgressStage.CACHE -> "progress.stage.cache"
+                LoadProgressStage.PARSING -> "progress.stage.parsing"
+                LoadProgressStage.BUILDING_TABLE -> "progress.stage.building.table"
+                LoadProgressStage.SCANNING_USAGE -> "progress.stage.scanning.usage"
+                LoadProgressStage.ANALYZING -> "progress.stage.analyzing"
+                LoadProgressStage.WRITING_CACHE -> "progress.stage.writing.cache"
+                LoadProgressStage.COMPLETED -> "progress.stage.completed"
+            },
+        )
 
     private fun applyFilter(resetPage: Boolean = true) {
         if (resetPage) currentPage = 0
@@ -338,7 +461,12 @@ internal class LocalizationManagerPanel(
             )
         val page = EntrySearch.paginate(joinedRows, currentPage, PAGE_SIZE)
         currentPage = page.page
-        entryModel.setData(page.rows, locales)
+        updatingEntryTable = true
+        try {
+            entryModel.setData(page.rows, locales)
+        } finally {
+            updatingEntryTable = false
+        }
         pageLabel.text = message("pagination.page", currentPage + 1, page.pageCount, page.totalRows)
         previousPageButton.isEnabled = currentPage > 0
         nextPageButton.isEnabled = currentPage + 1 < page.pageCount
@@ -351,6 +479,89 @@ internal class LocalizationManagerPanel(
                     else -> 260
                 }
         }
+    }
+
+    private fun updateUsageLocationTable(resetPage: Boolean = true) {
+        if (resetPage) currentUsagePage = 0
+        val target = usageLocationTarget
+        if (target == null) {
+            usageLocationModel.items = emptyList()
+            usageLocationWarning.text = ""
+            usagePageLabel.text = message("pagination.page", 1, 1, 0)
+            usagePreviousPageButton.isEnabled = false
+            usageNextPageButton.isEnabled = false
+            return
+        }
+        val entriesById = current.entries.associateBy { it.id }
+        val allowedEntryIds = current.entries.filter { (it.namespace to it.key) == target }.mapTo(hashSetOf()) { it.id }
+        val grouped = linkedMapOf<UsageLocationIdentity, UsageLocationRow>()
+        current.usageLocations
+            .asSequence()
+            .filter { it.entryId in allowedEntryIds }
+            .forEach { location ->
+                val entry = entriesById[location.entryId] ?: return@forEach
+                val identity = UsageLocationIdentity(entry.namespace, entry.key, location.filePath, location.offset)
+                val existing = grouped[identity]
+                if (existing == null || (existing.line <= 0 && location.line > 0) || location.occurrenceCount > existing.occurrenceCount) {
+                    grouped[identity] =
+                        UsageLocationRow(
+                            location.entryId,
+                            entry.namespace,
+                            entry.key,
+                            location.filePath,
+                            location.offset,
+                            location.line,
+                            location.column,
+                            location.occurrenceCount,
+                        )
+                }
+            }
+        val rows = grouped.values.sortedWith(compareBy(UsageLocationRow::namespace, UsageLocationRow::key, UsageLocationRow::filePath, UsageLocationRow::offset))
+        val pageCount = maxOf(1, (rows.size + PAGE_SIZE - 1) / PAGE_SIZE)
+        currentUsagePage = currentUsagePage.coerceIn(0, pageCount - 1)
+        val from = currentUsagePage * PAGE_SIZE
+        usageLocationModel.items = rows.subList(from.coerceAtMost(rows.size), (from + PAGE_SIZE).coerceAtMost(rows.size))
+        usagePageLabel.text = message("pagination.page", currentUsagePage + 1, pageCount, rows.size)
+        usagePreviousPageButton.isEnabled = currentUsagePage > 0
+        usageNextPageButton.isEnabled = currentUsagePage + 1 < pageCount
+        usageLocationWarning.text = if (current.usageLocationsTruncated) message("usage.locations.truncated") else ""
+        listOf(130, 220, 520, 70, 70, 90).forEachIndexed { index, width ->
+            usageLocationTable.columnModel.getColumn(index).preferredWidth = width
+        }
+    }
+
+    private fun clearUsageLocationTarget() {
+        usageLocationTarget = null
+        currentUsagePage = 0
+        usageLocationModel.items = emptyList()
+        usageLocationWarning.text = ""
+        if (tabs.tabCount > USAGE_LOCATIONS_TAB_INDEX) tabs.setEnabledAt(USAGE_LOCATIONS_TAB_INDEX, false)
+    }
+
+    private fun openSelectedUsageLocation() {
+        if (usageLocationTable.selectedRowCount != 1) return showError(message("error.select.usage.location"))
+        val modelRow = usageLocationTable.convertRowIndexToModel(usageLocationTable.selectedRow)
+        val location = usageLocationModel.items.getOrNull(modelRow) ?: return
+        if (location.line <= 0 || location.column <= 0) {
+            val schemeId = current.activeSchemeId ?: return showError(message("error.no.active.scheme"))
+            runAction {
+                val resolved = repository.resolveUsageLocation(schemeId, location.entryId, location.filePath, location.offset)
+                withContext(Dispatchers.EDT) { navigateToUsageLocation(resolved.filePath, resolved.line, resolved.column) }
+            }
+            return
+        }
+        navigateToUsageLocation(location.filePath, location.line, location.column)
+    }
+
+    private fun navigateToUsageLocation(
+        filePath: String,
+        line: Int,
+        column: Int,
+    ) {
+        val file =
+            LocalFileSystem.getInstance().refreshAndFindFileByPath(filePath.replace('\\', '/'))
+                ?: return showError(message("error.file.not.found", filePath))
+        OpenFileDescriptor(project, file, line - 1, column - 1).navigate(true)
     }
 
     private fun createScheme() {
@@ -1082,6 +1293,7 @@ internal class LocalizationManagerPanel(
     }
 
     private fun runSchemeLoad(
+        schemeId: String,
         title: String,
         action: suspend () -> Unit,
     ) {
@@ -1092,7 +1304,31 @@ internal class LocalizationManagerPanel(
         val job =
             scope.launch(start = CoroutineStart.LAZY) {
                 try {
-                    withBackgroundProgress(project, title, cancellable = true) { action() }
+                    withBackgroundProgress(project, title, cancellable = true) {
+                        reportRawProgress { reporter ->
+                            coroutineScope {
+                                val reportingJob =
+                                    launch {
+                                        loadProgressState
+                                            .filter { it.schemeId == schemeId }
+                                            .collect { progress ->
+                                                reporter.text(progressStageText(progress.stage))
+                                                reporter.details(progressStatusText(progress))
+                                                reporter.fraction(
+                                                    progress.totalSteps.takeIf { it > 0 }?.let {
+                                                        progress.completedSteps.toDouble().div(it).coerceIn(0.0, 1.0)
+                                                    },
+                                                )
+                                            }
+                                    }
+                                try {
+                                    action()
+                                } finally {
+                                    reportingJob.cancelAndJoin()
+                                }
+                            }
+                        }
+                    }
                 } catch (error: CancellationException) {
                     throw error
                 } catch (error: Exception) {
@@ -1372,11 +1608,17 @@ private class FolderCandidateTableModel(
 /** Keeps cell selection semantics while letting the active Look & Feel paint selected rows. */
 internal class RowHighlightTable(
     model: javax.swing.table.TableModel,
+    private val tooltipForModelColumn: (Int) -> String? = { null },
 ) : JBTable(model) {
     override fun isCellSelected(
         row: Int,
         column: Int,
     ): Boolean = super.isCellSelected(row, column) || selectionModel.isSelectedIndex(row)
+
+    override fun getToolTipText(event: MouseEvent): String? {
+        val viewColumn = columnAtPoint(event.point)
+        return if (viewColumn >= 0) tooltipForModelColumn(convertColumnIndexToModel(viewColumn)) else null
+    }
 }
 
 internal class ResponsiveGridPanel(
@@ -1566,6 +1808,64 @@ private class IssueTableModel : AbstractTableModel() {
         rowIndex: Int,
         columnIndex: Int,
     ): Boolean = columnIndex == columnCount - 1
+}
+
+private data class UsageLocationIdentity(
+    val namespace: String,
+    val key: String,
+    val filePath: String,
+    val offset: Int,
+)
+
+private data class UsageLocationRow(
+    val entryId: String,
+    val namespace: String,
+    val key: String,
+    val filePath: String,
+    val offset: Int,
+    val line: Int,
+    val column: Int,
+    val occurrenceCount: Int,
+)
+
+private class UsageLocationTableModel : AbstractTableModel() {
+    var items: List<UsageLocationRow> = emptyList()
+        set(value) {
+            field = value
+            fireTableDataChanged()
+        }
+
+    override fun getRowCount() = items.size
+
+    override fun getColumnCount() = 6
+
+    override fun getColumnName(column: Int): String =
+        when (column) {
+            0 -> message("table.namespace")
+            1 -> message("table.key")
+            2 -> message("table.usage.location.file")
+            3 -> message("table.usage.location.line")
+            4 -> message("table.usage.location.column")
+            else -> message("table.usage.location.count")
+        }
+
+    override fun getValueAt(
+        row: Int,
+        column: Int,
+    ): Any =
+        items[row].let { item ->
+            when (column) {
+                0 -> item.namespace
+                1 -> item.key
+                2 -> item.filePath
+                3 -> item.line.takeIf { it > 0 }?.toString() ?: message("usage.location.pending")
+                4 -> item.column.takeIf { it > 0 }?.toString() ?: message("usage.location.pending")
+                else -> item.occurrenceCount
+            }
+        }
+
+    override fun getColumnClass(columnIndex: Int): Class<*> =
+        if (columnIndex == 5) Int::class.javaObjectType else String::class.java
 }
 
 private fun severityText(severity: IssueSeverity): String =

@@ -5,7 +5,9 @@ import cg.creamgod45.localization.HARD_MAX_ENTRIES_PER_SCHEME
 import cg.creamgod45.localization.HARD_MAX_LANGUAGE_FILE_KB
 import cg.creamgod45.localization.HARD_MAX_LANGUAGE_SCHEME_MB
 import cg.creamgod45.localization.LanguageEntryDto
+import cg.creamgod45.localization.MAX_USAGE_EXCLUSIONS
 import cg.creamgod45.localization.UsageScanSettingsDto
+import cg.creamgod45.localization.UsageLocationDto
 import com.intellij.openapi.diagnostic.Logger
 import kotlinx.coroutines.CancellationException
 import java.nio.charset.StandardCharsets
@@ -19,8 +21,8 @@ import cg.creamgod45.LanguageManagerBackendBundle.message as backendMessage
 internal object UsageScanSupport {
     private const val MAX_REGEX_PATTERNS = 20
     private const val MAX_REGEX_LENGTH = 512
-    private const val MAX_EXCLUSIONS = 100
     private const val MAX_EXCLUSION_LENGTH = 200
+    private const val MAX_USAGE_LOCATION_RECORDS = 250_000
     private val log = Logger.getInstance(UsageScanSupport::class.java)
 
     fun normalize(settings: UsageScanSettingsDto): UsageScanSettingsDto {
@@ -51,7 +53,7 @@ internal object UsageScanSupport {
                 .map { it.trim().replace('\\', '/').trim('/') }
                 .filter(String::isNotEmpty)
                 .distinct()
-        require(exclusions.size <= MAX_EXCLUSIONS) { backendMessage("usage.exclusion.count", MAX_EXCLUSIONS) }
+        require(exclusions.size <= MAX_USAGE_EXCLUSIONS) { backendMessage("usage.exclusion.count", MAX_USAGE_EXCLUSIONS) }
         exclusions.forEach { exclusion ->
             val segments = exclusion.split('/')
             require(
@@ -85,10 +87,20 @@ internal object UsageScanSupport {
         languageFiles: List<String>,
         settings: UsageScanSettingsDto,
         cancellationCheck: () -> Unit = {},
-    ): Map<String, Int> {
+    ): Map<String, Int> = scan(root, entries, languageFiles, settings, cancellationCheck).counts
+
+    fun scan(
+        root: Path,
+        entries: List<LanguageEntryDto>,
+        languageFiles: List<String>,
+        settings: UsageScanSettingsDto,
+        cancellationCheck: () -> Unit = {},
+        fileProcessed: (Path, Int) -> Unit = { _, _ -> },
+    ): UsageScanResult {
         cancellationCheck()
-        val scanRoot = root.toRealPath()
         val counts = entries.associate { it.id to 0 }.toMutableMap()
+        val locationCounts = linkedMapOf<UsageLocationKey, Int>()
+        var locationsTruncated = false
         val needleOwners = mutableMapOf<String, MutableSet<String>>()
         entries.forEach { entry ->
             cancellationCheck()
@@ -96,69 +108,113 @@ internal object UsageScanSupport {
                 needleOwners.getOrPut(needle) { linkedSetOf() } += entry.id
             }
         }
-        val ignoredDirectories = settings.excludedDirectories.map { it.replace('\\', '/').trim('/').lowercase() }.toSet()
         val patterns = settings.regexPatterns.map(::Regex)
-        val normalizedLanguageFiles =
-            languageFiles.mapTo(hashSetOf()) {
-                runCatching { SafeLanguageFileAccess.validate(it).toString() }.getOrDefault(it)
-            }
         var visitedFiles = 0
         try {
-            Files.walkFileTree(
-                scanRoot,
-                object : SimpleFileVisitor<Path>() {
-                    override fun preVisitDirectory(
-                        dir: Path,
-                        attrs: BasicFileAttributes,
-                    ): FileVisitResult {
+            walkCandidateFiles(root, languageFiles, settings, cancellationCheck) { file ->
+                visitedFiles++
+                try {
+                    val content = readTextCancellable(file, cancellationCheck)
+                    val occurrences = extractCandidateOccurrences(content, patterns, cancellationCheck)
+                    val modifiedAt = Files.getLastModifiedTime(file).toMillis()
+                    occurrences.forEach { occurrence ->
                         cancellationCheck()
-                        if (dir == scanRoot) return FileVisitResult.CONTINUE
-                        val relative = scanRoot.relativize(dir).joinToString("/") { it.toString() }.lowercase()
-                        val excluded =
-                            ignoredDirectories.any { item ->
-                                if ('/' in item) {
-                                    relative == item || relative.startsWith("$item/")
-                                } else {
-                                    dir.fileName.toString().lowercase() == item
-                                }
+                        needleOwners[occurrence.candidate].orEmpty().forEach { id ->
+                            counts[id] = counts.getValue(id) + 1
+                            val key = UsageLocationKey(id, file.toString(), occurrence.range.first, modifiedAt)
+                            if (key in locationCounts || locationCounts.size < MAX_USAGE_LOCATION_RECORDS) {
+                                locationCounts[key] = (locationCounts[key] ?: 0) + 1
+                            } else {
+                                locationsTruncated = true
                             }
-                        return if (excluded) FileVisitResult.SKIP_SUBTREE else FileVisitResult.CONTINUE
-                    }
-
-                    override fun visitFile(
-                        file: Path,
-                        attrs: BasicFileAttributes,
-                    ): FileVisitResult {
-                        cancellationCheck()
-                        if (!attrs.isRegularFile || file.toString() in normalizedLanguageFiles) {
-                            return FileVisitResult.CONTINUE
                         }
-                        visitedFiles++
-                        try {
-                            val content = readTextCancellable(file, cancellationCheck)
-                            val occurrences = extractCandidateOccurrences(content, patterns, cancellationCheck)
-                            occurrences.forEach { occurrence ->
-                                cancellationCheck()
-                                needleOwners[occurrence.candidate].orEmpty().forEach { id ->
-                                    counts[id] = counts.getValue(id) + 1
-                                }
-                            }
-                        } catch (error: CancellationException) {
-                            throw error
-                        } catch (error: Exception) {
-                            log.debug("Unable to scan source file '$file'", error)
-                        }
-                        return FileVisitResult.CONTINUE
                     }
-                },
-            )
+                } catch (error: CancellationException) {
+                    throw error
+                } catch (error: Exception) {
+                    log.debug("Unable to scan source file '$file'", error)
+                } finally {
+                    fileProcessed(file, visitedFiles)
+                }
+            }
         } catch (error: CancellationException) {
             throw error
         } catch (error: Exception) {
             log.debug("Usage scan stopped early", error)
         }
         log.info("Usage scan checked $visitedFiles source files for ${entries.size} localization entries")
-        return counts
+        return UsageScanResult(
+            counts,
+            locationCounts.map { (location, count) ->
+                UsageLocationDto(
+                    location.entryId,
+                    location.filePath,
+                    location.offset,
+                    location.sourceModifiedAtEpochMs,
+                    occurrenceCount = count,
+                )
+            },
+            locationsTruncated,
+        )
+    }
+
+    fun sourceFileCount(
+        root: Path,
+        languageFiles: List<String>,
+        settings: UsageScanSettingsDto,
+        cancellationCheck: () -> Unit = {},
+    ): Int {
+        var count = 0
+        try {
+            walkCandidateFiles(root, languageFiles, settings, cancellationCheck) { count++ }
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Exception) {
+            log.debug("Usage scan planning stopped early", error)
+        }
+        return count
+    }
+
+    private fun walkCandidateFiles(
+        root: Path,
+        languageFiles: List<String>,
+        settings: UsageScanSettingsDto,
+        cancellationCheck: () -> Unit,
+        visit: (Path) -> Unit,
+    ) {
+        val scanRoot = root.toRealPath()
+        val ignoredDirectories = settings.excludedDirectories.map { it.replace('\\', '/').trim('/').lowercase() }.toSet()
+        val normalizedLanguageFiles =
+            languageFiles.mapTo(hashSetOf()) {
+                runCatching { SafeLanguageFileAccess.validate(it).toString() }.getOrDefault(it)
+            }
+        Files.walkFileTree(
+            scanRoot,
+            object : SimpleFileVisitor<Path>() {
+                override fun preVisitDirectory(
+                    dir: Path,
+                    attrs: BasicFileAttributes,
+                ): FileVisitResult {
+                    cancellationCheck()
+                    if (dir == scanRoot) return FileVisitResult.CONTINUE
+                    val relative = scanRoot.relativize(dir).joinToString("/") { it.toString() }.lowercase()
+                    val excluded =
+                        ignoredDirectories.any { item ->
+                            if ('/' in item) relative == item || relative.startsWith("$item/") else dir.fileName.toString().lowercase() == item
+                        }
+                    return if (excluded) FileVisitResult.SKIP_SUBTREE else FileVisitResult.CONTINUE
+                }
+
+                override fun visitFile(
+                    file: Path,
+                    attrs: BasicFileAttributes,
+                ): FileVisitResult {
+                    cancellationCheck()
+                    if (attrs.isRegularFile && file.toString() !in normalizedLanguageFiles) visit(file)
+                    return FileVisitResult.CONTINUE
+                }
+            },
+        )
     }
 
     private fun extractCandidateOccurrences(
@@ -201,4 +257,17 @@ internal object UsageScanSupport {
         val candidate: String,
         val range: IntRange,
     )
+
+    private data class UsageLocationKey(
+        val entryId: String,
+        val filePath: String,
+        val offset: Int,
+        val sourceModifiedAtEpochMs: Long,
+    )
 }
+
+internal data class UsageScanResult(
+    val counts: Map<String, Int>,
+    val locations: List<UsageLocationDto>,
+    val locationsTruncated: Boolean,
+)

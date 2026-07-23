@@ -10,6 +10,8 @@ import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 class UsageScanSupportTest {
     private val temp = Files.createTempDirectory("language-manager-usage-test")
@@ -146,6 +148,17 @@ class UsageScanSupportTest {
         assertFailsWith<IllegalArgumentException> {
             UsageScanSupport.normalize(UsageScanSettingsDto(maxEntriesPerFile = 10, maxEntriesPerScheme = 9))
         }
+        assertEquals(
+            1_000,
+            UsageScanSupport.normalize(
+                UsageScanSettingsDto(regexPatterns = listOf("x"), excludedDirectories = List(1_000) { "folder-$it" }),
+            ).excludedDirectories.size,
+        )
+        assertFailsWith<IllegalArgumentException> {
+            UsageScanSupport.normalize(
+                UsageScanSettingsDto(regexPatterns = listOf("x"), excludedDirectories = List(1_001) { "folder-$it" }),
+            )
+        }
     }
 
     @Test
@@ -207,6 +220,42 @@ class UsageScanSupportTest {
                 if (++checkpoints > 8) throw CancellationException("test cancellation")
             }
         }
+    }
+
+    @Test
+    fun `scan records cached source offsets and resolves line and column only on demand`() {
+        val content = "tr(\"auth.failed\")\n  tr(\"auth.failed\")\n"
+        val source =
+            temp.resolve("src/usage.php").apply {
+                parent.createDirectories()
+                writeText(content)
+            }
+        val entry = entry("auth", "failed")
+        val settings =
+            UsageScanSettingsDto(
+                regexPatterns = listOf("""tr\(\"(?<key>[^\"]+)\"\)"""),
+                excludedDirectories = emptyList(),
+            )
+
+        val result = UsageScanSupport.scan(temp, listOf(entry), emptyList(), settings)
+
+        assertEquals(2, result.counts[entry.id])
+        assertFalse(result.locationsTruncated)
+        assertEquals(listOf(content.indexOf("auth.failed"), content.lastIndexOf("auth.failed")), result.locations.map { it.offset }.sorted())
+        assertTrue(result.locations.all { it.line == 0 && it.column == 0 })
+        val second = result.locations.maxBy { it.offset }
+        assertEquals(2 to 7, UsageLocationSupport.sourceLineColumn(source, second.offset))
+        assertEquals(Files.getLastModifiedTime(source).toMillis(), second.sourceModifiedAtEpochMs)
+    }
+
+    @Test
+    fun `source file planning count follows exclusions and skips managed language files`() {
+        val source = temp.resolve("src/app.txt").apply { parent.createDirectories(); writeText("x") }
+        val language = temp.resolve("lang/en.json").apply { parent.createDirectories(); writeText("{}") }
+        temp.resolve("vendor/ignored.txt").apply { parent.createDirectories(); writeText("x") }
+        val settings = UsageScanSettingsDto(regexPatterns = listOf("x"), excludedDirectories = listOf("vendor"))
+
+        assertEquals(1, UsageScanSupport.sourceFileCount(temp, listOf(language.toString()), settings), source.toString())
     }
 
     private fun entry(

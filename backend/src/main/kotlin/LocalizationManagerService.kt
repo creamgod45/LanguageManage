@@ -34,10 +34,12 @@ class LocalizationManagerService(
     private val coroutineScope: CoroutineScope,
 ) {
     companion object {
-        private const val CACHE_FORMAT_VERSION = 5
+        private const val CACHE_FORMAT_VERSION = 6
         private const val MAX_PERSISTED_STATE_BYTES = 10L * 1024 * 1024
         private const val MAX_DISK_CACHE_ENTRIES = 25_000
         private const val MAX_ESTIMATED_CACHE_CHARS = 5_000_000L
+        private const val LOAD_FIXED_STEP_COUNT = 4
+        private const val PROGRESS_UPDATE_INTERVAL_NANOS = 50_000_000L
         private val LOG = Logger.getInstance(LocalizationManagerService::class.java)
 
         fun getInstance(project: Project): LocalizationManagerService = project.getService(LocalizationManagerService::class.java)
@@ -55,6 +57,8 @@ class LocalizationManagerService(
         val fingerprints: Map<String, Long>,
         val entries: List<LanguageEntryDto>,
         val issues: List<LanguageIssueDto>,
+        val usageLocations: List<UsageLocationDto> = emptyList(),
+        val usageLocationsTruncated: Boolean = false,
     )
 
     private val json =
@@ -68,6 +72,8 @@ class LocalizationManagerService(
     private val schemeFile = storageDir.resolve("schemes.json")
     private val mutableState = MutableStateFlow(LocalizationStateDto())
     val state: StateFlow<LocalizationStateDto> = mutableState.asStateFlow()
+    private val mutableLoadProgress = MutableStateFlow(LoadProgressDto())
+    val loadProgress: StateFlow<LoadProgressDto> = mutableLoadProgress.asStateFlow()
 
     init {
         coroutineScope.launch(Dispatchers.IO + CoroutineName("Language Manager initialization")) {
@@ -123,6 +129,8 @@ class LocalizationManagerService(
                     activeSchemeId = active,
                     entries = emptyList(),
                     issues = emptyList(),
+                    usageLocations = emptyList(),
+                    usageLocationsTruncated = false,
                     errorMessage = null,
                 )
             persistSchemes()
@@ -135,7 +143,14 @@ class LocalizationManagerService(
                 val scheme = mutableState.value.schemes.firstOrNull { it.id == id } ?: error(backendMessage("scheme.not.found"))
                 loadController.ensureCurrent(generation)
                 mutableState.value =
-                    mutableState.value.copy(activeSchemeId = id, entries = emptyList(), issues = emptyList(), errorMessage = null)
+                    mutableState.value.copy(
+                        activeSchemeId = id,
+                        entries = emptyList(),
+                        issues = emptyList(),
+                        usageLocations = emptyList(),
+                        usageLocationsTruncated = false,
+                        errorMessage = null,
+                    )
                 persistSchemes()
                 loadScheme(scheme, false, generation)
             }
@@ -153,17 +168,38 @@ class LocalizationManagerService(
         Files.deleteIfExists(cacheFile(id))
         persistSchemes()
         if (mutableState.value.activeSchemeId == id) {
-            coroutineScope.launch(Dispatchers.IO + CoroutineName("Language Manager usage settings reload")) {
-                loadController.run { generation ->
-                    mutex.withLock {
-                        mutableState.value.schemes
-                            .firstOrNull { it.id == id }
-                            ?.let { loadScheme(it, true, generation) }
-                    }
-                }
-            }
+            scheduleUsageSettingsReload(id)
         }
     }
+
+    suspend fun addActiveSchemeExcludedDirectories(folderPaths: List<String>): ExclusionUpdateResultDto =
+        mutex.withLock {
+            require(folderPaths.isNotEmpty() && folderPaths.size <= MAX_USAGE_EXCLUSIONS) {
+                backendMessage("usage.exclusion.folder.count", MAX_USAGE_EXCLUSIONS)
+            }
+            val activeId = mutableState.value.activeSchemeId ?: error(backendMessage("scheme.active.required"))
+            val scheme = requireScheme(activeId)
+            val root = usageScanRoot(scheme) ?: error(backendMessage("usage.exclusion.root.unavailable"))
+            val additions = UsageExclusionSupport.relativeDirectories(root, folderPaths)
+            val oldExclusions = scheme.usageScanSettings.excludedDirectories
+            val settings =
+                UsageScanSupport.normalize(
+                    scheme.usageScanSettings.copy(excludedDirectories = oldExclusions + additions),
+                )
+            val added = settings.excludedDirectories.filterNot(oldExclusions.toSet()::contains)
+            if (added.isNotEmpty()) {
+                val updated = scheme.copy(usageScanSettings = settings, updatedAtEpochMs = System.currentTimeMillis())
+                mutableState.value =
+                    mutableState.value.copy(
+                        schemes = mutableState.value.schemes.map { if (it.id == activeId) updated else it },
+                        errorMessage = null,
+                    )
+                Files.deleteIfExists(cacheFile(activeId))
+                persistSchemes()
+                scheduleUsageSettingsReload(activeId)
+            }
+            ExclusionUpdateResultDto(scheme.name, added)
+        }
 
     suspend fun reload(
         id: String,
@@ -174,6 +210,44 @@ class LocalizationManagerService(
             loadScheme(scheme, force, generation)
         }
     }
+
+    suspend fun resolveUsageLocation(
+        schemeId: String,
+        entryId: String,
+        filePath: String,
+        offset: Int,
+    ): UsageLocationDto =
+        mutex.withLock {
+            val scheme = requireScheme(schemeId)
+            require(mutableState.value.activeSchemeId == schemeId) { backendMessage("scheme.not.found") }
+            val location =
+                mutableState.value.usageLocations.firstOrNull {
+                    it.entryId == entryId && it.filePath == filePath && it.offset == offset
+                } ?: error(backendMessage("usage.location.not.found"))
+            val path = Path.of(location.filePath).toAbsolutePath().normalize()
+            require(Files.isRegularFile(path)) { backendMessage("usage.location.not.found") }
+            require(Files.getLastModifiedTime(path).toMillis() == location.sourceModifiedAtEpochMs) {
+                backendMessage("usage.location.stale")
+            }
+            val (line, column) = UsageLocationSupport.sourceLineColumn(path, location.offset) ?: error(backendMessage("usage.location.stale"))
+            val resolved = location.copy(line = line, column = column)
+            val updatedLocations =
+                mutableState.value.usageLocations.map {
+                    if (it.entryId == entryId && it.filePath == filePath && it.offset == offset) resolved else it
+                }
+            mutableState.value = mutableState.value.copy(usageLocations = updatedLocations)
+            val cache =
+                CacheStore(
+                    CACHE_FORMAT_VERSION,
+                    fingerprints(scheme),
+                    mutableState.value.entries,
+                    mutableState.value.issues,
+                    updatedLocations,
+                    mutableState.value.usageLocationsTruncated,
+                )
+            persistCacheIfSafe(scheme.id, cache)
+            resolved
+        }
 
     fun discoverLanguageFiles(
         folderPaths: List<String>,
@@ -549,10 +623,12 @@ class LocalizationManagerService(
     ) {
         loadController.ensureCurrent(generation)
         mutableState.value = mutableState.value.copy(busy = true, errorMessage = null)
+        publishLoadProgress(scheme, generation, LoadProgressStage.PLANNING, 0, 0)
         try {
             loadController.ensureCurrent(generation)
             val fingerprints = fingerprints(scheme)
             if (!force) {
+                publishLoadProgress(scheme, generation, LoadProgressStage.CACHE, 1, 2)
                 readCache(scheme.id)
                     ?.takeIf {
                         it.formatVersion == CACHE_FORMAT_VERSION &&
@@ -566,15 +642,36 @@ class LocalizationManagerService(
                                 activeSchemeId = scheme.id,
                                 entries = cache.entries,
                                 issues = cache.issues,
+                                usageLocations = cache.usageLocations,
+                                usageLocationsTruncated = cache.usageLocationsTruncated,
                                 busy = false,
                             )
+                        publishLoadProgress(scheme, generation, LoadProgressStage.COMPLETED, 2, 2)
                         return
                     }
             }
             val context = currentCoroutineContext()
             val cancellationCheck = { context.ensureActive() }
-            val documents = parseDocuments(scheme, cancellationCheck)
+            val usageRoot = usageScanRoot(scheme)
+            val sourceFileCount =
+                usageRoot?.let { UsageScanSupport.sourceFileCount(it, scheme.files, scheme.usageScanSettings, cancellationCheck) } ?: 0
+            val totalSteps = scheme.files.size + sourceFileCount + LOAD_FIXED_STEP_COUNT
+            var completedSteps = 1
+            publishLoadProgress(scheme, generation, LoadProgressStage.PARSING, completedSteps, totalSteps)
+            val documents =
+                parseDocuments(scheme, cancellationCheck) { path, parsedCount ->
+                    completedSteps = 1 + parsedCount
+                    publishLoadProgress(
+                        scheme,
+                        generation,
+                        LoadProgressStage.PARSING,
+                        completedSteps,
+                        totalSteps,
+                        path.fileName?.toString().orEmpty(),
+                    )
+                }
             loadController.ensureCurrent(generation)
+            publishLoadProgress(scheme, generation, LoadProgressStage.BUILDING_TABLE, completedSteps, totalSteps)
             val entriesWithoutUsage =
                 documents.flatMap { document ->
                     cancellationCheck()
@@ -591,6 +688,7 @@ class LocalizationManagerService(
                         )
                     }
                 }
+            completedSteps++
             // Publish parsed rows before the optional project-wide usage scan so
             // large/remote projects never leave the tool window looking idle.
             loadController.ensureCurrent(generation)
@@ -599,50 +697,112 @@ class LocalizationManagerService(
                     activeSchemeId = scheme.id,
                     entries = entriesWithoutUsage,
                     issues = documents.flatMap { it.issues },
+                    usageLocations = emptyList(),
+                    usageLocationsTruncated = false,
                     busy = true,
                 )
-            val usageRoot =
-                if (scheme.usageScanSettings.basePath.isBlank()) {
-                    project.basePath
-                        ?.let(Path::of)
-                        ?.toAbsolutePath()
-                        ?.normalize()
-                } else {
-                    SafeLanguageFileAccess.validateDirectory(scheme.usageScanSettings.basePath)
-                }
-            val usages =
+            publishLoadProgress(scheme, generation, LoadProgressStage.SCANNING_USAGE, completedSteps, totalSteps)
+            val scanStepStart = completedSteps
+            var lastProgressEmitNanos = 0L
+            val usageScan =
                 usageRoot
                     ?.let {
-                        UsageScanSupport.counts(it, entriesWithoutUsage, scheme.files, scheme.usageScanSettings, cancellationCheck)
-                    }.orEmpty()
+                        UsageScanSupport.scan(
+                            it,
+                            entriesWithoutUsage,
+                            scheme.files,
+                            scheme.usageScanSettings,
+                            cancellationCheck,
+                        ) { path, scannedCount ->
+                            completedSteps = scanStepStart + scannedCount.coerceAtMost(sourceFileCount)
+                            val now = System.nanoTime()
+                            if (scannedCount >= sourceFileCount || now - lastProgressEmitNanos >= PROGRESS_UPDATE_INTERVAL_NANOS) {
+                                lastProgressEmitNanos = now
+                                publishLoadProgress(
+                                    scheme,
+                                    generation,
+                                    LoadProgressStage.SCANNING_USAGE,
+                                    completedSteps,
+                                    totalSteps,
+                                    path.fileName?.toString().orEmpty(),
+                                )
+                            }
+                        }
+                    } ?: UsageScanResult(emptyMap(), emptyList(), false)
             loadController.ensureCurrent(generation)
-            val entries = entriesWithoutUsage.map { it.copy(usageCount = usages[it.id] ?: 0) }
+            completedSteps = scanStepStart + sourceFileCount
+            publishLoadProgress(scheme, generation, LoadProgressStage.ANALYZING, completedSteps, totalSteps)
+            val entries = entriesWithoutUsage.map { it.copy(usageCount = usageScan.counts[it.id] ?: 0) }
             val issues = documents.flatMap { it.issues } + LocalizationAnalysis.analyze(scheme.id, entries)
-            val cache = CacheStore(CACHE_FORMAT_VERSION, fingerprints, entries, issues)
+            completedSteps++
+            publishLoadProgress(scheme, generation, LoadProgressStage.WRITING_CACHE, completedSteps, totalSteps)
+            val cache =
+                CacheStore(
+                    CACHE_FORMAT_VERSION,
+                    fingerprints,
+                    entries,
+                    issues,
+                    usageScan.locations,
+                    usageScan.locationsTruncated,
+                )
             if (loadController.isCurrent(generation)) persistCacheIfSafe(scheme.id, cache)
             loadController.ensureCurrent(generation)
-            mutableState.value = mutableState.value.copy(activeSchemeId = scheme.id, entries = entries, issues = issues, busy = false)
+            completedSteps++
+            mutableState.value =
+                mutableState.value.copy(
+                    activeSchemeId = scheme.id,
+                    entries = entries,
+                    issues = issues,
+                    usageLocations = usageScan.locations,
+                    usageLocationsTruncated = usageScan.locationsTruncated,
+                    busy = false,
+                )
+            publishLoadProgress(scheme, generation, LoadProgressStage.COMPLETED, completedSteps, totalSteps)
             LOG.info("Loaded localization scheme '${scheme.name}': ${entries.size} entries, ${issues.size} issues")
         } catch (e: CancellationException) {
-            if (loadController.isCurrent(generation)) mutableState.value = mutableState.value.copy(busy = false)
+            if (loadController.isCurrent(generation)) {
+                mutableState.value = mutableState.value.copy(busy = false)
+                mutableLoadProgress.value = LoadProgressDto()
+            }
             LOG.debug("Cancelled obsolete localization scheme load '${scheme.name}'")
             throw e
         } catch (e: Exception) {
             if (loadController.isCurrent(generation)) {
                 mutableState.value = mutableState.value.copy(busy = false, errorMessage = safeMessage(e))
+                mutableLoadProgress.value = LoadProgressDto()
                 LOG.warn("Failed to load localization scheme '${scheme.name}'", e)
             }
         }
     }
 
+    private fun publishLoadProgress(
+        scheme: LanguageSchemeDto,
+        generation: Long?,
+        stage: LoadProgressStage,
+        completedSteps: Int,
+        totalSteps: Int,
+        detail: String = "",
+    ) {
+        if (!loadController.isCurrent(generation)) return
+        mutableLoadProgress.value =
+            LoadProgressDto(
+                schemeId = scheme.id,
+                stage = stage,
+                completedSteps = completedSteps.coerceAtLeast(0).let { if (totalSteps > 0) it.coerceAtMost(totalSteps) else it },
+                totalSteps = totalSteps.coerceAtLeast(0),
+                detail = detail.filterNot(Char::isISOControl).take(160),
+            )
+    }
+
     private fun parseDocuments(
         scheme: LanguageSchemeDto,
         cancellationCheck: () -> Unit = {},
+        fileParsed: (Path, Int) -> Unit = { _, _ -> },
     ): List<ParsedLanguageFile> {
         val budget = LanguageLoadBudget(scheme.usageScanSettings)
-        return scheme.files.map { raw ->
+        return scheme.files.mapIndexed { index, raw ->
             cancellationCheck()
-            try {
+            val document = try {
                 val path = SafeLanguageFileAccess.validate(raw)
                 budget.acceptFile(path)
                 val document = LanguageFileCodec.parse(path, scheme.id, scheme.usageScanSettings.maxEntriesPerFile, cancellationCheck)
@@ -662,9 +822,11 @@ class LocalizationManagerService(
                     issues =
                         mutableListOf(
                             LanguageIssueDto(scheme.id, raw, severity = IssueSeverity.ERROR, code = "READ_ERROR", message = safeMessage(e)),
-                        ),
+                    ),
                 )
             }
+            fileParsed(document.path, index + 1)
+            document
         }
     }
 
@@ -715,6 +877,29 @@ class LocalizationManagerService(
         return raw.trim()
     }
 
+    private fun usageScanRoot(scheme: LanguageSchemeDto): Path? =
+        if (scheme.usageScanSettings.basePath.isBlank()) {
+            project.basePath
+                ?.let(Path::of)
+                ?.toAbsolutePath()
+                ?.normalize()
+                ?.let { runCatching { it.toRealPath() }.getOrNull() }
+        } else {
+            SafeLanguageFileAccess.validateDirectory(scheme.usageScanSettings.basePath)
+        }
+
+    private fun scheduleUsageSettingsReload(schemeId: String) {
+        coroutineScope.launch(Dispatchers.IO + CoroutineName("Language Manager usage settings reload")) {
+            loadController.run { generation ->
+                mutex.withLock {
+                    mutableState.value.schemes
+                        .firstOrNull { it.id == schemeId }
+                        ?.let { loadScheme(it, true, generation) }
+                }
+            }
+        }
+    }
+
     private fun requireScheme(id: String) =
         mutableState.value.schemes.firstOrNull { it.id == id } ?: error(backendMessage("scheme.not.found"))
 
@@ -756,7 +941,8 @@ class LocalizationManagerService(
         val estimatedChars =
             cache.entries.sumOf { entry ->
                 entry.filePath.length.toLong() + entry.locale.length + entry.namespace.length + entry.key.length + entry.value.length + 160
-            } + cache.issues.sumOf { issue -> issue.filePath.length.toLong() + issue.key.length + issue.message.length + 120 }
+            } + cache.issues.sumOf { issue -> issue.filePath.length.toLong() + issue.key.length + issue.message.length + 120 } +
+                cache.usageLocations.sumOf { location -> location.entryId.length.toLong() + location.filePath.length + 80 }
         if (cache.entries.size > MAX_DISK_CACHE_ENTRIES || estimatedChars > MAX_ESTIMATED_CACHE_CHARS) {
             Files.deleteIfExists(path)
             LOG.info("Skipped oversized disk cache for scheme '$schemeId' (${cache.entries.size} entries)")

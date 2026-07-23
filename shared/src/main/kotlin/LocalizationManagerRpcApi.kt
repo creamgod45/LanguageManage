@@ -16,6 +16,16 @@ interface LocalizationManagerRpcApi : RemoteApi<Unit> {
 
     suspend fun state(projectId: ProjectId): Flow<LocalizationStateDto>
 
+    suspend fun loadProgress(projectId: ProjectId): Flow<LoadProgressDto>
+
+    suspend fun resolveUsageLocation(
+        projectId: ProjectId,
+        schemeId: String,
+        entryId: String,
+        filePath: String,
+        offset: Int,
+    ): UsageLocationDto
+
     suspend fun createScheme(
         projectId: ProjectId,
         name: String,
@@ -38,6 +48,11 @@ interface LocalizationManagerRpcApi : RemoteApi<Unit> {
         schemeId: String,
         settings: UsageScanSettingsDto,
     )
+
+    suspend fun addActiveSchemeExcludedDirectories(
+        projectId: ProjectId,
+        folderPaths: List<String>,
+    ): ExclusionUpdateResultDto
 
     suspend fun reload(
         projectId: ProjectId,

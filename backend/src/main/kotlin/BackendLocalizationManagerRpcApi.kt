@@ -13,6 +13,20 @@ class BackendLocalizationManagerRpcApi : LocalizationManagerRpcApi {
 
     override suspend fun state(projectId: ProjectId): Flow<LocalizationStateDto> = projectId.service()?.state ?: emptyFlow()
 
+    override suspend fun loadProgress(projectId: ProjectId): Flow<LoadProgressDto> = projectId.service()?.loadProgress ?: emptyFlow()
+
+    override suspend fun resolveUsageLocation(
+        projectId: ProjectId,
+        schemeId: String,
+        entryId: String,
+        filePath: String,
+        offset: Int,
+    ): UsageLocationDto =
+        withContext(Dispatchers.IO) {
+            projectId.service()?.resolveUsageLocation(schemeId, entryId, filePath, offset)
+                ?: error(LanguageManagerBackendBundle.message("project.unavailable"))
+        }
+
     override suspend fun createScheme(
         projectId: ProjectId,
         name: String,
@@ -47,6 +61,15 @@ class BackendLocalizationManagerRpcApi : LocalizationManagerRpcApi {
         projectId.service()?.updateSchemeUsageSettings(schemeId, settings)
         Unit
     }
+
+    override suspend fun addActiveSchemeExcludedDirectories(
+        projectId: ProjectId,
+        folderPaths: List<String>,
+    ): ExclusionUpdateResultDto =
+        withContext(Dispatchers.IO) {
+            projectId.service()?.addActiveSchemeExcludedDirectories(folderPaths)
+                ?: error(LanguageManagerBackendBundle.message("project.unavailable"))
+        }
 
     override suspend fun reload(
         projectId: ProjectId,

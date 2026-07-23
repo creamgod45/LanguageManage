@@ -15,6 +15,11 @@ internal class LocalizationFrontendRepository(
             durable { LocalizationManagerRpcApi.getInstance().state(project.projectId()).collect { emit(it) } }
         }
 
+    val loadProgress: Flow<LoadProgressDto> =
+        flow {
+            durable { LocalizationManagerRpcApi.getInstance().loadProgress(project.projectId()).collect { emit(it) } }
+        }
+
     suspend fun createScheme(
         name: String,
         files: List<String>,
@@ -30,7 +35,17 @@ internal class LocalizationFrontendRepository(
         settings: UsageScanSettingsDto,
     ) = LocalizationManagerRpcApi.getInstance().updateSchemeUsageSettings(project.projectId(), id, settings)
 
+    suspend fun addActiveSchemeExcludedDirectories(folderPaths: List<String>) =
+        LocalizationManagerRpcApi.getInstance().addActiveSchemeExcludedDirectories(project.projectId(), folderPaths)
+
     suspend fun reload(id: String) = LocalizationManagerRpcApi.getInstance().reload(project.projectId(), id, true)
+
+    suspend fun resolveUsageLocation(
+        schemeId: String,
+        entryId: String,
+        filePath: String,
+        offset: Int,
+    ) = LocalizationManagerRpcApi.getInstance().resolveUsageLocation(project.projectId(), schemeId, entryId, filePath, offset)
 
     suspend fun discoverLanguageFiles(
         folderPaths: List<String>,

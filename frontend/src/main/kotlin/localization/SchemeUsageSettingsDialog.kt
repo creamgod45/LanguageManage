@@ -109,6 +109,7 @@ internal class SchemeUsageSettingsDialog(
                         message("settings.exclusion.add.prompt"),
                         message("settings.exclusion.edit.prompt"),
                         DEFAULT_USAGE_EXCLUDED_DIRECTORIES,
+                        bulkInput = true,
                     ),
                 ).addTooltip(message("settings.usage.exclusions.help"))
                 .panel
@@ -143,6 +144,7 @@ internal class SchemeUsageSettingsDialog(
         editPrompt: String,
         defaultValues: List<String>,
         regexInput: Boolean = false,
+        bulkInput: Boolean = false,
     ): JComponent {
         val list = JBList(model).apply { visibleRowCount = 5 }
         return JPanel(BorderLayout(0, JBUI.scale(4))).apply {
@@ -183,6 +185,18 @@ internal class SchemeUsageSettingsDialog(
                             addActionListener { model.replaceWith(defaultValues) }
                         },
                     )
+                    if (bulkInput) {
+                        add(
+                            JButton(message("settings.list.add.bulk")).apply {
+                                addActionListener {
+                                    requestBulkListValues()?.let { values ->
+                                        val existing = model.values().toMutableSet()
+                                        values.filter(existing::add).forEach(model::addElement)
+                                    }
+                                }
+                            },
+                        )
+                    }
                     if (regexInput) {
                         add(
                             RegexPresetUi.button { patterns ->
@@ -196,6 +210,11 @@ internal class SchemeUsageSettingsDialog(
         }
     }
 
+    private fun requestBulkListValues(): List<String>? {
+        val dialog = BulkExclusionDialog(dialogProject)
+        return if (dialog.showAndGet()) parseBulkListValues(dialog.input) else null
+    }
+
     private fun requestListValue(
         prompt: String,
         initialValue: String?,
@@ -207,6 +226,37 @@ internal class SchemeUsageSettingsDialog(
             Messages.showInputDialog(dialogProject, prompt, title, null, initialValue, null)
         }
 }
+
+private class BulkExclusionDialog(
+    project: Project,
+) : DialogWrapper(project) {
+    private val inputArea =
+        JBTextArea(10, 48).apply {
+            lineWrap = true
+            wrapStyleWord = true
+            emptyText.text = message("settings.exclusion.bulk.placeholder")
+        }
+
+    val input: String get() = inputArea.text
+
+    init {
+        title = message("settings.exclusion.bulk.title")
+        setOKButtonText(message("settings.list.add.bulk"))
+        init()
+    }
+
+    override fun createCenterPanel(): JComponent =
+        JBScrollPane(inputArea).apply {
+            preferredSize = Dimension(JBUI.scale(560), JBUI.scale(220))
+        }
+}
+
+internal fun parseBulkListValues(input: String): List<String> =
+    input
+        .split(Regex("[,\\r\\n]+"))
+        .map(String::trim)
+        .filter(String::isNotEmpty)
+        .distinct()
 
 private fun DefaultListModel<String>.values(): List<String> = (0 until size()).map(::getElementAt)
 
