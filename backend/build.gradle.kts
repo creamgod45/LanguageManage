@@ -12,4 +12,5 @@ dependencies {
     compileOnly(libs.kotlin.serialization.json.jvm)
 
     testImplementation(kotlin("test"))
+    testImplementation(libs.jol.core)
 }

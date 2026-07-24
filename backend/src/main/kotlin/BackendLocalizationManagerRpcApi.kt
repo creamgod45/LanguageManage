@@ -15,6 +15,18 @@ class BackendLocalizationManagerRpcApi : LocalizationManagerRpcApi {
 
     override suspend fun loadProgress(projectId: ProjectId): Flow<LoadProgressDto> = projectId.service()?.loadProgress ?: emptyFlow()
 
+    override suspend fun usageLocations(
+        projectId: ProjectId,
+        schemeId: String,
+        entryIds: List<String>,
+        page: Int,
+        pageSize: Int,
+    ): UsageLocationPageDto =
+        withContext(Dispatchers.IO) {
+            projectId.service()?.usageLocations(schemeId, entryIds, page, pageSize)
+                ?: error(LanguageManagerBackendBundle.message("project.unavailable"))
+        }
+
     override suspend fun resolveUsageLocation(
         projectId: ProjectId,
         schemeId: String,
@@ -161,10 +173,31 @@ class BackendLocalizationManagerRpcApi : LocalizationManagerRpcApi {
     override suspend fun renameKey(
         projectId: ProjectId,
         schemeId: String,
+        namespace: String,
         oldKey: String,
         newKey: String,
     ) = withContext(Dispatchers.IO) {
-        projectId.service()?.renameKey(schemeId, oldKey, newKey)
+        projectId.service()?.renameKey(schemeId, namespace, oldKey, newKey)
+        Unit
+    }
+
+    override suspend fun previewRenameKey(
+        projectId: ProjectId,
+        schemeId: String,
+        request: RenameKeyRequestDto,
+    ): ChangePreviewDto =
+        withContext(Dispatchers.IO) {
+            projectId.service()?.previewRenameKey(schemeId, request) ?: ChangePreviewDto()
+        }
+
+    override suspend fun applyPreviewedRenameKey(
+        projectId: ProjectId,
+        schemeId: String,
+        request: RenameKeyRequestDto,
+        editedFiles: List<EditedFileContentDto>,
+        expectedBeforeHashes: Map<String, String>,
+    ) = withContext(Dispatchers.IO) {
+        projectId.service()?.applyPreviewedRenameKey(schemeId, request, editedFiles, expectedBeforeHashes)
         Unit
     }
 

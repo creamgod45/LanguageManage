@@ -110,8 +110,6 @@ data class LocalizationStateDto(
     val activeSchemeId: String? = null,
     val entries: List<LanguageEntryDto> = emptyList(),
     val issues: List<LanguageIssueDto> = emptyList(),
-    val usageLocations: List<UsageLocationDto> = emptyList(),
-    val usageLocationsTruncated: Boolean = false,
     val busy: Boolean = false,
     val errorMessage: String? = null,
 )
@@ -156,6 +154,15 @@ data class UsageLocationDto(
 )
 
 @Serializable
+data class UsageLocationPageDto(
+    val items: List<UsageLocationDto> = emptyList(),
+    val page: Int = 0,
+    val pageCount: Int = 1,
+    val totalItems: Int = 0,
+    val truncated: Boolean = false,
+)
+
+@Serializable
 data class EntryMutationDto(
     val id: String? = null,
     val filePath: String,
@@ -163,6 +170,20 @@ data class EntryMutationDto(
     val namespace: String,
     val key: String,
     val value: String,
+)
+
+@Serializable
+data class RenameKeyRequestDto(
+    val namespace: String,
+    val oldKey: String,
+    val newKey: String,
+    val syncUsageLocations: Boolean = false,
+)
+
+@Serializable
+data class EditedFileContentDto(
+    val filePath: String,
+    val content: String,
 )
 
 @Serializable
@@ -213,6 +234,7 @@ data class FileChangePreviewDto(
     val beforeContent: String,
     val afterContent: String,
     val beforeSha256: String,
+    val editable: Boolean = false,
 )
 
 @Serializable

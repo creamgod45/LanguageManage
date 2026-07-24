@@ -18,6 +18,14 @@ interface LocalizationManagerRpcApi : RemoteApi<Unit> {
 
     suspend fun loadProgress(projectId: ProjectId): Flow<LoadProgressDto>
 
+    suspend fun usageLocations(
+        projectId: ProjectId,
+        schemeId: String,
+        entryIds: List<String>,
+        page: Int,
+        pageSize: Int,
+    ): UsageLocationPageDto
+
     suspend fun resolveUsageLocation(
         projectId: ProjectId,
         schemeId: String,
@@ -117,8 +125,23 @@ interface LocalizationManagerRpcApi : RemoteApi<Unit> {
     suspend fun renameKey(
         projectId: ProjectId,
         schemeId: String,
+        namespace: String,
         oldKey: String,
         newKey: String,
+    )
+
+    suspend fun previewRenameKey(
+        projectId: ProjectId,
+        schemeId: String,
+        request: RenameKeyRequestDto,
+    ): ChangePreviewDto
+
+    suspend fun applyPreviewedRenameKey(
+        projectId: ProjectId,
+        schemeId: String,
+        request: RenameKeyRequestDto,
+        editedFiles: List<EditedFileContentDto>,
+        expectedBeforeHashes: Map<String, String>,
     )
 
     suspend fun repair(

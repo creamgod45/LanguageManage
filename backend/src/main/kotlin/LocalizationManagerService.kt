@@ -40,6 +40,7 @@ class LocalizationManagerService(
         private const val MAX_ESTIMATED_CACHE_CHARS = 5_000_000L
         private const val LOAD_FIXED_STEP_COUNT = 4
         private const val PROGRESS_UPDATE_INTERVAL_NANOS = 50_000_000L
+        private const val MAX_EDITED_PREVIEW_BYTES = 10L * 1024 * 1024
         private val LOG = Logger.getInstance(LocalizationManagerService::class.java)
 
         fun getInstance(project: Project): LocalizationManagerService = project.getService(LocalizationManagerService::class.java)
@@ -72,6 +73,8 @@ class LocalizationManagerService(
     private val schemeFile = storageDir.resolve("schemes.json")
     private val mutableState = MutableStateFlow(LocalizationStateDto())
     val state: StateFlow<LocalizationStateDto> = mutableState.asStateFlow()
+    private var activeUsageLocations: List<UsageLocationDto> = emptyList()
+    private var activeUsageLocationsTruncated: Boolean = false
     private val mutableLoadProgress = MutableStateFlow(LoadProgressDto())
     val loadProgress: StateFlow<LoadProgressDto> = mutableLoadProgress.asStateFlow()
 
@@ -129,10 +132,10 @@ class LocalizationManagerService(
                     activeSchemeId = active,
                     entries = emptyList(),
                     issues = emptyList(),
-                    usageLocations = emptyList(),
-                    usageLocationsTruncated = false,
                     errorMessage = null,
                 )
+            activeUsageLocations = emptyList()
+            activeUsageLocationsTruncated = false
             persistSchemes()
             active?.let { next -> schemes.firstOrNull { it.id == next }?.let { loadScheme(it, false) } }
         }
@@ -147,10 +150,10 @@ class LocalizationManagerService(
                         activeSchemeId = id,
                         entries = emptyList(),
                         issues = emptyList(),
-                        usageLocations = emptyList(),
-                        usageLocationsTruncated = false,
                         errorMessage = null,
                     )
+                activeUsageLocations = emptyList()
+                activeUsageLocationsTruncated = false
                 persistSchemes()
                 loadScheme(scheme, false, generation)
             }
@@ -221,7 +224,7 @@ class LocalizationManagerService(
             val scheme = requireScheme(schemeId)
             require(mutableState.value.activeSchemeId == schemeId) { backendMessage("scheme.not.found") }
             val location =
-                mutableState.value.usageLocations.firstOrNull {
+                activeUsageLocations.firstOrNull {
                     it.entryId == entryId && it.filePath == filePath && it.offset == offset
                 } ?: error(backendMessage("usage.location.not.found"))
             val path = Path.of(location.filePath).toAbsolutePath().normalize()
@@ -232,10 +235,10 @@ class LocalizationManagerService(
             val (line, column) = UsageLocationSupport.sourceLineColumn(path, location.offset) ?: error(backendMessage("usage.location.stale"))
             val resolved = location.copy(line = line, column = column)
             val updatedLocations =
-                mutableState.value.usageLocations.map {
+                activeUsageLocations.map {
                     if (it.entryId == entryId && it.filePath == filePath && it.offset == offset) resolved else it
                 }
-            mutableState.value = mutableState.value.copy(usageLocations = updatedLocations)
+            activeUsageLocations = updatedLocations
             val cache =
                 CacheStore(
                     CACHE_FORMAT_VERSION,
@@ -243,10 +246,36 @@ class LocalizationManagerService(
                     mutableState.value.entries,
                     mutableState.value.issues,
                     updatedLocations,
-                    mutableState.value.usageLocationsTruncated,
+                    activeUsageLocationsTruncated,
                 )
             persistCacheIfSafe(scheme.id, cache)
             resolved
+        }
+
+    suspend fun usageLocations(
+        schemeId: String,
+        entryIds: List<String>,
+        requestedPage: Int,
+        pageSize: Int,
+    ): UsageLocationPageDto =
+        mutex.withLock {
+            require(mutableState.value.activeSchemeId == schemeId) { backendMessage("scheme.not.found") }
+            require(pageSize in 1..100) { backendMessage("usage.location.page.size") }
+            require(entryIds.isNotEmpty() && entryIds.size <= 1_000) { backendMessage("usage.location.entry.count") }
+            val requestedEntryIds = entryIds.toHashSet()
+            val allowedEntryIds =
+                mutableState.value.entries
+                    .asSequence()
+                    .map { it.id }
+                    .filterTo(linkedSetOf()) { it in requestedEntryIds }
+            require(allowedEntryIds.isNotEmpty()) { backendMessage("usage.location.not.found") }
+            UsageLocationPagingSupport.page(
+                locations = activeUsageLocations,
+                allowedEntryIds = allowedEntryIds,
+                requestedPage = requestedPage,
+                pageSize = pageSize,
+                truncated = activeUsageLocationsTruncated,
+            )
         }
 
     fun discoverLanguageFiles(
@@ -399,15 +428,21 @@ class LocalizationManagerService(
 
     suspend fun renameKey(
         schemeId: String,
-        oldKey: String,
+        namespace: String,
+        oldKeyRaw: String,
         newKeyRaw: String,
     ) = mutex.withLock {
         val scheme = requireScheme(schemeId)
+        val oldKey = validateKey(oldKeyRaw)
         val newKey = validateKey(newKeyRaw)
+        require(oldKey != newKey) { backendMessage("entry.key.rename.same") }
+        require(namespace.isEmpty() || namespace.matches(Regex("[A-Za-z0-9_.-]{1,128}"))) {
+            backendMessage("namespace.invalid")
+        }
         val documents = parseDocuments(scheme)
         var changed = false
         documents.forEach { document ->
-            if (oldKey in document.values) {
+            if (document.namespace == namespace && oldKey in document.values) {
                 require(
                     newKey !in document.values || newKey == oldKey,
                 ) { backendMessage("entry.key.exists.file", document.path.fileName, newKey) }
@@ -428,6 +463,121 @@ class LocalizationManagerService(
         }
         require(changed) { backendMessage("entry.key.not.found", oldKey) }
         loadScheme(scheme, true)
+    }
+
+    suspend fun previewRenameKey(
+        schemeId: String,
+        request: RenameKeyRequestDto,
+    ): ChangePreviewDto =
+        mutex.withLock {
+            val context = currentCoroutineContext()
+            buildRenameKeyPreview(requireScheme(schemeId), request) { context.ensureActive() }
+        }
+
+    suspend fun applyPreviewedRenameKey(
+        schemeId: String,
+        request: RenameKeyRequestDto,
+        editedFiles: List<EditedFileContentDto>,
+        expectedBeforeHashes: Map<String, String>,
+    ) = mutex.withLock {
+        val scheme = requireScheme(schemeId)
+        val context = currentCoroutineContext()
+        val preview = buildRenameKeyPreview(scheme, request) { context.ensureActive() }
+        require(preview.files.associate { it.filePath to it.beforeSha256 } == expectedBeforeHashes) {
+            backendMessage("preview.changed")
+        }
+        require(editedFiles.size == editedFiles.map { it.filePath }.distinct().size) {
+            backendMessage("preview.files.mismatch")
+        }
+        val editedByPath = editedFiles.associate { it.filePath to it.content }
+        require(editedByPath.keys == preview.files.mapTo(linkedSetOf()) { it.filePath }) {
+            backendMessage("preview.files.mismatch")
+        }
+        editedByPath.values.forEach { content ->
+            require(content.toByteArray(StandardCharsets.UTF_8).size <= MAX_EDITED_PREVIEW_BYTES) {
+                backendMessage("preview.content.too.large", MAX_EDITED_PREVIEW_BYTES / 1024)
+            }
+            require(content.none { it == '\u0000' || (it.code < 32 && it !in "\n\r\t") }) {
+                backendMessage("input.control")
+            }
+        }
+        val written = mutableListOf<FileChangePreviewDto>()
+        try {
+            preview.files.forEach { change ->
+                SafeLanguageFileAccess.atomicWrite(Path.of(change.filePath), editedByPath.getValue(change.filePath))
+                written += change
+            }
+        } catch (error: Exception) {
+            written.asReversed().forEach { change ->
+                runCatching { SafeLanguageFileAccess.atomicWrite(Path.of(change.filePath), change.beforeContent) }
+                    .exceptionOrNull()
+                    ?.let(error::addSuppressed)
+            }
+            throw error
+        }
+        loadScheme(scheme, true)
+    }
+
+    private fun buildRenameKeyPreview(
+        scheme: LanguageSchemeDto,
+        request: RenameKeyRequestDto,
+        cancellationCheck: () -> Unit,
+    ): ChangePreviewDto {
+        val oldKey = validateKey(request.oldKey)
+        val newKey = validateKey(request.newKey)
+        require(oldKey != newKey) { backendMessage("entry.key.rename.same") }
+        require(
+            request.namespace.isEmpty() || request.namespace.matches(Regex("[A-Za-z0-9_.-]{1,128}")),
+        ) { backendMessage("namespace.invalid") }
+        val selectedEntries =
+            mutableState.value.entries.filter {
+                it.namespace == request.namespace && it.key == oldKey
+            }
+        require(selectedEntries.isNotEmpty()) { backendMessage("entry.key.not.found", oldKey) }
+        val documents = parseDocuments(scheme, cancellationCheck)
+        require(documents.none { document -> document.issues.any { it.severity == IssueSeverity.ERROR } }) {
+            backendMessage("edit.fix.parse.first")
+        }
+        val languageChanges =
+            documents.mapNotNull { document ->
+                cancellationCheck()
+                if (document.namespace != request.namespace || oldKey !in document.values) return@mapNotNull null
+                require(newKey !in document.values) {
+                    backendMessage("entry.key.exists.file", document.path.fileName, newKey)
+                }
+                val rebuilt = linkedMapOf<String, String>()
+                document.values.forEach { (key, value) -> rebuilt[if (key == oldKey) newKey else key] = value }
+                if (oldKey in document.structuredValueKeys) {
+                    document.structuredValueKeys.remove(oldKey)
+                    document.structuredValueKeys += newKey
+                }
+                document.keyPaths.remove(oldKey)?.let { oldPath ->
+                    document.keyPaths[newKey] =
+                        if (oldPath.size == 1) listOf(newKey) else newKey.split('.').filter(String::isNotBlank)
+                }
+                document.values.clear()
+                document.values.putAll(rebuilt)
+                val before = SafeLanguageFileAccess.read(document.path)
+                val after = LanguageFileCodec.render(document)
+                FileChangePreviewDto(document.path.toString(), before, after, contentSha256(before))
+            }
+        require(languageChanges.isNotEmpty()) { backendMessage("entry.key.not.found", oldKey) }
+        val sourceChanges =
+            if (request.syncUsageLocations) {
+                val root = usageScanRoot(scheme) ?: error(backendMessage("usage.exclusion.root.unavailable"))
+                UsageSourceRenameSupport.buildPreview(
+                    root = root,
+                    locations = activeUsageLocations,
+                    allowedEntryIds = selectedEntries.mapTo(hashSetOf()) { it.id },
+                    namespace = request.namespace,
+                    oldKey = oldKey,
+                    newKey = newKey,
+                    cancellationCheck = cancellationCheck,
+                )
+            } else {
+                emptyList()
+            }
+        return ChangePreviewDto(languageChanges + sourceChanges)
     }
 
     suspend fun repair(schemeId: String) =
@@ -623,6 +773,8 @@ class LocalizationManagerService(
     ) {
         loadController.ensureCurrent(generation)
         mutableState.value = mutableState.value.copy(busy = true, errorMessage = null)
+        activeUsageLocations = emptyList()
+        activeUsageLocationsTruncated = false
         publishLoadProgress(scheme, generation, LoadProgressStage.PLANNING, 0, 0)
         try {
             loadController.ensureCurrent(generation)
@@ -642,10 +794,10 @@ class LocalizationManagerService(
                                 activeSchemeId = scheme.id,
                                 entries = cache.entries,
                                 issues = cache.issues,
-                                usageLocations = cache.usageLocations,
-                                usageLocationsTruncated = cache.usageLocationsTruncated,
                                 busy = false,
                             )
+                        activeUsageLocations = cache.usageLocations
+                        activeUsageLocationsTruncated = cache.usageLocationsTruncated
                         publishLoadProgress(scheme, generation, LoadProgressStage.COMPLETED, 2, 2)
                         return
                     }
@@ -697,10 +849,10 @@ class LocalizationManagerService(
                     activeSchemeId = scheme.id,
                     entries = entriesWithoutUsage,
                     issues = documents.flatMap { it.issues },
-                    usageLocations = emptyList(),
-                    usageLocationsTruncated = false,
                     busy = true,
                 )
+            activeUsageLocations = emptyList()
+            activeUsageLocationsTruncated = false
             publishLoadProgress(scheme, generation, LoadProgressStage.SCANNING_USAGE, completedSteps, totalSteps)
             val scanStepStart = completedSteps
             var lastProgressEmitNanos = 0L
@@ -753,10 +905,10 @@ class LocalizationManagerService(
                     activeSchemeId = scheme.id,
                     entries = entries,
                     issues = issues,
-                    usageLocations = usageScan.locations,
-                    usageLocationsTruncated = usageScan.locationsTruncated,
                     busy = false,
                 )
+            activeUsageLocations = usageScan.locations
+            activeUsageLocationsTruncated = usageScan.locationsTruncated
             publishLoadProgress(scheme, generation, LoadProgressStage.COMPLETED, completedSteps, totalSteps)
             LOG.info("Loaded localization scheme '${scheme.name}': ${entries.size} entries, ${issues.size} issues")
         } catch (e: CancellationException) {

@@ -40,6 +40,13 @@ internal class LocalizationFrontendRepository(
 
     suspend fun reload(id: String) = LocalizationManagerRpcApi.getInstance().reload(project.projectId(), id, true)
 
+    suspend fun usageLocations(
+        schemeId: String,
+        entryIds: List<String>,
+        page: Int,
+        pageSize: Int,
+    ) = LocalizationManagerRpcApi.getInstance().usageLocations(project.projectId(), schemeId, entryIds, page, pageSize)
+
     suspend fun resolveUsageLocation(
         schemeId: String,
         entryId: String,
@@ -91,9 +98,28 @@ internal class LocalizationFrontendRepository(
 
     suspend fun rename(
         id: String,
+        namespace: String,
         oldKey: String,
         newKey: String,
-    ) = LocalizationManagerRpcApi.getInstance().renameKey(project.projectId(), id, oldKey, newKey)
+    ) = LocalizationManagerRpcApi.getInstance().renameKey(project.projectId(), id, namespace, oldKey, newKey)
+
+    suspend fun previewRename(
+        id: String,
+        request: RenameKeyRequestDto,
+    ) = LocalizationManagerRpcApi.getInstance().previewRenameKey(project.projectId(), id, request)
+
+    suspend fun applyPreviewedRename(
+        id: String,
+        request: RenameKeyRequestDto,
+        editedFiles: List<EditedFileContentDto>,
+        expectedBeforeHashes: Map<String, String>,
+    ) = LocalizationManagerRpcApi.getInstance().applyPreviewedRenameKey(
+        project.projectId(),
+        id,
+        request,
+        editedFiles,
+        expectedBeforeHashes,
+    )
 
     suspend fun repair(id: String) = LocalizationManagerRpcApi.getInstance().repair(project.projectId(), id)
 

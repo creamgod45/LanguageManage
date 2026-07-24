@@ -1,5 +1,13 @@
 # Language Manager Changelog
 
+## 1.5.5
+
+- Extend **Rename Key** with an optional source-usage synchronization checkbox. When enabled, the backend validates cached Regex offsets against `oldKey` or `namespace.oldKey`, prepares language-file and source-code changes without writing, and shows one Diff before apply.
+- Make the right side of matched source-code Diff entries editable while keeping generated language-file changes read-only. User-edited results are applied only after the backend regenerates the preview, verifies the exact file set and SHA-256 hashes, enforces size/control-character limits, and performs atomic writes with rollback.
+- Show a dynamic Diff hint for the currently selected file: language-file changes are identified as read-only, while matched source-code changes explicitly indicate that the proposed content on the right can be edited.
+- Keep cached usage-location records only in the backend and fetch them on demand after the user double-clicks a Usage cell. The RPC returns at most 100 deduplicated locations per page, so normal state updates and lazy line/column resolution no longer serialize and copy up to 250,000 location records into the frontend.
+- Add a reproducible 12-locale memory regression test that uses the production JSON parser, production Regex usage scanner, and JOL retained-size measurement. The 96,000-entry reference run remains within default scheme limits and records both frontend retained memory and serialized RPC payload savings in `docs/performance_memory.md`.
+
 ## 1.5.4
 
 - Replace the internal/experimental `reportRawProgress` integration with the stable `Task.Backgroundable` and `ProgressIndicator` APIs. Cancellable stage text, detail text, exact fractions, and superseded-task cancellation are preserved without `RawProgressReporterHandle` or `RawProgressReporter` bytecode references.

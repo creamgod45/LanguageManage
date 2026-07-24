@@ -14,7 +14,7 @@ The UI and diagnostics are available in English, Traditional Chinese, Simplified
 - Import and export portable scheme settings as JSON from the Tool Window dropdown. Project paths are converted to relative paths when possible, and every imported file receives a parser and security preview.
 - JOIN translations with the same `namespace + key` into one table row, with a separate column for each locale.
 - Fuzzy and exact search, locale filtering, missing-translation and zero-usage filters, and pagination limited to 100 rows per page.
-- Add or edit every locale value in one scrollable form, save the locale mutations as one validated batch, bulk delete, rename keys across locales, copy and paste cells, and launch the IDE-native Find in Files action.
+- Add or edit every locale value in one scrollable form, save the locale mutations as one validated batch, bulk delete, rename keys across locales, copy and paste cells, and launch the IDE-native Find in Files action. Rename Key can optionally synchronize recorded source usages through an editable code Diff before any file is written.
 - Batch-translate up to 100 selected rows through an OpenAI-compatible or Anthropic Claude endpoint. The modal defaults editable source text to `en` when available (otherwise the key), supports multiple target locales, and reviews each target in its own editable column before one combined file Diff. API tokens stay in JetBrains PasswordSafe, and optional Temperature is omitted by default. Only **Apply** writes files; **Give AI More Feedback** carries the edited source values, reviewed suggestions, and feedback into a new request round.
 - Copy selected keys into one target locale's values, and add framework-specific usage Regex recommendations for major PHP frameworks, Spring/Java/Kotlin, ResourceBundle, and IntelliJ Platform plugins. An opt-in Laravel key-only preset can ignore uncertain package/group prefixes such as `filament::components/button.` when exact namespace matching is not practical.
 - Create a complete new locale from an existing locale—for example, copy the key structure from `en/*.php` into `es/*.php`—using a freely editable code field and an explicit ISO/BCP 47 suggestion popup. The popup never rewrites text while typing. An optional locale note is saved with the scheme and supplied to AI as language, region, terminology, and tone context; every new file is reviewed in a Diff first.
@@ -22,7 +22,7 @@ The UI and diagnostics are available in English, Traditional Chinese, Simplified
 - Maintain up to 1,000 exclusions per scheme and bulk-add them with comma- or newline-separated input. From the Project file tree, use **Localization Manager → Exclude Folders from Current Scheme Scan** to add selected folders as precise paths relative to the active scheme base path; the action is disabled when no scheme is active.
 - Detect parser errors, empty values, duplicate keys, duplicate values, missing locales, and possibly unused keys. Duplicate-value and possibly-unused suggestions can be hidden in settings.
 - Accumulate usage occurrences detected by multiple Regex patterns. Repeated calls on one line are counted separately, while overlapping patterns that capture the same key at the same source position are deduplicated.
-- Double-click a translation row's Usage cell to enable the on-demand **Usage Locations** tab. It lists only that key's cached source matches with 100-row pagination; opening a row lazily resolves and caches its line/column before navigating the IDE caret.
+- Double-click a translation row's Usage cell to enable the on-demand **Usage Locations** tab. Location records remain backend-only and the frontend requests only that key's current page, limited to 100 rows; opening a row lazily resolves and caches its line/column before navigating the IDE caret.
 - The default usage-scan exclusions cover `.git`, `.github`, `docs`, `vendor`, `storage`, `database`, `gradle`, `.gradle`, `build`, `out`, `dist`, `target`, `node_modules`, and IDE-generated directories such as `.idea`, `.fleet`, `.vs`, `.settings`, `.metadata`, and `nbproject`. Users can customize the list.
 - Display an IDE two-pane Diff before repairing or deleting. SHA-256 is checked before applying a preview so external changes made after the preview are never overwritten silently.
 - Cache parsed state in memory and under `.idea/language-manager/` to reduce repeated parsing.
@@ -35,6 +35,7 @@ The UI and diagnostics are available in English, Traditional Chinese, Simplified
 - [Requirements](docs/需求.md): functional requirements, table filters, issue rules, RPC, security, caching, and acceptance criteria. Currently written in Traditional Chinese.
 - [Project Instructions](AGENTS.md): engineering principles, architecture boundaries, localization requirements, tests, and Git conventions.
 - [Compatibility Verification](docs/compatibility.md): verified IDE versions and the supported build range.
+- [Memory and Large-Scheme Verification](docs/performance_memory.md): reproducible 12-locale parser, scanner, retained-memory, and RPC-payload measurements.
 - [Changelog](CHANGELOG.md)
 - Marketplace “What’s New”: generated from the current version section in [CHANGELOG.md](CHANGELOG.md) and injected into `plugin.xml` during the build.
 
@@ -177,6 +178,8 @@ The root project uses the IntelliJ Platform Gradle Plugin to assemble three cont
 | `applyPreviewedEntryMutations(...)` | Rebuilds translation mutations, verifies every preview hash, and atomically writes unchanged sources | Yes |
 | `deleteEntries(...)` | Deletes entries by entry ID | Yes |
 | `renameKey(...)` | Renames a key in every applicable file of the scheme | Yes |
+| `previewRenameKey(...)` | Validates cached usage offsets and builds language/source before-after content without writing | No |
+| `applyPreviewedRenameKey(...)` | Regenerates the preview, verifies hashes and the edited file set, then atomically writes user-reviewed content | Yes |
 | `repair(...)` | Normalizes parseable files and fills empty values with their keys | Yes; UI uses preview first |
 | `repairEntries(...)` | Repairs specific empty entries | Yes; UI uses preview first |
 | `previewLocaleVersion(...)` | Produces new-locale content and a Diff for each file | No |

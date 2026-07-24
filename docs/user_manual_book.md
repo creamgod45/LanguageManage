@@ -225,9 +225,11 @@ Select one or more rows, choose **Actions ▾ → Copy Key to Locale Values**, s
 1. Select one translation key.
 2. Choose **Rename Key**.
 3. Enter the new key.
-4. Every file in the scheme containing the old key is renamed together.
+4. Leave **Synchronize the key in recorded source usage locations** disabled to keep the original language-file-only flow.
+5. Enable the checkbox to build a preview from the selected row's cached usage locations. Language-file changes remain read-only, while the right side of matched source-code files is editable.
+6. Review every file and choose **Apply** to write the edited result. Cancel closes the preview without modifying language or source files.
 
-If any affected file already contains the new key, the entire write is rejected to prevent overwriting.
+The backend accepts only cached positions that still contain the exact `oldKey` or `namespace.oldKey`. It preserves uncertain prefixes around a captured key, rejects changed, out-of-root, or oversized source files, regenerates the preview before apply, and compares SHA-256 hashes. If any affected language file already contains the new key, the entire write is rejected to prevent overwriting.
 
 ### IDE Find in Files
 
@@ -362,7 +364,7 @@ The scanner applies the scheme Regex to the complete content of every regular fi
 
 ### Inspect usage locations
 
-The **Usage Locations** tab is disabled and empty by default, so ordinary scheme loading does not build a Swing table for unused location records. Double-click the **Usage** cell of one translation row to select that logical `namespace + key`, enable the tab, and display only its matched source records. The table shows source file, line, column, and occurrences with at most 100 rows per page. Initially line and column say **On open**: the scan caches only the character offset and source modification time. Double-click a location or click **Open Location** to calculate line/column in the backend, cache the result, and navigate the IDE caret. If the source changed after scanning, the plugin refuses the stale offset and asks for a reload.
+The **Usage Locations** tab is disabled and empty by default, so ordinary scheme loading does not build a Swing table for unused location records. Location records remain in the backend and are not included in the normal state Flow. Double-click the **Usage** cell of one translation row to select that logical `namespace + key`, enable the tab, and request only its current page from the backend. The table shows source file, line, column, and occurrences with at most 100 rows per RPC page. Initially line and column say **On open**: the scan caches only the character offset and source modification time. Double-click a location or click **Open Location** to calculate line/column in the backend, cache the result, and navigate the IDE caret. If the source changed after scanning, the plugin refuses the stale offset and asks for a reload.
 
 ### Excluded directories
 

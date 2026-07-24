@@ -23,6 +23,8 @@ import com.intellij.openapi.fileChooser.FileSaverDescriptor
 import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.fileEditor.OpenFileDescriptor
 import com.intellij.openapi.fileTypes.FileTypeManager
+import com.intellij.openapi.editor.Document
+import com.intellij.openapi.editor.EditorFactory
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.progress.ProcessCanceledException
 import com.intellij.openapi.progress.ProgressIndicator
@@ -30,6 +32,7 @@ import com.intellij.openapi.progress.Task
 import com.intellij.openapi.ui.ComboBox
 import com.intellij.openapi.ui.DialogWrapper
 import com.intellij.openapi.ui.Messages
+import com.intellij.openapi.ui.ValidationInfo
 import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.ui.components.*
@@ -93,7 +96,9 @@ internal class LocalizationManagerPanel(
     private var updatingSchemes = false
     private var currentPage = 0
     private var currentUsagePage = 0
+    private var currentUsageLocations = UsageLocationPageDto()
     private var usageLocationTarget: Pair<String, String>? = null
+    private var usageLocationLoadJob: Job? = null
     private var updatingEntryTable = false
     private var schemeLoadJob: Job? = null
     private var schemeLoadIndicator: ProgressIndicator? = null
@@ -323,7 +328,7 @@ internal class LocalizationManagerPanel(
                     usageLocationTarget = row.namespace to row.key
                     currentUsagePage = 0
                     tabs.setEnabledAt(USAGE_LOCATIONS_TAB_INDEX, true)
-                    updateUsageLocationTable()
+                    loadUsageLocationPage()
                     tabs.selectedIndex = USAGE_LOCATIONS_TAB_INDEX
                 }
             },
@@ -350,17 +355,17 @@ internal class LocalizationManagerPanel(
         usagePreviousPageButton.addActionListener {
             if (currentUsagePage > 0) {
                 currentUsagePage--
-                updateUsageLocationTable(resetPage = false)
+                loadUsageLocationPage()
             }
         }
         usageNextPageButton.addActionListener {
             currentUsagePage++
-            updateUsageLocationTable(resetPage = false)
+            loadUsageLocationPage()
         }
     }
 
     private fun render(state: LocalizationStateDto) {
-        if (current.activeSchemeId != state.activeSchemeId) clearUsageLocationTarget()
+        if (current.activeSchemeId != state.activeSchemeId || (state.busy && !current.busy)) clearUsageLocationTarget()
         current = state
         if (state.busy && schemeLoadPending) schemeLoadObservedBusy = true
         if (!state.busy && schemeLoadObservedBusy) schemeLoadPending = false
@@ -398,7 +403,7 @@ internal class LocalizationManagerPanel(
         val displayedIssues = displayedIssues(state.issues)
         issueModel.items = displayedIssues
         applyFilter()
-        updateUsageLocationTable()
+        renderUsageLocationTable()
         refreshStatus(displayedIssues)
     }
 
@@ -484,60 +489,77 @@ internal class LocalizationManagerPanel(
         }
     }
 
-    private fun updateUsageLocationTable(resetPage: Boolean = true) {
-        if (resetPage) currentUsagePage = 0
+    private fun loadUsageLocationPage() {
         val target = usageLocationTarget
-        if (target == null) {
-            usageLocationModel.items = emptyList()
-            usageLocationWarning.text = ""
-            usagePageLabel.text = message("pagination.page", 1, 1, 0)
-            usagePreviousPageButton.isEnabled = false
-            usageNextPageButton.isEnabled = false
+        val schemeId = current.activeSchemeId
+        val entryIds = current.entries.filter { (it.namespace to it.key) == target }.map { it.id }
+        if (target == null || schemeId == null || entryIds.isEmpty()) {
+            clearUsageLocationTarget()
             return
         }
-        val entriesById = current.entries.associateBy { it.id }
-        val allowedEntryIds = current.entries.filter { (it.namespace to it.key) == target }.mapTo(hashSetOf()) { it.id }
-        val grouped = linkedMapOf<UsageLocationIdentity, UsageLocationRow>()
-        current.usageLocations
-            .asSequence()
-            .filter { it.entryId in allowedEntryIds }
-            .forEach { location ->
-                val entry = entriesById[location.entryId] ?: return@forEach
-                val identity = UsageLocationIdentity(entry.namespace, entry.key, location.filePath, location.offset)
-                val existing = grouped[identity]
-                if (existing == null || (existing.line <= 0 && location.line > 0) || location.occurrenceCount > existing.occurrenceCount) {
-                    grouped[identity] =
-                        UsageLocationRow(
-                            location.entryId,
-                            entry.namespace,
-                            entry.key,
-                            location.filePath,
-                            location.offset,
-                            location.line,
-                            location.column,
-                            location.occurrenceCount,
-                        )
+        usageLocationLoadJob?.cancel()
+        currentUsageLocations = UsageLocationPageDto()
+        renderUsageLocationTable()
+        val requestedPage = currentUsagePage
+        usageLocationLoadJob =
+            scope.launch {
+                try {
+                    val result = repository.usageLocations(schemeId, entryIds, requestedPage, PAGE_SIZE)
+                    withContext(Dispatchers.EDT) {
+                        if (usageLocationTarget != target || current.activeSchemeId != schemeId) return@withContext
+                        currentUsageLocations = result
+                        currentUsagePage = result.page
+                        renderUsageLocationTable()
+                    }
+                } catch (error: CancellationException) {
+                    throw error
+                } catch (error: Exception) {
+                    withContext(Dispatchers.EDT) { showError(error.message ?: message("error.action.failed")) }
                 }
             }
-        val rows = grouped.values.sortedWith(compareBy(UsageLocationRow::namespace, UsageLocationRow::key, UsageLocationRow::filePath, UsageLocationRow::offset))
-        val pageCount = maxOf(1, (rows.size + PAGE_SIZE - 1) / PAGE_SIZE)
-        currentUsagePage = currentUsagePage.coerceIn(0, pageCount - 1)
-        val from = currentUsagePage * PAGE_SIZE
-        usageLocationModel.items = rows.subList(from.coerceAtMost(rows.size), (from + PAGE_SIZE).coerceAtMost(rows.size))
-        usagePageLabel.text = message("pagination.page", currentUsagePage + 1, pageCount, rows.size)
+    }
+
+    private fun renderUsageLocationTable() {
+        val target = usageLocationTarget
+        usageLocationModel.items =
+            if (target == null) {
+                emptyList()
+            } else {
+                currentUsageLocations.items.map { location ->
+                    UsageLocationRow(
+                        location.entryId,
+                        target.first,
+                        target.second,
+                        location.filePath,
+                        location.offset,
+                        location.line,
+                        location.column,
+                        location.occurrenceCount,
+                    )
+                }
+            }
+        usagePageLabel.text =
+            message(
+                "pagination.page",
+                currentUsageLocations.page + 1,
+                currentUsageLocations.pageCount,
+                currentUsageLocations.totalItems,
+            )
         usagePreviousPageButton.isEnabled = currentUsagePage > 0
-        usageNextPageButton.isEnabled = currentUsagePage + 1 < pageCount
-        usageLocationWarning.text = if (current.usageLocationsTruncated) message("usage.locations.truncated") else ""
+        usageNextPageButton.isEnabled = currentUsagePage + 1 < currentUsageLocations.pageCount
+        usageLocationWarning.text = if (currentUsageLocations.truncated) message("usage.locations.truncated") else ""
         listOf(130, 220, 520, 70, 70, 90).forEachIndexed { index, width ->
             usageLocationTable.columnModel.getColumn(index).preferredWidth = width
         }
     }
 
     private fun clearUsageLocationTarget() {
+        usageLocationLoadJob?.cancel()
+        usageLocationLoadJob = null
         usageLocationTarget = null
         currentUsagePage = 0
-        usageLocationModel.items = emptyList()
-        usageLocationWarning.text = ""
+        currentUsageLocations = UsageLocationPageDto()
+        renderUsageLocationTable()
         if (tabs.tabCount > USAGE_LOCATIONS_TAB_INDEX) tabs.setEnabledAt(USAGE_LOCATIONS_TAB_INDEX, false)
     }
 
@@ -549,7 +571,17 @@ internal class LocalizationManagerPanel(
             val schemeId = current.activeSchemeId ?: return showError(message("error.no.active.scheme"))
             runAction {
                 val resolved = repository.resolveUsageLocation(schemeId, location.entryId, location.filePath, location.offset)
-                withContext(Dispatchers.EDT) { navigateToUsageLocation(resolved.filePath, resolved.line, resolved.column) }
+                withContext(Dispatchers.EDT) {
+                    currentUsageLocations =
+                        currentUsageLocations.copy(
+                            items =
+                                currentUsageLocations.items.map {
+                                    if (it.entryId == resolved.entryId && it.filePath == resolved.filePath && it.offset == resolved.offset) resolved else it
+                                },
+                        )
+                    renderUsageLocationTable()
+                    navigateToUsageLocation(resolved.filePath, resolved.line, resolved.column)
+                }
             }
             return
         }
@@ -802,18 +834,47 @@ internal class LocalizationManagerPanel(
     private fun renameKey() {
         val row =
             selectedRows().singleOrNull() ?: return showError(message("error.select.rename.source"))
-        val value =
-            Messages
-                .showInputDialog(
-                    project,
-                    message("dialog.rename.prompt", row.key),
-                    message("dialog.rename.title"),
-                    null,
-                    row.key,
-                    null,
-                )?.trim()
-                ?: return
-        runAction { repository.rename(activeId(), row.key, value) }
+        val dialog = RenameKeyDialog(project, row.key)
+        if (!dialog.showAndGet()) return
+        val request =
+            RenameKeyRequestDto(
+                namespace = row.namespace,
+                oldKey = row.key,
+                newKey = dialog.newKey,
+                syncUsageLocations = dialog.syncUsageLocations,
+            )
+        if (!request.syncUsageLocations) {
+            runAction { repository.rename(activeId(), row.namespace, row.key, request.newKey) }
+            return
+        }
+        runAction {
+            val schemeId = activeId()
+            val preview = repository.previewRename(schemeId, request)
+            if (preview.files.isEmpty()) return@runAction
+            val editedFiles =
+                withContext(Dispatchers.EDT) {
+                    val disposable = Disposer.newDisposable("Language Manager editable rename preview")
+                    try {
+                        val previewDialog =
+                            ChangePreviewDialog(
+                                project,
+                                preview,
+                                message("summary.rename.sync", row.key, request.newKey),
+                                disposable,
+                                editableAfterEnabled = true,
+                            )
+                        if (previewDialog.showAndGet()) previewDialog.editedFiles() else null
+                    } finally {
+                        Disposer.dispose(disposable)
+                    }
+                } ?: return@runAction
+            repository.applyPreviewedRename(
+                schemeId,
+                request,
+                editedFiles,
+                preview.files.associate { it.filePath to it.beforeSha256 },
+            )
+        }
     }
 
     private fun copyKeysToLocaleValues() {
@@ -1850,13 +1911,6 @@ private class IssueTableModel : AbstractTableModel() {
     ): Boolean = columnIndex == columnCount - 1
 }
 
-private data class UsageLocationIdentity(
-    val namespace: String,
-    val key: String,
-    val filePath: String,
-    val offset: Int,
-)
-
 private data class UsageLocationRow(
     val entryId: String,
     val namespace: String,
@@ -1980,17 +2034,63 @@ private class IssueActionButtonEditor(
 
 private enum class ChangePreviewDecision { APPLY, AI_FEEDBACK, CANCEL }
 
+private class RenameKeyDialog(
+    project: Project,
+    private val oldKey: String,
+) : DialogWrapper(project, true) {
+    private val keyField = JBTextField(oldKey)
+    private val syncCheckBox = JBCheckBox(message("dialog.rename.sync.usages"))
+
+    val newKey: String
+        get() = keyField.text.trim()
+    val syncUsageLocations: Boolean
+        get() = syncCheckBox.isSelected
+
+    init {
+        title = message("dialog.rename.title")
+        init()
+    }
+
+    override fun doValidate(): ValidationInfo? =
+        if (newKey.isEmpty()) ValidationInfo(message("error.rename.key.required"), keyField) else null
+
+    override fun createCenterPanel(): JComponent =
+        JPanel().apply {
+            layout = BoxLayout(this, BoxLayout.Y_AXIS)
+            border = JBUI.Borders.empty(8)
+            add(JBLabel(message("dialog.rename.prompt", oldKey)).apply { alignmentX = Component.LEFT_ALIGNMENT })
+            add(Box.createVerticalStrut(6))
+            add(
+                keyField.apply {
+                    alignmentX = Component.LEFT_ALIGNMENT
+                    maximumSize = Dimension(Int.MAX_VALUE, preferredSize.height)
+                },
+            )
+            add(Box.createVerticalStrut(10))
+            add(syncCheckBox.apply { alignmentX = Component.LEFT_ALIGNMENT })
+            add(Box.createVerticalStrut(4))
+            add(JBLabel(message("dialog.rename.sync.usages.help")).apply { alignmentX = Component.LEFT_ALIGNMENT })
+        }
+
+    override fun getPreferredFocusedComponent(): JComponent = keyField
+}
+
 private class ChangePreviewDialog(
     private val project: Project,
     private val preview: ChangePreviewDto,
     private val summary: String,
     disposable: Disposable,
     private val aiFeedbackEnabled: Boolean = false,
+    private val editableAfterEnabled: Boolean = false,
 ) : DialogWrapper(project, true) {
     private val fileSelector = ComboBox(preview.files.toTypedArray())
     private val diffPanel: DiffRequestPanel = DiffManager.getInstance().createRequestPanel(project, disposable, null)
+    private val editabilityHint = JBLabel()
     var decision: ChangePreviewDecision = ChangePreviewDecision.CANCEL
         private set
+    private val editedAfterContents = preview.files.associate { it.filePath to it.afterContent }.toMutableMap()
+    private var currentAfterDocument: Document? = null
+    private var currentAfterPath: String? = null
     private val feedbackAction =
         object : DialogWrapperAction(message("diff.ai.feedback")) {
             override fun doAction(event: ActionEvent) {
@@ -2019,6 +2119,7 @@ private class ChangePreviewDialog(
     }
 
     override fun doOKAction() {
+        saveCurrentEdit()
         decision = ChangePreviewDecision.APPLY
         super.doOKAction()
     }
@@ -2026,15 +2127,57 @@ private class ChangePreviewDialog(
     override fun createActions(): Array<Action> =
         if (aiFeedbackEnabled) arrayOf(okAction, feedbackAction, cancelAction) else super.createActions()
 
+    fun editedFiles(): List<EditedFileContentDto> {
+        saveCurrentEdit()
+        return preview.files.map { change ->
+            EditedFileContentDto(change.filePath, editedAfterContents.getValue(change.filePath))
+        }
+    }
+
+    private fun saveCurrentEdit() {
+        val path = currentAfterPath ?: return
+        val document = currentAfterDocument ?: return
+        editedAfterContents[path] = document.text
+    }
+
     private fun updateDiff() {
+        saveCurrentEdit()
         val change = fileSelector.selectedItem as? FileChangePreviewDto ?: return
         val fileType = FileTypeManager.getInstance().getFileTypeByFileName(change.filePath)
         val factory = DiffContentFactory.getInstance()
+        val editable = editableAfterEnabled && change.editable
+        if (editableAfterEnabled) {
+            editabilityHint.text =
+                message(
+                    if (editable) {
+                        "diff.editable.hint.source"
+                    } else {
+                        "diff.editable.hint.language"
+                    },
+                )
+        }
+        val afterContent =
+            if (editable) {
+                EditorFactory
+                    .getInstance()
+                    .createDocument(editedAfterContents.getValue(change.filePath))
+                    .also {
+                        currentAfterDocument = it
+                        currentAfterPath = change.filePath
+                    }
+                    .let { document ->
+                        factory.create(project, document, fileType)
+                    }
+            } else {
+                currentAfterDocument = null
+                currentAfterPath = null
+                factory.create(project, editedAfterContents.getValue(change.filePath), fileType)
+            }
         diffPanel.setRequest(
             SimpleDiffRequest(
                 change.filePath,
                 factory.create(project, change.beforeContent, fileType),
-                factory.create(project, change.afterContent, fileType),
+                afterContent,
                 message("diff.before"),
                 message("diff.after"),
             ),
@@ -2048,6 +2191,7 @@ private class ChangePreviewDialog(
                 JPanel(BorderLayout(6, 4)).apply {
                     add(JBLabel(message("diff.header", summary, preview.files.size)), BorderLayout.NORTH)
                     add(fileSelector, BorderLayout.CENTER)
+                    if (editableAfterEnabled) add(editabilityHint, BorderLayout.SOUTH)
                 },
                 BorderLayout.NORTH,
             )
