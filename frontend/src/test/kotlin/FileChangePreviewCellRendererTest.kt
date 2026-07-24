@@ -5,8 +5,10 @@ import cg.creamgod45.localization.FileChangePreviewDto
 import cg.creamgod45.settings.DisplayLanguage
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNotEquals
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class FileChangePreviewCellRendererTest {
     private fun file(
@@ -39,6 +41,25 @@ class FileChangePreviewCellRendererTest {
 
         assertEquals("lang/en/foo.php", path)
         assertNull(tag)
+    }
+
+    @Test
+    fun `oversized markdown diffs drop rich highlighting to avoid the folding CPU spike`() {
+        val big = LARGE_MARKDOWN_DIFF_CHARS + 1
+
+        assertTrue(shouldDowngradeDiffHighlighting("Markdown", "md", beforeChars = big, afterChars = 0))
+        assertTrue(shouldDowngradeDiffHighlighting("Markdown", "md", beforeChars = 0, afterChars = big))
+        // Extension alone is enough when the Markdown plugin is absent and the type resolves to plain text.
+        assertTrue(shouldDowngradeDiffHighlighting("PLAIN_TEXT", "md", beforeChars = big, afterChars = big))
+    }
+
+    @Test
+    fun `small markdown and other file types keep normal highlighting`() {
+        assertFalse(shouldDowngradeDiffHighlighting("Markdown", "md", beforeChars = 10, afterChars = 10))
+        assertFalse(
+            shouldDowngradeDiffHighlighting("PHP", "php", beforeChars = LARGE_MARKDOWN_DIFF_CHARS + 100, afterChars = 0),
+        )
+        assertFalse(shouldDowngradeDiffHighlighting("JSON", "json", beforeChars = 1_000_000, afterChars = 1_000_000))
     }
 
     @Test
