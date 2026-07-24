@@ -9,6 +9,7 @@ import com.intellij.diff.DiffContentFactory
 import com.intellij.diff.DiffManager
 import com.intellij.diff.DiffRequestPanel
 import com.intellij.diff.requests.SimpleDiffRequest
+import com.intellij.icons.AllIcons
 import com.intellij.find.FindManager
 import com.intellij.find.findInProject.FindInProjectManager
 import com.intellij.ide.BrowserUtil
@@ -17,6 +18,7 @@ import com.intellij.notification.NotificationGroupManager
 import com.intellij.notification.NotificationType
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.EDT
+import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.fileChooser.FileChooserDescriptor
 import com.intellij.openapi.fileChooser.FileChooserFactory
 import com.intellij.openapi.fileChooser.FileSaverDescriptor
@@ -35,6 +37,8 @@ import com.intellij.openapi.ui.Messages
 import com.intellij.openapi.ui.ValidationInfo
 import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.vfs.LocalFileSystem
+import com.intellij.ui.ColoredListCellRenderer
+import com.intellij.ui.SimpleTextAttributes
 import com.intellij.ui.components.*
 import com.intellij.ui.table.JBTable
 import com.intellij.util.ui.JBUI
@@ -61,6 +65,7 @@ import javax.swing.event.DocumentListener
 import javax.swing.table.AbstractTableModel
 import javax.swing.table.TableCellEditor
 import javax.swing.table.TableCellRenderer
+import kotlin.system.measureTimeMillis
 
 internal class LocalizationManagerPanel(
     private val project: Project,
@@ -2103,16 +2108,7 @@ private class ChangePreviewDialog(
         title = message("diff.title")
         setOKButtonText(message("diff.apply"))
         setCancelButtonText(message("button.cancel"))
-        fileSelector.renderer =
-            object : DefaultListCellRenderer() {
-                override fun getListCellRendererComponent(
-                    list: JList<*>?,
-                    value: Any?,
-                    index: Int,
-                    selected: Boolean,
-                    focus: Boolean,
-                ) = super.getListCellRendererComponent(list, (value as? FileChangePreviewDto)?.filePath ?: value, index, selected, focus)
-            }
+        fileSelector.renderer = FileChangePreviewCellRenderer(editableAfterEnabled)
         fileSelector.addActionListener { updateDiff() }
         updateDiff()
         init()
@@ -2143,6 +2139,14 @@ private class ChangePreviewDialog(
     private fun updateDiff() {
         saveCurrentEdit()
         val change = fileSelector.selectedItem as? FileChangePreviewDto ?: return
+        // @todo(diff-markdown-cpu): High CPU when the JetBrains diff viewer renders Markdown (`.md`) source files with
+        //   code folding. A usage-rename source file can be any regular file, including Markdown. When `getFileTypeByFileName`
+        //   resolves the Markdown FileType, the SimpleDiffViewer builds an EditorEx that combines (a) Markdown language folding
+        //   (headers, fenced code blocks with injected language highlighting) and (b) the diff's own "fold unchanged fragments"
+        //   pass. On large Markdown files these two folding passes plus fenced-code injection re-run on every dropdown switch
+        //   (each `setRequest`), which is the suspected hotspot. Candidate mitigations to evaluate: downgrade oversized Markdown
+        //   content to PlainTextFileType for the diff, or disable fold-unchanged for Markdown. Timing below is instrumentation
+        //   to confirm the hotspot before changing behaviour. Source: DiffContentFactory.create(..., fileType) + setRequest.
         val fileType = FileTypeManager.getInstance().getFileTypeByFileName(change.filePath)
         val factory = DiffContentFactory.getInstance()
         val editable = editableAfterEnabled && change.editable
@@ -2155,6 +2159,8 @@ private class ChangePreviewDialog(
                         "diff.editable.hint.language"
                     },
                 )
+            editabilityHint.revalidate()
+            editabilityHint.repaint()
         }
         val afterContent =
             if (editable) {
@@ -2173,15 +2179,36 @@ private class ChangePreviewDialog(
                 currentAfterPath = null
                 factory.create(project, editedAfterContents.getValue(change.filePath), fileType)
             }
-        diffPanel.setRequest(
-            SimpleDiffRequest(
-                change.filePath,
-                factory.create(project, change.beforeContent, fileType),
-                afterContent,
-                message("diff.before"),
-                message("diff.after"),
-            ),
+        // @todo(diff-markdown-cpu): `setRequest` is where the diff viewer instantiates its editors and runs highlighting +
+        //   folding. Wall-clock timing here isolates how much of a slow switch is spent inside the platform viewer versus our
+        //   own content preparation. If `elapsedMs` spikes for Markdown while JSON/PHP/Properties stay cheap, the platform
+        //   Markdown folding path is confirmed as the cause and the mitigation above should be applied.
+        val elapsedMs =
+            measureTimeMillis {
+                diffPanel.setRequest(
+                    SimpleDiffRequest(
+                        change.filePath,
+                        factory.create(project, change.beforeContent, fileType),
+                        afterContent,
+                        message("diff.before"),
+                        message("diff.after"),
+                    ),
+                )
+            }
+        val beforeLength = change.beforeContent.length
+        val afterLength = editedAfterContents.getValue(change.filePath).length
+        LOG.debug(
+            "Rendered rename preview diff: file=${change.filePath}, fileType=${fileType.name}, editable=$editable, " +
+                "beforeChars=$beforeLength, afterChars=$afterLength, elapsedMs=$elapsedMs",
         )
+        if (elapsedMs >= SLOW_DIFF_RENDER_WARN_MS) {
+            // @todo(diff-markdown-cpu): A crossed threshold here is the concrete signal to reproduce and profile the Markdown
+            //   folding hotspot. Keep this warning until the mitigation lands so field reports carry the fileType and size.
+            LOG.warn(
+                "Slow rename preview diff render (${elapsedMs}ms) for fileType=${fileType.name}, file=${change.filePath}, " +
+                    "beforeChars=$beforeLength, afterChars=$afterLength. Suspected platform Markdown/code-folding cost; see @todo(diff-markdown-cpu).",
+            )
+        }
     }
 
     override fun createCenterPanel(): JComponent =
@@ -2199,4 +2226,48 @@ private class ChangePreviewDialog(
         }
 
     override fun getPreferredFocusedComponent(): JComponent? = diffPanel.preferredFocusedComponent
+
+    companion object {
+        private val LOG = Logger.getInstance(ChangePreviewDialog::class.java)
+
+        // @todo(diff-markdown-cpu): Warning threshold for a single diff render. Markdown files that trip this are the
+        //   reproduction candidates for the platform code-folding CPU spike. Tune once the hotspot is profiled.
+        private const val SLOW_DIFF_RENDER_WARN_MS = 400L
+    }
+}
+
+/**
+ * Pure editability tag decision for a preview file, extracted so it can be unit-tested without the IDE platform.
+ * Returns the visible path plus an optional read-only/editable tag; a null tag means editability is not surfaced.
+ */
+internal fun fileChangePreviewSegments(
+    showEditability: Boolean,
+    file: FileChangePreviewDto,
+    tag: (Boolean) -> String,
+): Pair<String, String?> = if (showEditability) file.filePath to tag(file.editable) else file.filePath to null
+
+internal class FileChangePreviewCellRenderer(
+    private val showEditability: Boolean,
+    private val tagText: (Boolean) -> String = { editable ->
+        message(if (editable) "diff.file.tag.editable" else "diff.file.tag.readonly")
+    },
+) : ColoredListCellRenderer<FileChangePreviewDto>() {
+    override fun customizeCellRenderer(
+        list: JList<out FileChangePreviewDto>,
+        value: FileChangePreviewDto?,
+        index: Int,
+        selected: Boolean,
+        hasFocus: Boolean,
+    ) {
+        val file = value ?: return
+        val (path, tag) = fileChangePreviewSegments(showEditability, file, tagText)
+        if (tag == null) {
+            append(path)
+            return
+        }
+        icon = if (file.editable) AllIcons.Actions.Edit else AllIcons.Ide.Readonly
+        append(path, if (file.editable) SimpleTextAttributes.REGULAR_ATTRIBUTES else SimpleTextAttributes.GRAYED_ATTRIBUTES)
+        append("  ")
+        append(tag, SimpleTextAttributes.GRAYED_ATTRIBUTES)
+    }
 }
