@@ -46,6 +46,7 @@ PHP **只 parse 不執行**：只接受選填的 `declare(strict_types=1);` + �
 - 多組 Regex 累計出現次數（同行重複計數，同位置重疊去重）。
 - 內建各主流框架 Regex 建議（PHP 框架、Spring/Java/Kotlin、ResourceBundle、IntelliJ Platform），另有 opt-in Laravel「key only」預設。
 - 掃描設定以方案隔離：安全 base path、可編輯排除清單（每方案上限 1,000，支援逗號/換行批量、Project 樹右鍵加入資料夾）。
+- Project 樹右鍵批量加入排除：逐一分類——掃描根本身/根外/無效/超長，以及超過 1,000 上限的多餘項目個別略過並回報，能加入的先加入，不因單一無法排除者中斷整批（其餘合法資料夾照常加入）。
 - 雙擊某列 Usage cell 才啟用 **Usage Locations** 分頁；位置記錄僅存 backend，前端每次只取該 key 當頁（≤100），開啟時才 lazy 解析行/列並快取。
 
 ### 問題偵測

@@ -183,15 +183,10 @@ class LocalizationManagerService(
             val activeId = mutableState.value.activeSchemeId ?: error(backendMessage("scheme.active.required"))
             val scheme = requireScheme(activeId)
             val root = usageScanRoot(scheme) ?: error(backendMessage("usage.exclusion.root.unavailable"))
-            val additions = UsageExclusionSupport.relativeDirectories(root, folderPaths)
-            val oldExclusions = scheme.usageScanSettings.excludedDirectories
-            val settings =
-                UsageScanSupport.normalize(
-                    scheme.usageScanSettings.copy(excludedDirectories = oldExclusions + additions),
-                )
-            val added = settings.excludedDirectories.filterNot(oldExclusions.toSet()::contains)
-            if (added.isNotEmpty()) {
-                val updated = scheme.copy(usageScanSettings = settings, updatedAtEpochMs = System.currentTimeMillis())
+            val resolution = UsageExclusionSupport.resolve(root, folderPaths)
+            val merge = UsageScanSupport.mergeExclusions(scheme.usageScanSettings, resolution.relativeDirectories)
+            if (merge.added.isNotEmpty()) {
+                val updated = scheme.copy(usageScanSettings = merge.settings, updatedAtEpochMs = System.currentTimeMillis())
                 mutableState.value =
                     mutableState.value.copy(
                         schemes = mutableState.value.schemes.map { if (it.id == activeId) updated else it },
@@ -201,7 +196,7 @@ class LocalizationManagerService(
                 persistSchemes()
                 scheduleUsageSettingsReload(activeId)
             }
-            ExclusionUpdateResultDto(scheme.name, added)
+            ExclusionUpdateResultDto(scheme.name, merge.added, resolution.skippedDirectories + merge.skipped)
         }
 
     suspend fun reload(

@@ -50,18 +50,12 @@ internal object UsageScanSupport {
         }
         val exclusions =
             settings.excludedDirectories
-                .map { it.trim().replace('\\', '/').trim('/') }
+                .map(::sanitizeExclusion)
                 .filter(String::isNotEmpty)
                 .distinct()
         require(exclusions.size <= MAX_USAGE_EXCLUSIONS) { backendMessage("usage.exclusion.count", MAX_USAGE_EXCLUSIONS) }
         exclusions.forEach { exclusion ->
-            val segments = exclusion.split('/')
-            require(
-                exclusion.length <= MAX_EXCLUSION_LENGTH &&
-                    exclusion.none(Char::isISOControl) &&
-                    "://" !in exclusion && ':' !in exclusion &&
-                    segments.none { it.isBlank() || it == "." || it == ".." },
-            ) { backendMessage("usage.exclusion.invalid", exclusion) }
+            require(isSafeExclusion(exclusion)) { backendMessage("usage.exclusion.invalid", exclusion) }
         }
         require(settings.maxLanguageFileKb in 1..HARD_MAX_LANGUAGE_FILE_KB) {
             backendMessage("load.limit.file.size", HARD_MAX_LANGUAGE_FILE_KB)
@@ -80,6 +74,49 @@ internal object UsageScanSupport {
         }
         return settings.copy(basePath = basePath, regexPatterns = patterns, excludedDirectories = exclusions)
     }
+
+    /**
+     * Merge freshly resolved exclusion paths into the scheme's current settings without ever
+     * throwing on the batch as a whole:
+     *
+     * - Additions that duplicate an existing entry are folded away, so selecting a folder that is
+     *   already excluded never blocks the other folders in the same batch.
+     * - Additions that fail per-entry validation (too long, unsafe characters) or that would push
+     *   the list past [MAX_USAGE_EXCLUSIONS] are skipped and reported in
+     *   [ExclusionMergeResult.skipped] instead of aborting — the folders that still fit are added.
+     *
+     * [ExclusionMergeResult.added] lists only the entries genuinely new relative to [current].
+     */
+    fun mergeExclusions(
+        current: UsageScanSettingsDto,
+        additions: List<String>,
+    ): ExclusionMergeResult {
+        val old = current.excludedDirectories
+        val existing = LinkedHashSet(old)
+        val remainingCapacity = (MAX_USAGE_EXCLUSIONS - existing.size).coerceAtLeast(0)
+        val accepted = LinkedHashSet<String>()
+        val skipped = mutableListOf<String>()
+        additions.forEach { raw ->
+            val entry = sanitizeExclusion(raw)
+            when {
+                entry.isEmpty() || entry in existing || entry in accepted -> Unit // duplicate/blank: not new, not an error
+                !isSafeExclusion(entry) -> skipped += raw
+                accepted.size >= remainingCapacity -> skipped += raw
+                else -> accepted += entry
+            }
+        }
+        val settings = normalize(current.copy(excludedDirectories = old + accepted))
+        val added = settings.excludedDirectories.filterNot(existing::contains)
+        return ExclusionMergeResult(settings, added, skipped)
+    }
+
+    private fun sanitizeExclusion(raw: String): String = raw.trim().replace('\\', '/').trim('/')
+
+    private fun isSafeExclusion(exclusion: String): Boolean =
+        exclusion.length <= MAX_EXCLUSION_LENGTH &&
+            exclusion.none(Char::isISOControl) &&
+            "://" !in exclusion && ':' !in exclusion &&
+            exclusion.split('/').none { it.isBlank() || it == "." || it == ".." }
 
     fun counts(
         root: Path,
@@ -270,4 +307,10 @@ internal data class UsageScanResult(
     val counts: Map<String, Int>,
     val locations: List<UsageLocationDto>,
     val locationsTruncated: Boolean,
+)
+
+internal data class ExclusionMergeResult(
+    val settings: UsageScanSettingsDto,
+    val added: List<String>,
+    val skipped: List<String> = emptyList(),
 )
