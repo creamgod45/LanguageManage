@@ -1,4 +1,5 @@
 import org.jetbrains.intellij.platform.gradle.TestFrameworkType
+import org.jetbrains.intellij.platform.gradle.extensions.IntelliJPlatformExtension
 import org.jetbrains.intellij.platform.gradle.tasks.aware.SplitModeAware
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
@@ -40,6 +41,13 @@ subprojects {
         sourceCompatibility = JavaVersion.VERSION_21
         targetCompatibility = JavaVersion.VERSION_21
     }
+
+    // Pure-Kotlin modules: no Java sources and no GUI .form files, so there is nothing for
+    // IntelliJ's Javac2 bytecode instrumentation to do. Disabling it also avoids Javac2 probing a
+    // non-existent Apple-style "<javaHome>/Packages" classpath dir, which fails the build on JDK 25.
+    extensions.configure<IntelliJPlatformExtension> {
+        instrumentCode.set(false)
+    }
 }
 
 // Read more: https://plugins.jetbrains.com/docs/intellij/tools-intellij-platform-gradle-plugin.html
@@ -58,6 +66,7 @@ dependencies {
 }
 
 intellijPlatform {
+    instrumentCode = false
     splitMode = true
     pluginInstallationTarget = SplitModeAware.PluginInstallationTarget.BOTH
     pluginConfiguration {
