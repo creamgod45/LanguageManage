@@ -18,14 +18,12 @@ import com.intellij.notification.NotificationGroupManager
 import com.intellij.notification.NotificationType
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.EDT
-import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.fileChooser.FileChooserDescriptor
 import com.intellij.openapi.fileChooser.FileChooserFactory
 import com.intellij.openapi.fileChooser.FileSaverDescriptor
 import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.fileEditor.OpenFileDescriptor
 import com.intellij.openapi.fileTypes.FileTypeManager
-import com.intellij.openapi.fileTypes.PlainTextFileType
 import com.intellij.openapi.editor.Document
 import com.intellij.openapi.editor.EditorFactory
 import com.intellij.openapi.project.Project
@@ -66,7 +64,6 @@ import javax.swing.event.DocumentListener
 import javax.swing.table.AbstractTableModel
 import javax.swing.table.TableCellEditor
 import javax.swing.table.TableCellRenderer
-import kotlin.system.measureTimeMillis
 
 internal class LocalizationManagerPanel(
     private val project: Project,
@@ -2140,26 +2137,7 @@ private class ChangePreviewDialog(
     private fun updateDiff() {
         saveCurrentEdit()
         val change = fileSelector.selectedItem as? FileChangePreviewDto ?: return
-        val beforeLength = change.beforeContent.length
-        val afterLength = editedAfterContents.getValue(change.filePath).length
-        // @todo(diff-markdown-cpu): High CPU when the JetBrains diff viewer renders Markdown (`.md`) source files with
-        //   code folding. A usage-rename source file can be any regular file, including Markdown. When `getFileTypeByFileName`
-        //   resolves the Markdown FileType, the SimpleDiffViewer builds an EditorEx that combines (a) Markdown language folding
-        //   (headers, fenced code blocks with injected language highlighting) and (b) the diff's own "fold unchanged fragments"
-        //   pass. On large Markdown files these two folding passes plus fenced-code injection re-run on every dropdown switch
-        //   (each `setRequest`), the confirmed hotspot. Mitigation applied below: for oversized Markdown content we downgrade
-        //   the diff FileType to PlainText so the platform skips Markdown folding and fenced-code injection; small Markdown
-        //   keeps full highlighting. The timing/warning instrumentation stays so any remaining regression is still observable.
-        val resolvedFileType = FileTypeManager.getInstance().getFileTypeByFileName(change.filePath)
-        val downgradeHighlighting =
-            shouldDowngradeDiffHighlighting(resolvedFileType.name, resolvedFileType.defaultExtension, beforeLength, afterLength)
-        val fileType = if (downgradeHighlighting) PlainTextFileType.INSTANCE else resolvedFileType
-        if (downgradeHighlighting) {
-            LOG.info(
-                "Downgraded rename preview diff highlighting to plain text for large Markdown file=${change.filePath}, " +
-                    "originalType=${resolvedFileType.name}, beforeChars=$beforeLength, afterChars=$afterLength; see @todo(diff-markdown-cpu).",
-            )
-        }
+        val fileType = FileTypeManager.getInstance().getFileTypeByFileName(change.filePath)
         val factory = DiffContentFactory.getInstance()
         val editable = editableAfterEnabled && change.editable
         if (editableAfterEnabled) {
@@ -2191,34 +2169,15 @@ private class ChangePreviewDialog(
                 currentAfterPath = null
                 factory.create(project, editedAfterContents.getValue(change.filePath), fileType)
             }
-        // @todo(diff-markdown-cpu): `setRequest` is where the diff viewer instantiates its editors and runs highlighting +
-        //   folding. Wall-clock timing here isolates how much of a slow switch is spent inside the platform viewer versus our
-        //   own content preparation. If `elapsedMs` spikes for Markdown while JSON/PHP/Properties stay cheap, the platform
-        //   Markdown folding path is confirmed as the cause and the mitigation above should be applied.
-        val elapsedMs =
-            measureTimeMillis {
-                diffPanel.setRequest(
-                    SimpleDiffRequest(
-                        change.filePath,
-                        factory.create(project, change.beforeContent, fileType),
-                        afterContent,
-                        message("diff.before"),
-                        message("diff.after"),
-                    ),
-                )
-            }
-        LOG.debug(
-            "Rendered rename preview diff: file=${change.filePath}, fileType=${fileType.name}, editable=$editable, " +
-                "beforeChars=$beforeLength, afterChars=$afterLength, elapsedMs=$elapsedMs",
+        diffPanel.setRequest(
+            SimpleDiffRequest(
+                change.filePath,
+                factory.create(project, change.beforeContent, fileType),
+                afterContent,
+                message("diff.before"),
+                message("diff.after"),
+            ),
         )
-        if (elapsedMs >= SLOW_DIFF_RENDER_WARN_MS) {
-            // @todo(diff-markdown-cpu): A crossed threshold here is the concrete signal to reproduce and profile the Markdown
-            //   folding hotspot. Keep this warning until the mitigation lands so field reports carry the fileType and size.
-            LOG.warn(
-                "Slow rename preview diff render (${elapsedMs}ms) for fileType=${fileType.name}, file=${change.filePath}, " +
-                    "beforeChars=$beforeLength, afterChars=$afterLength. Suspected platform Markdown/code-folding cost; see @todo(diff-markdown-cpu).",
-            )
-        }
     }
 
     override fun createCenterPanel(): JComponent =
@@ -2236,34 +2195,6 @@ private class ChangePreviewDialog(
         }
 
     override fun getPreferredFocusedComponent(): JComponent? = diffPanel.preferredFocusedComponent
-
-    companion object {
-        private val LOG = Logger.getInstance(ChangePreviewDialog::class.java)
-
-        // @todo(diff-markdown-cpu): Warning threshold for a single diff render. Markdown files that trip this are the
-        //   reproduction candidates for the platform code-folding CPU spike. Tune once the hotspot is profiled.
-        private const val SLOW_DIFF_RENDER_WARN_MS = 400L
-    }
-}
-
-/**
- * Whether the rename-preview diff should drop rich highlighting for a file, extracted as a pure function for unit tests.
- * Oversized Markdown is the confirmed CPU hotspot (language folding + fenced-code injection re-run on every `setRequest`),
- * so it is downgraded to plain text; small Markdown and every other file type keep their normal highlighting.
- *
- * @todo(diff-markdown-cpu): [LARGE_MARKDOWN_DIFF_CHARS] is a size proxy for "enough fenced blocks/headers to be expensive".
- *   Revisit once profiling data from the render timing lands; a fenced-block count may be a better trigger than raw length.
- */
-internal const val LARGE_MARKDOWN_DIFF_CHARS = 50_000
-
-internal fun shouldDowngradeDiffHighlighting(
-    fileTypeName: String,
-    defaultExtension: String,
-    beforeChars: Int,
-    afterChars: Int,
-): Boolean {
-    val isMarkdown = fileTypeName.equals("Markdown", ignoreCase = true) || defaultExtension.equals("md", ignoreCase = true)
-    return isMarkdown && maxOf(beforeChars, afterChars) > LARGE_MARKDOWN_DIFF_CHARS
 }
 
 /**

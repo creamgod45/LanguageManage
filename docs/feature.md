@@ -55,7 +55,7 @@ PHP **只 parse 不執行**：只接受選填的 `declare(strict_types=1);` + �
 - 單列與批量操作；可自動修改的操作先出 Diff 預覽。
 
 ### Diff / 安全寫入
-- 修復或刪除前顯示 IDE 雙欄 Diff；大型 Markdown 來源檔在預覽時降級為純文字，避免平台 Markdown 摺疊造成 CPU 尖峰。
+- 修復或刪除前顯示 IDE 雙欄 Diff。
 - 套用前以 **SHA-256** 比對，避免預覽後外部變更被靜默覆蓋。
 - 寫檔用 temporary file + atomic move；輸出依各格式正確跳脫；錯誤訊息移除危險控制字元並限長。
 - 檔案來源驗證：只接受一般本機檔案，拒絕 URI、`file:`、Windows device path、`GLOBALROOT`、控制字元。
