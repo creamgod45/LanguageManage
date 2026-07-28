@@ -9,6 +9,7 @@ import com.intellij.diff.DiffContentFactory
 import com.intellij.diff.DiffManager
 import com.intellij.diff.DiffRequestPanel
 import com.intellij.diff.requests.SimpleDiffRequest
+import com.intellij.icons.AllIcons
 import com.intellij.find.FindManager
 import com.intellij.find.findInProject.FindInProjectManager
 import com.intellij.ide.BrowserUtil
@@ -35,6 +36,8 @@ import com.intellij.openapi.ui.Messages
 import com.intellij.openapi.ui.ValidationInfo
 import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.vfs.LocalFileSystem
+import com.intellij.ui.ColoredListCellRenderer
+import com.intellij.ui.SimpleTextAttributes
 import com.intellij.ui.components.*
 import com.intellij.ui.table.JBTable
 import com.intellij.util.ui.JBUI
@@ -2103,16 +2106,7 @@ private class ChangePreviewDialog(
         title = message("diff.title")
         setOKButtonText(message("diff.apply"))
         setCancelButtonText(message("button.cancel"))
-        fileSelector.renderer =
-            object : DefaultListCellRenderer() {
-                override fun getListCellRendererComponent(
-                    list: JList<*>?,
-                    value: Any?,
-                    index: Int,
-                    selected: Boolean,
-                    focus: Boolean,
-                ) = super.getListCellRendererComponent(list, (value as? FileChangePreviewDto)?.filePath ?: value, index, selected, focus)
-            }
+        fileSelector.renderer = FileChangePreviewCellRenderer(editableAfterEnabled)
         fileSelector.addActionListener { updateDiff() }
         updateDiff()
         init()
@@ -2155,6 +2149,8 @@ private class ChangePreviewDialog(
                         "diff.editable.hint.language"
                     },
                 )
+            editabilityHint.revalidate()
+            editabilityHint.repaint()
         }
         val afterContent =
             if (editable) {
@@ -2199,4 +2195,40 @@ private class ChangePreviewDialog(
         }
 
     override fun getPreferredFocusedComponent(): JComponent? = diffPanel.preferredFocusedComponent
+}
+
+/**
+ * Pure editability tag decision for a preview file, extracted so it can be unit-tested without the IDE platform.
+ * Returns the visible path plus an optional read-only/editable tag; a null tag means editability is not surfaced.
+ */
+internal fun fileChangePreviewSegments(
+    showEditability: Boolean,
+    file: FileChangePreviewDto,
+    tag: (Boolean) -> String,
+): Pair<String, String?> = if (showEditability) file.filePath to tag(file.editable) else file.filePath to null
+
+internal class FileChangePreviewCellRenderer(
+    private val showEditability: Boolean,
+    private val tagText: (Boolean) -> String = { editable ->
+        message(if (editable) "diff.file.tag.editable" else "diff.file.tag.readonly")
+    },
+) : ColoredListCellRenderer<FileChangePreviewDto>() {
+    override fun customizeCellRenderer(
+        list: JList<out FileChangePreviewDto>,
+        value: FileChangePreviewDto?,
+        index: Int,
+        selected: Boolean,
+        hasFocus: Boolean,
+    ) {
+        val file = value ?: return
+        val (path, tag) = fileChangePreviewSegments(showEditability, file, tagText)
+        if (tag == null) {
+            append(path)
+            return
+        }
+        icon = if (file.editable) AllIcons.Actions.Edit else AllIcons.Ide.Readonly
+        append(path, if (file.editable) SimpleTextAttributes.REGULAR_ATTRIBUTES else SimpleTextAttributes.GRAYED_ATTRIBUTES)
+        append("  ")
+        append(tag, SimpleTextAttributes.GRAYED_ATTRIBUTES)
+    }
 }

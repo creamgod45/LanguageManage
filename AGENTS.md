@@ -48,6 +48,7 @@
 
 ## Testing and delivery
 
+- Marketplace What’s New／`CHANGELOG.md` 的每個版本必須同時提供英文與繁體中文；英文在前，接著使用 `---` 分隔，再提供繁體中文。
 - 新功能需加入與風險相稱的 test case；parser、安全、RPC DTO、搜尋及語言字典不可只靠手動驗證。
 - 交付前至少執行 `test` 與 `buildPlugin`，確認 ZIP 含 shared/frontend/backend module 及所有語言 bundle。
 - 功能更新需同步 `CHANGELOG.md`；架構、API 或操作方式改變時同步 README 與 `docs/`。

@@ -81,13 +81,24 @@ class ExcludeFoldersFromActiveSchemeAction : DumbAwareAction() {
         CoroutineScopeHolder.getInstance(project).getPluginScope().launch {
             runCatching { LocalizationFrontendRepository(project).addActiveSchemeExcludedDirectories(folderPaths) }
                 .onSuccess { result ->
-                    val text =
-                        if (result.addedDirectories.isEmpty()) {
-                            message("notification.exclusion.already.exists", result.schemeName)
-                        } else {
-                            message("notification.exclusion.added", result.addedDirectories.size, result.schemeName)
+                    val added = result.addedDirectories.size
+                    val skipped = result.skippedDirectories.size
+                    val (text, type) =
+                        when {
+                            added > 0 && skipped > 0 ->
+                                message("notification.exclusion.added.partial", added, skipped, result.schemeName) to
+                                    NotificationType.INFORMATION
+                            added > 0 ->
+                                message("notification.exclusion.added", added, result.schemeName) to
+                                    NotificationType.INFORMATION
+                            skipped > 0 ->
+                                message("notification.exclusion.skipped", skipped, result.schemeName) to
+                                    NotificationType.WARNING
+                            else ->
+                                message("notification.exclusion.already.exists", result.schemeName) to
+                                    NotificationType.INFORMATION
                         }
-                    notify(project, text, NotificationType.INFORMATION)
+                    notify(project, text, type)
                 }.onFailure { error ->
                     notify(project, safeActionMessage(error), NotificationType.ERROR)
                 }

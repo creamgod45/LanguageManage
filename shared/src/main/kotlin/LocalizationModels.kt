@@ -118,6 +118,7 @@ data class LocalizationStateDto(
 data class ExclusionUpdateResultDto(
     val schemeName: String,
     val addedDirectories: List<String> = emptyList(),
+    val skippedDirectories: List<String> = emptyList(),
 )
 
 @Serializable
