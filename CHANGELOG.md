@@ -2,6 +2,8 @@
 
 ## 1.5.5
 
+### English
+
 - Fix a serious logic error in the Project view **Exclude Folders from Current Scheme Scan** action: when the selection contained a folder that could not be excluded (the scan root itself or a folder outside the scan root), the backend threw and aborted the whole batch, so none of the other valid folders were excluded. Each folder is now classified independently—valid folders below the scan root are added while unexcludable ones are skipped and reported. Additions that fail validation (over-long or unsafe) or that would push the list past the 1,000-entry cap are likewise skipped instead of aborting: the folders that still fit are added and the rest are reported. The notification distinguishes added, partially-added (with a skipped count), skipped-only, and already-excluded outcomes. Directly editing the exclusion list in Settings keeps its strict over-limit validation, so the two paths stay separate.
 - Surface per-file editability directly in the Rename Key preview dropdown. Each entry now shows an icon plus an "editable"/"read-only" tag—editable source-code files are highlighted and read-only language files are grayed—so the currently selected file's state is visible in the dropdown itself instead of only in the hint line below it. The hint line is retained and revalidated on selection so its longer read-only text no longer truncates.
 - Extend **Rename Key** with an optional source-usage synchronization checkbox. When enabled, the backend validates cached Regex offsets against `oldKey` or `namespace.oldKey`, prepares language-file and source-code changes without writing, and shows one Diff before apply.
@@ -9,6 +11,18 @@
 - Show a dynamic Diff hint for the currently selected file: language-file changes are identified as read-only, while matched source-code changes explicitly indicate that the proposed content on the right can be edited.
 - Keep cached usage-location records only in the backend and fetch them on demand after the user double-clicks a Usage cell. The RPC returns at most 100 deduplicated locations per page, so normal state updates and lazy line/column resolution no longer serialize and copy up to 250,000 location records into the frontend.
 - Add a reproducible 12-locale memory regression test that uses the production JSON parser, production Regex usage scanner, and JOL retained-size measurement. The 96,000-entry reference run remains within default scheme limits and records both frontend retained memory and serialized RPC payload savings in `docs/performance_memory.md`.
+
+---
+
+### 繁體中文
+
+- 修正 Project 檢視中「**從目前方案掃描排除資料夾**」的嚴重邏輯錯誤。批量選取包含掃描根目錄或根目錄外的資料夾時，現在會逐項處理：有效資料夾仍會加入排除清單，無法排除、不安全、過長或超出 1,000 筆上限的項目則會略過並回報，不再讓整批操作中止。通知會區分新增成功、部分新增、全部略過及已存在等結果；設定頁直接編輯排除清單時仍維持嚴格的上限驗證。
+- 在 Key 改名預覽的檔案下拉選單中直接顯示每個檔案的可編輯狀態。可編輯的程式碼檔案與唯讀語言檔案會以圖示、文字標籤及不同樣式辨識，切換檔案時下方提示也會同步更新。
+- **Key 改名**新增「同步程式碼使用位置」選項。啟用後，後端會依快取的 Regex 位置驗證 `oldKey` 或 `namespace.oldKey`，先產生語言檔與程式碼變更，再以單一 Diff 預覽確認。
+- 符合的程式碼檔案可直接編輯 Diff 右側結果，產生的語言檔變更仍維持唯讀。套用前後端會重新建立預覽、核對完整檔案集合與 SHA-256、驗證內容大小及控制字元，並以具備回復機制的原子寫入完成變更。
+- Diff 會依目前選取的檔案動態提示：語言檔案明確標示為唯讀，程式碼檔案則提示右側修改內容可以編輯。
+- 使用位置紀錄只保留在後端快取；使用者雙擊「使用次數」欄位後才按需讀取。RPC 每頁最多回傳 100 筆去重後的位置，避免一般狀態更新與延遲計算行列位置時，將最多 250,000 筆紀錄序列化並複製到前端。
+- 新增可重現的 12 種 locale 記憶體回歸測試，使用正式 JSON parser、Regex 使用率掃描器與 JOL retained-size 測量。96,000 筆翻譯的參考案例符合方案預設限制，並在 `docs/performance_memory.zh.md` 記錄前端保留記憶體與 RPC 序列化資料量的改善。
 
 ## 1.5.4
 
