@@ -51,9 +51,10 @@ interface LocalizationManagerRpcApi : RemoteApi<Unit> {
         schemeId: String,
     )
 
-    suspend fun updateSchemeUsageSettings(
+    suspend fun updateSchemeSettings(
         projectId: ProjectId,
         schemeId: String,
+        name: String,
         settings: UsageScanSettingsDto,
     )
 
@@ -113,6 +114,36 @@ interface LocalizationManagerRpcApi : RemoteApi<Unit> {
         projectId: ProjectId,
         schemeId: String,
         mutations: List<EntryMutationDto>,
+        expectedBeforeHashes: Map<String, String>,
+    )
+
+    suspend fun scanSelectionReplacements(
+        projectId: ProjectId,
+        schemeId: String,
+        selectedText: String,
+        rules: List<ReplacementTemplateRuleDto>,
+    ): SelectionReplacementScanDto
+
+    suspend fun previewSelectionReplacementFile(
+        projectId: ProjectId,
+        schemeId: String,
+        selectedText: String,
+        replacementKey: String,
+        rules: List<ReplacementTemplateRuleDto>,
+        filePath: String,
+    ): FileChangePreviewDto
+
+    suspend fun previewSelectionTranslation(
+        projectId: ProjectId,
+        schemeId: String,
+        request: SelectionTranslationRequestDto,
+    ): ChangePreviewDto
+
+    suspend fun applyPreviewedSelectionTranslation(
+        projectId: ProjectId,
+        schemeId: String,
+        request: SelectionTranslationRequestDto,
+        editedFiles: List<EditedFileContentDto>,
         expectedBeforeHashes: Map<String, String>,
     )
 

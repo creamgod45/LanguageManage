@@ -1,5 +1,8 @@
 blank_issues_enabled: false
 contact_links:
-  - name: 使用者操作手冊 / User Manual
+  - name: User Manual (English)
     url: https://github.com/creamgod45/LanguageManage/blob/main/docs/user_manual_book.md
+    about: Review installation, scheme, format, and Diff instructions before submitting an issue.
+  - name: 使用者操作手冊（繁體中文）
+    url: https://github.com/creamgod45/LanguageManage/blob/main/docs/user_manual_book.zh.md
     about: 提交問題前，請先確認安裝、方案、格式與 Diff 操作方式。

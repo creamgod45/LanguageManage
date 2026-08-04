@@ -65,12 +65,13 @@ class BackendLocalizationManagerRpcApi : LocalizationManagerRpcApi {
         Unit
     }
 
-    override suspend fun updateSchemeUsageSettings(
+    override suspend fun updateSchemeSettings(
         projectId: ProjectId,
         schemeId: String,
+        name: String,
         settings: UsageScanSettingsDto,
     ) = withContext(Dispatchers.IO) {
-        projectId.service()?.updateSchemeUsageSettings(schemeId, settings)
+        projectId.service()?.updateSchemeSettings(schemeId, name, settings)
         Unit
     }
 
@@ -158,6 +159,50 @@ class BackendLocalizationManagerRpcApi : LocalizationManagerRpcApi {
         expectedBeforeHashes: Map<String, String>,
     ) = withContext(Dispatchers.IO) {
         projectId.service()?.applyPreviewedEntryMutations(schemeId, mutations, expectedBeforeHashes)
+        Unit
+    }
+
+    override suspend fun scanSelectionReplacements(
+        projectId: ProjectId,
+        schemeId: String,
+        selectedText: String,
+        rules: List<ReplacementTemplateRuleDto>,
+    ): SelectionReplacementScanDto =
+        withContext(Dispatchers.IO) {
+            projectId.service()?.scanSelectionReplacements(schemeId, selectedText, rules)
+                ?: error(LanguageManagerBackendBundle.message("project.unavailable"))
+        }
+
+    override suspend fun previewSelectionReplacementFile(
+        projectId: ProjectId,
+        schemeId: String,
+        selectedText: String,
+        replacementKey: String,
+        rules: List<ReplacementTemplateRuleDto>,
+        filePath: String,
+    ): FileChangePreviewDto =
+        withContext(Dispatchers.IO) {
+            projectId.service()?.previewSelectionReplacementFile(schemeId, selectedText, replacementKey, rules, filePath)
+                ?: error(LanguageManagerBackendBundle.message("project.unavailable"))
+        }
+
+    override suspend fun previewSelectionTranslation(
+        projectId: ProjectId,
+        schemeId: String,
+        request: SelectionTranslationRequestDto,
+    ): ChangePreviewDto =
+        withContext(Dispatchers.IO) {
+            projectId.service()?.previewSelectionTranslation(schemeId, request) ?: ChangePreviewDto()
+        }
+
+    override suspend fun applyPreviewedSelectionTranslation(
+        projectId: ProjectId,
+        schemeId: String,
+        request: SelectionTranslationRequestDto,
+        editedFiles: List<EditedFileContentDto>,
+        expectedBeforeHashes: Map<String, String>,
+    ) = withContext(Dispatchers.IO) {
+        projectId.service()?.applyPreviewedSelectionTranslation(schemeId, request, editedFiles, expectedBeforeHashes)
         Unit
     }
 

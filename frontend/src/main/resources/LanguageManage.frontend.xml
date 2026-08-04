@@ -27,5 +27,12 @@
                     class="cg.creamgod45.localization.ui.ExcludeFoldersFromActiveSchemeAction"/>
             <add-to-group group-id="ProjectViewPopupMenu" anchor="last"/>
         </group>
+        <group id="cg.creamgod45.localization.EditorSelectionGroup"
+               class="cg.creamgod45.localization.ui.LanguageManagerEditorActionGroup"
+               popup="true">
+            <action id="cg.creamgod45.localization.CreateTranslationFromSelection"
+                    class="cg.creamgod45.localization.ui.CreateTranslationFromSelectionAction"/>
+            <add-to-group group-id="EditorPopupMenu" anchor="last"/>
+        </group>
     </actions>
 </idea-plugin>

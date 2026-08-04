@@ -33,6 +33,8 @@ internal class LocalizationActionContext(
 
     fun hasActiveScheme(): Boolean = localizationState.activeSchemeId != null
 
+    fun snapshot(): LocalizationStateDto = localizationState
+
     companion object {
         fun getInstance(project: Project): LocalizationActionContext = project.getService(LocalizationActionContext::class.java)
     }

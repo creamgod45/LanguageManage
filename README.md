@@ -19,7 +19,8 @@ The UI and diagnostics are available in English, Traditional Chinese, Simplified
 - Copy selected keys into one target locale's values, and add framework-specific usage Regex recommendations for major PHP frameworks, Spring/Java/Kotlin, ResourceBundle, and IntelliJ Platform plugins. An opt-in Laravel key-only preset can ignore uncertain package/group prefixes such as `filament::components/button.` when exact namespace matching is not practical.
 - Create a complete new locale from an existing locale—for example, copy the key structure from `en/*.php` into `es/*.php`—using a freely editable code field and an explicit ISO/BCP 47 suggestion popup. The popup never rewrites text while typing. An optional locale note is saved with the scheme and supplied to AI as language, region, terminology, and tone context; every new file is reviewed in a Diff first.
 - Configure the plugin display language, issue visibility, and defaults for new schemes in IDE Settings. Existing scheme base paths, Regex patterns, and exclusions are edited independently from the Tool Window.
-- Maintain up to 1,000 exclusions per scheme and bulk-add them with comma- or newline-separated input. From the Project file tree, use **Localization Manager → Exclude Folders from Current Scheme Scan** to add selected folders as precise paths relative to the active scheme base path; the action is disabled when no scheme is active.
+- Rename the active scheme from **Scheme Settings** without changing its managed files or isolated identity. Maintain up to 1,000 exclusions per scheme and bulk-add them with comma- or newline-separated input. From the Project file tree, use **Localization Manager → Exclude Folders from Current Scheme Scan** to add selected folders as precise paths relative to the active scheme base path; the action is disabled when no scheme is active.
+- Turn an editor selection into a managed translation through **Localization Manager → Create Translation from Selection**. Optional ordered `%key%` template conditions scan only the active scheme working directory, provide a lazy file list and per-file Diff, then show a final multi-file confirmation where source-code results are editable and generated language-file changes remain read-only.
 - Detect parser errors, empty values, duplicate keys, duplicate values, missing locales, and possibly unused keys. Duplicate-value and possibly-unused suggestions can be hidden in settings.
 - Accumulate usage occurrences detected by multiple Regex patterns. Repeated calls on one line are counted separately, while overlapping patterns that capture the same key at the same source position are deduplicated.
 - Double-click a translation row's Usage cell to enable the on-demand **Usage Locations** tab. Location records remain backend-only and the frontend requests only that key's current page, limited to 100 rows; opening a row lazily resolves and caches its line/column before navigating the IDE caret.
@@ -43,7 +44,7 @@ The UI and diagnostics are available in English, Traditional Chinese, Simplified
 
 1. Install the plugin and open **LanguageManager** from the IDE sidebar.
 2. Open the **New Scheme** dropdown and choose file selection or folder selection. Folder mode supports selecting locale directories such as `en`, `zh_CN`, and `zh_TW` together.
-3. Folder mode lists each discovered file, format, locale, namespace, entry count, and recognition error. Add more folders from the popup, enter a scheme name, select the recognized files, and confirm.
+3. Folder mode lists each discovered file, format, locale, namespace, entry count, and recognition error. Add more folders from the popup, enter or edit the scheme name in its dedicated field, select the recognized files, and confirm.
 4. Use search, locale filtering, and translation-status filtering to find rows with missing translations or zero usage. Manage the results with pagination and the **Actions** dropdown.
 5. Select one or more rows in **Issues and Suggestions**. Any automatic modification is written only after the user reviews and accepts its Diff.
 6. To hide duplicate-value or possibly-unused suggestions, open **Settings → Tools → LanguageManager**.
@@ -92,7 +93,7 @@ The root project uses the IntelliJ Platform Gradle Plugin to assemble three cont
 | `gradle.properties` | Release version and Gradle/Kotlin build options |
 | `CHANGELOG.md` | Release features and fixes |
 | `AGENTS.md` | Product, architecture, security, localization, test, and Git rules |
-| `.github/ISSUE_TEMPLATE/` | Bug, feature request, and format compatibility Issue Forms |
+| `.github/ISSUE_TEMPLATE/` | Separate English and Traditional Chinese Issue Forms for bug reports, feature requests, and format compatibility |
 
 ### `shared`
 
@@ -165,7 +166,7 @@ The root project uses the IntelliJ Platform Gradle Plugin to assemble three cont
 | `deleteScheme(...)` | Deletes a scheme and its cache without deleting language files | No |
 | `activateScheme(...)` | Switches the active scheme and loads cache or reparses | No |
 | `reload(...)` | Reloads forcibly or according to fingerprints | No |
-| `updateSchemeUsageSettings(...)` | Validates and stores base path, Regex, and exclusions, invalidates cache, and recounts | No; writes plugin scheme data only |
+| `updateSchemeSettings(...)` | Validates and stores the scheme name, base path, Regex, and exclusions, invalidates cache, and recounts | No; writes plugin scheme data only |
 | `addActiveSchemeExcludedDirectories(...)` | Validates Project-tree folders against the active scheme base path, adds relative exclusions, invalidates cache, and recounts | No; writes plugin scheme data only |
 | `discoverLanguageFiles(...)` | Safely scans selected folders with the new-scheme loading budget, deduplicates files, and returns recognition results | No |
 | `exportSchemeSettings()` | Serializes every scheme into portable, versioned JSON | No |

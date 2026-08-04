@@ -1,6 +1,6 @@
-name: 錯誤回報 / Bug report
+name: 錯誤回報（繁體中文）
 description: 回報可重現的插件錯誤、無回應、資料顯示或寫入問題
-title: "[Bug] "
+title: "[錯誤] "
 labels:
   - bug
 body:

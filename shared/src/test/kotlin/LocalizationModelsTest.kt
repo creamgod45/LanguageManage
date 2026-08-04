@@ -3,9 +3,20 @@ package cg.creamgod45.localization
 import kotlinx.serialization.json.Json
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class LocalizationModelsTest {
+    @Test
+    fun `scheme names are trimmed and reject blank oversized or control characters`() {
+        assertEquals("Website Frontend", normalizeSchemeName("  Website Frontend  "))
+        assertEquals("網站前台", normalizeSchemeName("網站前台"))
+        assertNull(normalizeSchemeName("   "))
+        assertNull(normalizeSchemeName("a".repeat(MAX_SCHEME_NAME_LENGTH + 1)))
+        assertNull(normalizeSchemeName("unsafe\nname"))
+        assertEquals("a".repeat(MAX_SCHEME_NAME_LENGTH), normalizeSchemeName("a".repeat(MAX_SCHEME_NAME_LENGTH)))
+    }
+
     @Test
     fun `old schemes receive default usage scan settings`() {
         val scheme =

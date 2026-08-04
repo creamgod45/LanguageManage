@@ -1,6 +1,6 @@
 # LanguageManager 功能總覽
 
-> 給開發者的簡短精確功能索引。版本 **1.5.5**。詳細操作見 [`user_manual_book.zh.md`](user_manual_book.zh.md)，完整需求見 [`需求.md`](需求.md)，工程規範見 [`../AGENTS.md`](../AGENTS.md)。
+> 給開發者的簡短精確功能索引。版本 **1.5.6**。詳細操作見 [`user_manual_book.zh.md`](user_manual_book.zh.md)，完整需求見 [`需求.md`](需求.md)，工程規範見 [`../AGENTS.md`](../AGENTS.md)。
 
 ## 一句話定位
 
@@ -25,7 +25,8 @@ PHP **只 parse 不執行**：只接受選填的 `declare(strict_types=1);` + �
 ## 核心功能
 
 ### 方案（Scheme）
-- 從明確選取的檔案或一個以上資料夾建立隔離方案；資料夾模式先 parse、預覽辨識結果（格式/locale/namespace/筆數/錯誤）再確認。
+- 從明確選取的檔案或一個以上資料夾建立隔離方案；資料夾模式先 parse、預覽辨識結果（格式/locale/namespace/筆數/錯誤），並由使用者在獨立欄位確認或修改方案名稱後才建立。
+- 目前方案可從「方案設定」重新命名；改名不改變方案 ID、列管檔案、快取歸屬或方案隔離。
 - 方案間完全隔離，mutation 只寫入該方案檔案。
 - 可從 Tool Window dropdown 以 JSON 匯入/匯出可攜方案設定（路徑盡量轉相對，每檔含 parser 與安全預覽）。
 
@@ -35,6 +36,12 @@ PHP **只 parse 不執行**：只接受選填的 `declare(strict_types=1);` + �
 - 一張捲動表單編輯所有 locale 值並存為單一驗證批次；批量刪除、跨 locale 改 key、複製/貼上 cell、IDE 原生 Find in Files。
 - **Rename Key** 可選同步已記錄的原始碼使用位置，透過可編輯 code Diff 後才寫檔。Diff 的檔案下拉選單以圖示＋文字標籤（可編輯／唯讀）逐檔標示，切換時即時反映當前檔案是否可編輯。
 - 從既有 locale 建立完整新 locale（如 `en/*.php` → `es/*.php`），附 ISO/BCP 47 建議 popup 與選填語言備註。
+
+### 編輯器選取範圍建立翻譯
+- 編輯器右鍵群組只在有選取文字時顯示可用狀態，且必須有目前方案；Modal 同時處理 key、所有 locale 值與選填的類似文字替換條件。
+- 替換條件為 `%key%` 字串樣板＋檔名 suffix，不是 Regex；完全保留新增順序，每個檔案以第一個符合條件為準。
+- 掃描只限方案 base path，遵守排除清單並略過列管語言檔、二進位、無效 UTF-8 與超過 5 MB 的來源檔；最多檢查 50,000 檔、列出 2,000 候選。
+- 候選清單雙擊才 lazy 建立單檔 Diff。送出後另顯示最終多檔 Diff 與完整路徑／可編輯狀態；語言檔唯讀、程式碼結果可編輯，套用前重新驗證 SHA-256 與完整檔案集合。
 
 ### AI 批量翻譯
 - 對最多 100 列，透過 OpenAI-compatible 或 Anthropic Claude endpoint 翻譯。

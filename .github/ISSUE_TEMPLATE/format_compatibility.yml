@@ -1,6 +1,6 @@
-name: 格式相容性 / Format compatibility
-description: 回報 JSON、YAML 或 Laravel PHP 無法安全解析或 round-trip 的案例
-title: "[Format] "
+name: 格式相容性（繁體中文）
+description: 回報 JSON、YAML、Laravel PHP 或 Properties 無法安全解析或 round-trip 的案例
+title: "[格式] "
 labels:
   - parser
 body:
@@ -12,6 +12,7 @@ body:
         - JSON
         - YAML / YML
         - Laravel PHP
+        - JetBrains / Java ResourceBundle Properties
     validations:
       required: true
   - type: input

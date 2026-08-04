@@ -1,0 +1,53 @@
+name: Format compatibility (English)
+description: Report a JSON, YAML, Laravel PHP, or Properties file that cannot be parsed or written back safely
+title: "[Format] "
+labels:
+  - parser
+body:
+  - type: dropdown
+    id: format
+    attributes:
+      label: File format
+      options:
+        - JSON
+        - YAML / YML
+        - Laravel PHP
+        - JetBrains / Java ResourceBundle Properties
+    validations:
+      required: true
+  - type: input
+    id: plugin-version
+    attributes:
+      label: Plugin version
+      placeholder: For example, 1.5.6
+    validations:
+      required: true
+  - type: textarea
+    id: sample
+    attributes:
+      label: Minimal reproducible file
+      description: Do not include customer, credential, proprietary, or other sensitive data.
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected keys, values, and write-back result
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual parser result or error message
+    validations:
+      required: true
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Safety confirmation
+      options:
+        - label: This sample is static localization data and does not require PHP execution, eval, include, or function calls.
+          required: true
+        - label: I removed credentials, customer data, private paths, and proprietary content.
+          required: true

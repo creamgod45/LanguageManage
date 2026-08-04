@@ -103,14 +103,14 @@ class LocalizationManagerService(
         rawFiles: List<String>,
         rawUsageSettings: UsageScanSettingsDto,
     ) = mutex.withLock {
-        LOG.info("Creating localization scheme '$name' with ${rawFiles.size} explicitly selected files")
-        require(name.trim().length in 1..80) { backendMessage("scheme.name.length") }
+        val normalizedName = requireNotNull(normalizeSchemeName(name)) { backendMessage("scheme.name.length") }
+        LOG.info("Creating localization scheme '$normalizedName' with ${rawFiles.size} explicitly selected files")
         require(rawFiles.isNotEmpty()) { backendMessage("scheme.files.required") }
         val files = rawFiles.map(SafeLanguageFileAccess::validate).distinct().map(Path::toString)
         val scheme =
             LanguageSchemeDto(
                 UUID.randomUUID().toString(),
-                sanitizeText(name, 80),
+                sanitizeText(normalizedName, MAX_SCHEME_NAME_LENGTH),
                 files,
                 System.currentTimeMillis(),
                 UsageScanSupport.normalize(rawUsageSettings),
@@ -159,13 +159,20 @@ class LocalizationManagerService(
             }
         }
 
-    suspend fun updateSchemeUsageSettings(
+    suspend fun updateSchemeSettings(
         id: String,
+        name: String,
         rawSettings: UsageScanSettingsDto,
     ) = mutex.withLock {
         val scheme = requireScheme(id)
+        val normalizedName = requireNotNull(normalizeSchemeName(name)) { backendMessage("scheme.name.length") }
         val settings = UsageScanSupport.normalize(rawSettings)
-        val updated = scheme.copy(usageScanSettings = settings, updatedAtEpochMs = System.currentTimeMillis())
+        val updated =
+            scheme.copy(
+                name = sanitizeText(normalizedName, MAX_SCHEME_NAME_LENGTH),
+                usageScanSettings = settings,
+                updatedAtEpochMs = System.currentTimeMillis(),
+            )
         val schemes = mutableState.value.schemes.map { if (it.id == id) updated else it }
         mutableState.value = mutableState.value.copy(schemes = schemes, errorMessage = null)
         Files.deleteIfExists(cacheFile(id))
@@ -379,6 +386,95 @@ class LocalizationManagerService(
             throw error
         }
         loadScheme(scheme, true)
+    }
+
+    suspend fun scanSelectionReplacements(
+        schemeId: String,
+        selectedText: String,
+        rules: List<ReplacementTemplateRuleDto>,
+    ): SelectionReplacementScanDto {
+        val scheme = requireScheme(schemeId)
+        val root = usageScanRoot(scheme) ?: error(backendMessage("usage.exclusion.root.unavailable"))
+        val context = currentCoroutineContext()
+        return SelectionReplacementSupport.scan(root, scheme.files, scheme.usageScanSettings, selectedText, rules) {
+            context.ensureActive()
+        }
+    }
+
+    suspend fun previewSelectionReplacementFile(
+        schemeId: String,
+        selectedText: String,
+        replacementKey: String,
+        rules: List<ReplacementTemplateRuleDto>,
+        filePath: String,
+    ): FileChangePreviewDto {
+        val scheme = requireScheme(schemeId)
+        val root = usageScanRoot(scheme) ?: error(backendMessage("usage.exclusion.root.unavailable"))
+        return SelectionReplacementSupport.previewFile(root, scheme.files, selectedText, replacementKey, rules, filePath)
+    }
+
+    suspend fun previewSelectionTranslation(
+        schemeId: String,
+        request: SelectionTranslationRequestDto,
+    ): ChangePreviewDto = mutex.withLock { buildSelectionTranslationPreview(requireScheme(schemeId), request) }
+
+    suspend fun applyPreviewedSelectionTranslation(
+        schemeId: String,
+        request: SelectionTranslationRequestDto,
+        editedFiles: List<EditedFileContentDto>,
+        expectedBeforeHashes: Map<String, String>,
+    ) = mutex.withLock {
+        val scheme = requireScheme(schemeId)
+        val preview = buildSelectionTranslationPreview(scheme, request)
+        require(preview.files.associate { it.filePath to it.beforeSha256 } == expectedBeforeHashes) { backendMessage("preview.changed") }
+        val editedByPath = editedFiles.associate { it.filePath to it.content }
+        require(editedByPath.keys == preview.files.mapTo(linkedSetOf()) { it.filePath })
+        preview.files.filterNot { it.editable }.forEach { change -> require(editedByPath.getValue(change.filePath) == change.afterContent) }
+        editedByPath.values.forEach { content ->
+            require(content.toByteArray(StandardCharsets.UTF_8).size <= MAX_EDITED_PREVIEW_BYTES) { backendMessage("input.too.long") }
+            require(content.none { it == '\u0000' || (it.code < 32 && it !in "\n\r\t") }) { backendMessage("input.control") }
+        }
+        val written = mutableListOf<FileChangePreviewDto>()
+        try {
+            preview.files.forEach { change ->
+                SafeLanguageFileAccess.atomicWrite(Path.of(change.filePath), editedByPath.getValue(change.filePath))
+                written += change
+            }
+        } catch (error: Exception) {
+            written.asReversed().forEach { change ->
+                runCatching { SafeLanguageFileAccess.atomicWrite(Path.of(change.filePath), change.beforeContent) }
+                    .exceptionOrNull()
+                    ?.let(error::addSuppressed)
+            }
+            throw error
+        }
+        loadScheme(scheme, true)
+    }
+
+    private fun buildSelectionTranslationPreview(
+        scheme: LanguageSchemeDto,
+        request: SelectionTranslationRequestDto,
+    ): ChangePreviewDto {
+        require(request.replacementFiles.size <= 2_000)
+        val entryChanges = buildEntryMutationPreview(scheme, request.mutations).files
+        val sourceChanges =
+            if (request.replacementFiles.isEmpty()) {
+                emptyList()
+            } else {
+                val root = usageScanRoot(scheme) ?: error(backendMessage("usage.exclusion.root.unavailable"))
+                request.replacementFiles.distinct().map { filePath ->
+                    SelectionReplacementSupport.previewFile(
+                        root,
+                        scheme.files,
+                        request.selectedText,
+                        request.replacementKey,
+                        request.rules,
+                        filePath,
+                    )
+                }
+            }
+        require((entryChanges + sourceChanges).map { it.filePath }.distinct().size == entryChanges.size + sourceChanges.size)
+        return ChangePreviewDto(entryChanges + sourceChanges)
     }
 
     private fun buildEntryMutationPreview(

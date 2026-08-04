@@ -1,0 +1,54 @@
+name: Feature request (English)
+description: Propose a workflow, management capability, IDE integration, or quality-analysis improvement
+title: "[Feature] "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: Describe the user scenario and problem before proposing UI controls, workflow, or API behavior.
+  - type: dropdown
+    id: area
+    attributes:
+      label: Feature area
+      options:
+        - Scheme management
+        - Translation table, search, or filters
+        - Parser or file format
+        - Issues, suggestions, or analysis
+        - Diff, repair, or safe writes
+        - IDE integration
+        - AI translation
+        - Performance or caching
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: User scenario and problem
+      description: Who encounters the limitation, in what situation, and what outcome is currently difficult?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: Describe the workflow, button location, inputs, outputs, or API behavior.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+  - type: checkboxes
+    id: constraints
+    attributes:
+      label: Design constraints
+      options:
+        - label: The feature must preserve explicit file selection and isolation between schemes.
+          required: true
+        - label: Automatic file changes must provide a Diff preview and conflict protection.
+          required: true
+        - label: I searched existing issues and did not find the same request.
+          required: true

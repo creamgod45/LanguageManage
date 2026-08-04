@@ -30,10 +30,11 @@ internal class LocalizationFrontendRepository(
 
     suspend fun activateScheme(id: String) = LocalizationManagerRpcApi.getInstance().activateScheme(project.projectId(), id)
 
-    suspend fun updateSchemeUsageSettings(
+    suspend fun updateSchemeSettings(
         id: String,
+        name: String,
         settings: UsageScanSettingsDto,
-    ) = LocalizationManagerRpcApi.getInstance().updateSchemeUsageSettings(project.projectId(), id, settings)
+    ) = LocalizationManagerRpcApi.getInstance().updateSchemeSettings(project.projectId(), id, name, settings)
 
     suspend fun addActiveSchemeExcludedDirectories(folderPaths: List<String>) =
         LocalizationManagerRpcApi.getInstance().addActiveSchemeExcludedDirectories(project.projectId(), folderPaths)
@@ -90,6 +91,36 @@ internal class LocalizationFrontendRepository(
         mutations: List<EntryMutationDto>,
         expectedBeforeHashes: Map<String, String>,
     ) = LocalizationManagerRpcApi.getInstance().applyPreviewedEntryMutations(project.projectId(), id, mutations, expectedBeforeHashes)
+
+    suspend fun scanSelectionReplacements(
+        id: String,
+        selectedText: String,
+        rules: List<ReplacementTemplateRuleDto>,
+    ) = LocalizationManagerRpcApi.getInstance().scanSelectionReplacements(project.projectId(), id, selectedText, rules)
+
+    suspend fun previewSelectionReplacementFile(
+        id: String,
+        selectedText: String,
+        replacementKey: String,
+        rules: List<ReplacementTemplateRuleDto>,
+        filePath: String,
+    ) = LocalizationManagerRpcApi.getInstance().previewSelectionReplacementFile(
+        project.projectId(), id, selectedText, replacementKey, rules, filePath,
+    )
+
+    suspend fun previewSelectionTranslation(
+        id: String,
+        request: SelectionTranslationRequestDto,
+    ) = LocalizationManagerRpcApi.getInstance().previewSelectionTranslation(project.projectId(), id, request)
+
+    suspend fun applyPreviewedSelectionTranslation(
+        id: String,
+        request: SelectionTranslationRequestDto,
+        editedFiles: List<EditedFileContentDto>,
+        expectedBeforeHashes: Map<String, String>,
+    ) = LocalizationManagerRpcApi.getInstance().applyPreviewedSelectionTranslation(
+        project.projectId(), id, request, editedFiles, expectedBeforeHashes,
+    )
 
     suspend fun delete(
         id: String,

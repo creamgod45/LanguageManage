@@ -19,7 +19,8 @@ LanguageManager 是支援 JetBrains IDE split mode 的在地化檔案管理插�
 - 可將多個所選 key 一次複製到指定語言 value，並提供 PHP 主流框架、Spring／Java／Kotlin、ResourceBundle 與 JetBrains Plugin 的使用率 Regex 推薦格式；另有選用的 Laravel「僅擷取 key」規則，可在不適合精準 namespace 配對時忽略 `filament::components/button.` 等不確定 package／group 前綴。
 - 可從現有 locale 建立完整的新語言版本；目標代碼使用可自由輸入的文字欄位，右側按鈕會開啟 ISO／BCP 47 建議 Popup，只有使用者明確選取才會回填，輸入或刪除期間不會自動改寫。選填語言備註會保存於方案並帶入 AI，作為語言、地區、術語及語氣背景；新檔案仍須經 Diff 確認。
 - IDE Settings 可設定插件顯示語言、問題建議顯示偏好，以及新方案的 base path 模式、向上層級、Regex 與排除清單；既有方案由 Tool Window「方案設定」獨立調整。
-- 每個方案最多支援 1,000 個排除項目，並可用逗號或換行大量新增。也可在 Project 檔案樹使用「在地化語言管理 → 從目前方案掃描中排除資料夾」，將選取資料夾以目前方案 base path 的精確相對路徑加入；沒有啟用方案時操作會停用。
+- 可從「方案設定」重新命名目前方案，不會改變列管檔案或隔離身分。每個方案最多支援 1,000 個排除項目，並可用逗號或換行大量新增。也可在 Project 檔案樹使用「在地化語言管理 → 從目前方案掃描中排除資料夾」，將選取資料夾以目前方案 base path 的精確相對路徑加入；沒有啟用方案時操作會停用。
+- 可在編輯器選取文字後使用「在地化管理器 → 以選取範圍建立翻譯文字」。選填的 `%key%` 樣板條件會依新增順序掃描目前方案工作目錄，候選檔案採 lazy 單檔預覽，最後以多檔 Diff 再次確認；程式碼結果可編輯，產生的語言檔維持唯讀。
 - 偵測解析錯誤、空值、重複鍵、重複值、缺少語言及可能未使用的 key；重複值與可能未使用建議可在設定中隱藏。
 - 多個使用率 Regex 的實際命中會累加；同一行的重複呼叫分別計數，不同 Regex 若捕獲同一位置的相同 key 則只計一次。
 - 雙擊翻譯 row 的「使用次數」cell 才會啟用按需載入的「使用位置」Tab；位置紀錄只保留於 backend，frontend 僅請求該 key 當頁最多 100 筆，開啟 row 時才計算及快取行／欄，再把 IDE 游標移到精確位置。
@@ -42,7 +43,7 @@ LanguageManager 是支援 JetBrains IDE split mode 的在地化檔案管理插�
 
 1. 安裝插件後，從 IDE 右側開啟「在地化管理器」。
 2. 點選「新增方案」下拉選單，選擇「依檔案選取」或「依資料夾選取」；資料夾模式可一次多選 `en`、`zh_CN`、`zh_TW` 等 locale 目錄。
-3. 資料夾模式會列出掃描到的檔案、格式、語言、namespace、筆數與識別錯誤；可在 Popup 使用「增加資料夾」，確認方案名稱及勾選項目後建立方案。
+3. 資料夾模式會列出掃描到的檔案、格式、語言、namespace、筆數與識別錯誤；可在 Popup 使用「增加資料夾」，並在獨立名稱欄位輸入或修改方案名稱，確認勾選項目後建立方案。
 4. 使用搜尋、語言篩選與翻譯狀態篩選，快速找出缺少語言或使用次數為 0 的 row，再透過分頁及「操作」選單管理翻譯。
 5. 在「問題與建議」頁籤選擇單列或批量處理；確認 Diff 後才會寫入檔案。
 6. 若不需要重複值或可能未使用提示，可在 **Settings → Tools → LanguageManager** 隱藏對應建議。
@@ -91,7 +92,7 @@ flowchart LR
 | `gradle.properties` | 發布版本與 Gradle/Kotlin 建置選項 |
 | `CHANGELOG.md` | 各版本功能與修正紀錄 |
 | `AGENTS.md` | 專案開發提示：產品原則、架構、安全、多國語言、測試與 Git 習慣 |
-| `.github/ISSUE_TEMPLATE/` | 錯誤、功能需求、格式相容性 Issue Forms 與提交入口設定 |
+| `.github/ISSUE_TEMPLATE/` | 分開顯示的英文／繁中錯誤回報、功能需求、格式相容性 Issue Forms 與提交入口設定 |
 
 ### `shared`
 
@@ -165,7 +166,7 @@ flowchart LR
 | `deleteScheme(...)` | 刪除方案及其 cache，不刪除語言檔 | 否 |
 | `activateScheme(...)` | 切換方案並載入 cache 或重新解析 | 否 |
 | `reload(...)` | 強制或依 fingerprint 重新載入 | 否 |
-| `updateSchemeUsageSettings(...)` | 驗證並儲存方案 base path、Regex 與排除清單，清除 cache 後重新計算 | 否，僅寫入插件方案資料 |
+| `updateSchemeSettings(...)` | 驗證並儲存方案名稱、base path、Regex 與排除清單，清除 cache 後重新計算 | 否，僅寫入插件方案資料 |
 | `addActiveSchemeExcludedDirectories(...)` | 驗證檔案樹所選資料夾、加入目前方案相對排除路徑、清除 cache 並重新計算 | 否，僅寫入插件方案資料 |
 | `discoverLanguageFiles(...)` | 依新方案載入預算安全掃描一個／多個指定資料夾，去重後回傳逐檔解析與識別結果 | 否 |
 | `exportSchemeSettings()` | 將所有方案轉成可攜式、有版本的 JSON 內容 | 否 |

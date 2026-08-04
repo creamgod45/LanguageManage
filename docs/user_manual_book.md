@@ -8,7 +8,7 @@ This manual explains how to use LanguageManager in a JetBrains IDE to create iso
 
 ### Supported IDE versions
 
-The minimum supported version is JetBrains Platform build `253.5` (IntelliJ IDEA 2025.3.5), with no configured upper bound. Marketplace Plugin Verifier has confirmed compatibility with IntelliJ IDEA 2025.3.5, 2025.3.6, 2026.1.1 through 2026.1.4, and 2026.2 RC. See [Compatibility Verification](compatibility.md) for the complete record.
+The minimum supported version is JetBrains Platform build `253.5` (IntelliJ IDEA 2025.3.5), with no configured upper bound. Marketplace Plugin Verifier has confirmed compatibility with IntelliJ IDEA 2025.3.5, 2025.3.6, 2026.1.1 through 2026.1.4, 2026.2, 2026.2.0.1, and 2026.2.1 EAP. See [Compatibility Verification](compatibility.md) for the complete record.
 
 ## 1. Supported Content
 
@@ -51,7 +51,7 @@ After installation, the LanguageManager icon appears in the IDE Tool Window side
    - **Select Files**: select one or more JSON, YAML/YML, PHP, or Properties files, then enter a scheme name.
    - **Select Folders**: select one or more folders—such as `en`, `zh_CN`, and `zh_TW`—and wait for the backend to combine, scan, and parse the supported files.
 4. The folder-recognition dialog displays each full path, format, locale, namespace, entry count, and recognition result. A failed file keeps its error message but cannot be selected. Use **Add Folder** to merge another folder into the scan.
-5. Enter a recognizable scheme name, select the recognized files to manage, and click **Create Scheme**.
+5. Enter or edit a recognizable scheme name in the dedicated name field, select the recognized files to manage, and click **Create Scheme**. Names are trimmed and must contain 1–80 characters without control characters.
 6. Wait for loading to finish. Parsed entries then appear in the translation table.
 
 Folder mode checks at most 500 supported files, descends at most 16 levels per root, applies the configured new-scheme loading budget, and skips common non-source directories such as `.git`, `.idea`, `vendor`, `node_modules`, `build`, `storage`, and `cache`. Selecting both a parent and child directory does not duplicate files because normalized absolute paths are deduplicated. Discovery only creates a candidate list; no file is managed until the user confirms it.
@@ -62,6 +62,19 @@ Scheme behavior:
 - Switching schemes never mixes entries from another scheme.
 - Deleting a scheme never deletes its source language files.
 - More folders may be added in the recognition popup before creation. To change the managed scope later, create a new scheme; the plugin never adds files automatically.
+
+### Create a translation from an editor selection
+
+1. Activate the scheme that owns the target language files, select a word or range in the editor, then right-click and choose **Localization Manager → Create Translation from Selection**. The action stays disabled without both a selection and an active scheme.
+2. Enter the key and review the selected source text. The modal lists every locale target in the selected namespace in one scrollable form; the selected text is initially placed in the preferred `en` target when available.
+3. To find duplicate source literals, enable **Scan for similar text**. Add any number of ordered conditions, each with exactly one `%key%` placeholder and one filename suffix. For example, use `__('%key%')` with `.php`, or `@lang('%key%')` with `.blade.php`. Suggested framework templates fill these two ordinary fields; they do not create a Regex.
+4. Conditions retain their insertion order. For each filename, the first matching suffix wins—even when a later, more specific suffix would also match—so the visible row order is the actual execution order.
+5. Click **Preview Matches** to scan only the active scheme working directory. Managed language files and configured exclusions are skipped, as are binary, invalid UTF-8, and source files larger than 5 MB. The scan stops at 50,000 inspected files or 2,000 matched files.
+6. The candidate list is lazy. Double-clicking one file computes and opens only that file's Diff, with the matched source and generated replacement marked in the Diff labels. Select or clear candidate files to control which ones enter the final operation.
+7. Confirm the modal to open the final multi-file Diff. Its file selector displays the full affected path and an editable/read-only state. Generated language-file results are read-only; replacement results for source-code files are editable on the right side.
+8. **Apply** regenerates the preview on the backend, verifies the exact file set and every original SHA-256, validates edited sizes, and writes atomically with rollback. Canceling either preview writes nothing.
+
+Replacement templates are data only. They are never compiled as Regex, evaluated as PHP, or executed as commands. The selected source text is searched literally.
 
 ### Import and export scheme settings
 
@@ -314,7 +327,7 @@ Click **Handle** in the final column. Depending on issue type, the action previe
 
 ## 10. Usage Scan Settings
 
-Select a scheme in the Tool Window and click **Scheme Settings**. The popup uses the already-loaded active scheme and shows its managed files and isolated scan settings. It does not dynamically load schemes from IDE Settings.
+Select a scheme in the Tool Window and click **Scheme Settings**. The popup uses the already-loaded active scheme and lets you rename it while showing its managed files and isolated scan settings. Renaming preserves the scheme ID, managed files, cache ownership, and isolation. It does not dynamically load schemes from IDE Settings.
 
 **Settings → Tools → LanguageManager** manages plugin display language, issue visibility, and defaults for newly created schemes. Existing schemes are not loaded there. The Tool Window's JetBrains **More Options** menu also contains a shortcut to this settings page.
 
@@ -456,6 +469,8 @@ Choose the appropriate Issue type:
 - Bug report: reproducible UI, RPC, parser, write, or performance problems.
 - Feature request: new workflows, analysis, formats, or IDE integration.
 - Format compatibility: a minimal JSON, YAML, Laravel PHP, or ResourceBundle Properties parse/round-trip example.
+
+Each issue type is displayed as two separate templates: **English** and **Traditional Chinese**. Select the language-specific card you want to complete; the form does not mix both languages in the same fields.
 
 Before submitting, remove passwords, tokens, client names, and other sensitive content from logs, paths, and language files.
 

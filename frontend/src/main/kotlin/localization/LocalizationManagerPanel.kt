@@ -680,7 +680,10 @@ internal class LocalizationManagerPanel(
     private fun editSchemeSettings() {
         val scheme = activeScheme() ?: return showError(message("error.no.active.scheme"))
         val dialog = SchemeUsageSettingsDialog(project, scheme)
-        if (dialog.showAndGet()) runAction { repository.updateSchemeUsageSettings(scheme.id, dialog.result()) }
+        if (dialog.showAndGet()) {
+            val result = dialog.result()
+            runAction { repository.updateSchemeSettings(scheme.id, result.name, result.usageSettings) }
+        }
     }
 
     private fun exportSchemeSettings() {
@@ -1502,13 +1505,23 @@ private class FolderSchemeDialog(
 
     fun selection() =
         FolderSchemeSelection(
-            schemeName.text.trim(),
+            normalizeSchemeName(schemeName.text)!!,
             model.rows.filter { it.selected && it.candidate.recognized }.map { it.candidate.filePath },
         )
 
     private fun updateOkAction() {
-        isOKActionEnabled = !loading && schemeName.text.trim().isNotEmpty() && model.rows.any { it.selected && it.candidate.recognized }
+        isOKActionEnabled =
+            !loading &&
+                normalizeSchemeName(schemeName.text) != null &&
+                model.rows.any { it.selected && it.candidate.recognized }
     }
+
+    override fun doValidate(): ValidationInfo? =
+        if (normalizeSchemeName(schemeName.text) == null) {
+            ValidationInfo(message("error.scheme.name.length", MAX_SCHEME_NAME_LENGTH), schemeName)
+        } else {
+            null
+        }
 
     private fun addFolders() {
         val descriptor =
@@ -1568,9 +1581,15 @@ private class FolderSchemeDialog(
             add(
                 JPanel(BorderLayout(6, 4)).apply {
                     add(
-                        JPanel(BorderLayout(6, 0)).apply {
-                            add(JBLabel(message("folder.discovery.name")), BorderLayout.WEST)
-                            add(schemeName, BorderLayout.CENTER)
+                        JPanel(BorderLayout(6, 4)).apply {
+                            add(
+                                JPanel(BorderLayout(6, 0)).apply {
+                                    add(JBLabel(message("folder.discovery.name")), BorderLayout.WEST)
+                                    add(schemeName, BorderLayout.CENTER)
+                                },
+                                BorderLayout.NORTH,
+                            )
+                            add(JBLabel(message("folder.discovery.name.help")), BorderLayout.CENTER)
                             add(addFolderButton, BorderLayout.EAST)
                         },
                         BorderLayout.NORTH,
@@ -2035,7 +2054,7 @@ private class IssueActionButtonEditor(
     }
 }
 
-private enum class ChangePreviewDecision { APPLY, AI_FEEDBACK, CANCEL }
+internal enum class ChangePreviewDecision { APPLY, AI_FEEDBACK, CANCEL }
 
 private class RenameKeyDialog(
     project: Project,
@@ -2078,7 +2097,7 @@ private class RenameKeyDialog(
     override fun getPreferredFocusedComponent(): JComponent = keyField
 }
 
-private class ChangePreviewDialog(
+internal class ChangePreviewDialog(
     private val project: Project,
     private val preview: ChangePreviewDto,
     private val summary: String,

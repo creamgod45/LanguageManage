@@ -10,7 +10,9 @@ import cg.creamgod45.localization.HARD_MAX_ENTRIES_PER_SCHEME
 import cg.creamgod45.localization.HARD_MAX_LANGUAGE_FILE_KB
 import cg.creamgod45.localization.HARD_MAX_LANGUAGE_SCHEME_MB
 import cg.creamgod45.localization.LanguageSchemeDto
+import cg.creamgod45.localization.MAX_SCHEME_NAME_LENGTH
 import cg.creamgod45.localization.UsageScanSettingsDto
+import cg.creamgod45.localization.normalizeSchemeName
 import com.intellij.openapi.fileChooser.FileChooserDescriptor
 import com.intellij.openapi.fileChooser.FileChooserFactory
 import com.intellij.openapi.project.Project
@@ -33,10 +35,16 @@ import javax.swing.JPanel
 import javax.swing.JSpinner
 import javax.swing.SpinnerNumberModel
 
+internal data class SchemeSettingsResult(
+    val name: String,
+    val usageSettings: UsageScanSettingsDto,
+)
+
 internal class SchemeUsageSettingsDialog(
     private val dialogProject: Project,
     private val scheme: LanguageSchemeDto,
 ) : DialogWrapper(dialogProject) {
+    private val schemeNameField = JBTextField(scheme.name)
     private val filesArea =
         JBTextArea(scheme.files.joinToString("\n"), 4, 48).apply {
             isEditable = false
@@ -59,15 +67,19 @@ internal class SchemeUsageSettingsDialog(
         init()
     }
 
-    fun result(): UsageScanSettingsDto =
-        UsageScanSettingsDto(
-            basePath = basePathField.text.trim(),
-            regexPatterns = regexModel.values(),
-            excludedDirectories = exclusionModel.values(),
-            maxLanguageFileKb = maxLanguageFileKbSpinner.value as Int,
-            maxLanguageSchemeMb = maxLanguageSchemeMbSpinner.value as Int,
-            maxEntriesPerFile = maxEntriesPerFileSpinner.value as Int,
-            maxEntriesPerScheme = maxEntriesPerSchemeSpinner.value as Int,
+    fun result(): SchemeSettingsResult =
+        SchemeSettingsResult(
+            name = normalizeSchemeName(schemeNameField.text)!!,
+            usageSettings =
+                UsageScanSettingsDto(
+                    basePath = basePathField.text.trim(),
+                    regexPatterns = regexModel.values(),
+                    excludedDirectories = exclusionModel.values(),
+                    maxLanguageFileKb = maxLanguageFileKbSpinner.value as Int,
+                    maxLanguageSchemeMb = maxLanguageSchemeMbSpinner.value as Int,
+                    maxEntriesPerFile = maxEntriesPerFileSpinner.value as Int,
+                    maxEntriesPerScheme = maxEntriesPerSchemeSpinner.value as Int,
+                ),
         )
 
     override fun createCenterPanel(): JComponent {
@@ -79,6 +91,8 @@ internal class SchemeUsageSettingsDialog(
         val panel =
             FormBuilder
                 .createFormBuilder()
+                .addLabeledComponent(message("settings.scheme.name"), schemeNameField)
+                .addTooltip(message("settings.scheme.name.help"))
                 .addLabeledComponent(
                     message("settings.scheme.files"),
                     JBScrollPane(filesArea).apply {
@@ -119,12 +133,18 @@ internal class SchemeUsageSettingsDialog(
         }
     }
 
-    override fun doValidate(): ValidationInfo? =
-        if ((maxEntriesPerFileSpinner.value as Int) > (maxEntriesPerSchemeSpinner.value as Int)) {
+    override fun doValidate(): ValidationInfo? {
+        if (normalizeSchemeName(schemeNameField.text) == null) {
+            return ValidationInfo(message("error.scheme.name.length", MAX_SCHEME_NAME_LENGTH), schemeNameField)
+        }
+        return if ((maxEntriesPerFileSpinner.value as Int) > (maxEntriesPerSchemeSpinner.value as Int)) {
             ValidationInfo(message("settings.load.entries.order"), maxEntriesPerFileSpinner)
         } else {
             null
         }
+    }
+
+    override fun getPreferredFocusedComponent(): JComponent = schemeNameField
 
     private fun chooseBasePath() {
         val descriptor =

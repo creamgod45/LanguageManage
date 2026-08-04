@@ -59,6 +59,15 @@ const val HARD_MAX_ENTRIES_PER_FILE = 100_000
 const val HARD_MAX_ENTRIES_PER_SCHEME = 250_000
 const val MAX_LOCALE_NOTE_CHARS = 500
 const val MAX_USAGE_EXCLUSIONS = 1_000
+const val MAX_SCHEME_NAME_LENGTH = 80
+
+fun normalizeSchemeName(value: String): String? {
+    val normalized = value.trim()
+    return normalized.takeIf {
+        it.length in 1..MAX_SCHEME_NAME_LENGTH &&
+            it.none(Char::isISOControl)
+    }
+}
 
 @Serializable
 data class UsageScanSettingsDto(
@@ -171,6 +180,33 @@ data class EntryMutationDto(
     val namespace: String,
     val key: String,
     val value: String,
+)
+
+@Serializable
+data class ReplacementTemplateRuleDto(
+    val template: String,
+    val fileSuffix: String,
+)
+
+@Serializable
+data class SelectionReplacementCandidateDto(
+    val filePath: String,
+    val occurrenceCount: Int,
+)
+
+@Serializable
+data class SelectionReplacementScanDto(
+    val files: List<SelectionReplacementCandidateDto> = emptyList(),
+    val truncated: Boolean = false,
+)
+
+@Serializable
+data class SelectionTranslationRequestDto(
+    val mutations: List<EntryMutationDto>,
+    val selectedText: String,
+    val replacementKey: String,
+    val rules: List<ReplacementTemplateRuleDto> = emptyList(),
+    val replacementFiles: List<String> = emptyList(),
 )
 
 @Serializable

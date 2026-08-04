@@ -1,0 +1,104 @@
+name: Bug report (English)
+description: Report a reproducible plugin error, freeze, display issue, or write failure
+title: "[Bug] "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not include API tokens, credentials, customer data, or unredacted private paths. Use the smallest reproducible localization files and redact sensitive IDE log content.
+  - type: dropdown
+    id: area
+    attributes:
+      label: Affected area
+      options:
+        - Scheme management / RPC
+        - JSON, YAML, PHP, or Properties parsing
+        - Translation table, search, or filters
+        - Add, edit, delete, or rename key
+        - Issues, suggestions, or Diff preview
+        - WSL, local files, or path handling
+        - AI translation
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: plugin-version
+    attributes:
+      label: Plugin version
+      placeholder: For example, 1.5.6
+    validations:
+      required: true
+  - type: input
+    id: ide
+    attributes:
+      label: IDE and version
+      placeholder: For example, PhpStorm 2026.2
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Operating system and file environment
+      placeholder: For example, Windows 11 + WSL2 Ubuntu, or macOS 15
+    validations:
+      required: true
+  - type: dropdown
+    id: format
+    attributes:
+      label: Localization format
+      options:
+        - Not format-specific
+        - JSON
+        - YAML / YML
+        - Laravel PHP
+        - JetBrains / Java ResourceBundle Properties
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Reproduction steps
+      description: Provide a numbered sequence that reproduces the problem consistently.
+      placeholder: |
+        1. Open a scheme...
+        2. Select...
+        3. Observe...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected result
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual result and complete error message
+    validations:
+      required: true
+  - type: textarea
+    id: sample
+    attributes:
+      label: Minimal localization-file example
+      description: Remove all sensitive, customer, and proprietary content first.
+      render: text
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant IDE log
+      description: Include only LanguageManager-related lines and redact usernames, paths, credentials, and private data.
+      render: text
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched existing issues and did not find the same problem.
+          required: true
+        - label: I removed API tokens, credentials, private paths, and sensitive data.
+          required: true
+        - label: I understand that the plugin only manages files explicitly selected in a scheme.
+          required: true

@@ -1,6 +1,6 @@
-name: 功能需求 / Feature request
+name: 功能需求（繁體中文）
 description: 提議新的使用流程、管理能力、IDE 整合或品質分析
-title: "[Feature] "
+title: "[功能] "
 labels:
   - enhancement
 body:

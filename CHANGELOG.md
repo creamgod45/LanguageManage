@@ -1,5 +1,29 @@
 # Language Manager Changelog
 
+## 1.5.6
+
+### English
+
+- Add **Localization Manager → Create Translation from Selection** to the editor context menu. It is enabled only when text is selected and an active scheme exists, then opens one modal for the key, all locale values, and optional similar-text replacement assistance.
+- Add ordered placeholder replacement conditions such as `__('%key%')` for `.php` and `@lang('%key%')` for `.blade.php`, plus framework suggestions. Conditions remain in insertion order and the first matching suffix wins; templates are treated only as data and never as Regex or executable code.
+- Scan only the active scheme working directory, honor its exclusion list, skip managed language files, binary/invalid UTF-8 files and oversized source files, and cap candidate discovery. The match list is lazy: double-clicking a file generates its Diff only then.
+- Add a final multi-file confirmation Diff that lists every affected path and its state. Generated language-file changes are read-only, source-code results are editable, and apply regenerates the preview, verifies the exact file set and SHA-256 hashes, then writes atomically with rollback.
+- Add scheme renaming to **Scheme Settings**. The name and usage-scan settings are validated and saved together while the scheme ID, managed files, cache ownership, and isolation remain unchanged.
+- Make the folder-based creation dialog's scheme-name field prominent and fully editable before creation. Shared validation trims the name and rejects blank, over-80-character, or control-character input in both file- and folder-based creation and settings.
+- Split GitHub Issue Forms into dedicated English and Traditional Chinese versions for bug reports, feature requests, and format compatibility reports. The New Issue page now presents six clearly labeled templates plus separate English and Traditional Chinese user-manual links.
+
+---
+
+### 繁體中文
+
+- 在編輯器右鍵選單加入「**在地化管理器 → 以選取範圍建立翻譯文字**」。只有選取文字且目前方案已啟用時才能操作；同一個 Modal 可填寫 key、全部 locale 翻譯值，以及選填的類似文字替換輔助。
+- 新增依加入順序執行的 placeholder 替換條件，例如 `.php` 使用 `__('%key%')`、`.blade.php` 使用 `@lang('%key%')`，並提供框架建議樣板。條件不會自動排序，第一個符合副檔名的條件優先；樣板只當作字串資料，不會被當成 Regex 或程式碼執行。
+- 掃描範圍只限目前方案工作目錄，遵守排除清單並略過列管語言檔、二進位／無效 UTF-8 與過大程式碼檔案，同時限制候選數量。檔案清單採 lazy 流程，只有雙擊項目時才建立該檔案 Diff。
+- 新增最終多檔再次確認 Diff，列出所有變更檔案位置與狀態。產生的語言檔維持唯讀，程式碼替換結果可編輯；套用時後端會重新計算預覽、核對完整檔案集合與 SHA-256，再以具回復機制的原子寫入完成。
+- 在「**方案設定**」加入方案改名。方案名稱與使用率掃描設定會一起驗證並儲存，方案 ID、列管檔案、快取歸屬及隔離狀態皆維持不變。
+- 將資料夾建立方案視窗的名稱欄位改為醒目且可完整編輯的獨立欄位。依檔案／資料夾建立及方案設定共用相同驗證：名稱會自動去除前後空白，並拒絕空白、超過 80 個字元或包含控制字元的輸入。
+- 將 GitHub Issue Forms 的錯誤回報、功能需求與格式相容性拆分為獨立英文及繁體中文版本。New Issue 頁面會清楚顯示六份模板，並分別提供英文與繁中使用者手冊連結。
+
 ## 1.5.5
 
 ### English
