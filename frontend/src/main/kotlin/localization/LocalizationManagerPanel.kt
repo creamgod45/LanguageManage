@@ -86,6 +86,31 @@ internal class LocalizationManagerPanel(
     private val usageLocationModel = UsageLocationTableModel()
     private val usageLocationTable = JBTable(usageLocationModel)
     private val tabs = JTabbedPane()
+    private val dynamicSourcePanel =
+        DynamicSourceRulesPanel(
+            project,
+            save = { rules ->
+                activeScheme()?.let { scheme -> runAction { repository.updateDynamicSourceRules(scheme.id, rules) } }
+                    ?: showError(message("error.no.active.scheme"))
+            },
+            reportError = ::showError,
+            convertToMarker = { rule, rules ->
+                val scheme = activeScheme()
+                if (scheme == null) {
+                    showError(message("error.no.active.scheme"))
+                } else {
+                    runAction {
+                        repository.convertDynamicRuleToMarker(scheme.id, rule.id, rules)
+                        withContext(Dispatchers.EDT) {
+                            navigateToUsageLocation(rule.filePath, rule.line, 1)
+                        }
+                    }
+                }
+            },
+            navigateToMarker = { rule ->
+                navigateToUsageLocation(rule.filePath, rule.line, rule.column)
+            },
+        )
     private val previousPageButton = JButton(message("button.previous"))
     private val nextPageButton = JButton(message("button.next"))
     private val pageLabel = JBLabel()
@@ -130,6 +155,11 @@ internal class LocalizationManagerPanel(
                 withContext(Dispatchers.EDT) {
                     if (progress.schemeId == current.activeSchemeId || progress.stage == LoadProgressStage.IDLE) refreshStatus()
                 }
+            }
+        }
+        scope.launch {
+            LocalizationActionContext.getInstance(project).commands.collect { command ->
+                withContext(Dispatchers.EDT) { handleUiCommand(command) }
             }
         }
     }
@@ -297,6 +327,7 @@ internal class LocalizationManagerPanel(
                 }
             addTab(message("tab.usage.locations"), usageLocationsPanel)
             setEnabledAt(USAGE_LOCATIONS_TAB_INDEX, false)
+            addTab(message("tab.dynamic.sources"), dynamicSourcePanel)
         }
 
     private fun wireEvents() {
@@ -405,9 +436,29 @@ internal class LocalizationManagerPanel(
             previousLocale?.takeIf { it in locales } ?: allLocales
         val displayedIssues = displayedIssues(state.issues)
         issueModel.items = displayedIssues
+        dynamicSourcePanel.render(state.schemes.firstOrNull { it.id == state.activeSchemeId }, state.entries)
         applyFilter()
         renderUsageLocationTable()
         refreshStatus(displayedIssues)
+    }
+
+    private fun handleUiCommand(command: LocalizationUiCommand) {
+        when (command) {
+            is LocalizationUiCommand.SearchTranslations -> {
+                searchField.text = command.text
+                searchMode.selectedItem = if (command.exact) SearchMode.EXACT else SearchMode.FUZZY
+                tabs.selectedIndex = 0
+                applyFilter()
+            }
+            is LocalizationUiCommand.AddDynamicSource -> {
+                dynamicSourcePanel.addDraft(command)
+                tabs.selectedIndex = 3
+            }
+            is LocalizationUiCommand.FocusDynamicSource -> {
+                tabs.selectedIndex = 3
+                dynamicSourcePanel.focusRule(command.ruleId)
+            }
+        }
     }
 
     private fun refreshStatus(issues: List<LanguageIssueDto> = displayedIssues(current.issues)) {

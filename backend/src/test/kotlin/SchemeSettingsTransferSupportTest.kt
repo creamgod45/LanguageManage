@@ -1,6 +1,8 @@
 package cg.creamgod45
 
 import cg.creamgod45.localization.LanguageSchemeDto
+import cg.creamgod45.localization.DynamicSourceGroupDto
+import cg.creamgod45.localization.DynamicSourceRuleDto
 import cg.creamgod45.localization.SchemeSettingsTransferDto
 import cg.creamgod45.localization.UsageScanSettingsDto
 import kotlinx.serialization.encodeToString
@@ -30,6 +32,10 @@ class SchemeSettingsTransferSupportTest {
                 parent.createDirectories()
                 writeText("<?php return ['failed' => 'Invalid'];")
             }
+        val sourceFile = temp.resolve("src/controller.php").apply {
+            parent.createDirectories()
+            writeText("<?php __('auth.failed');")
+        }
         val scheme =
             LanguageSchemeDto(
                 id = "scheme",
@@ -45,6 +51,16 @@ class SchemeSettingsTransferSupportTest {
                         maxEntriesPerScheme = 150_000,
                     ),
                 localeNotes = mapOf("es-MX" to "Mexican Spanish, formal tone"),
+                dynamicSourceRules =
+                    listOf(
+                        DynamicSourceRuleDto(
+                            id = "dynamic-rule",
+                            filePath = sourceFile.toString(),
+                            line = 1,
+                            column = 7,
+                            groups = listOf(DynamicSourceGroupDto("enum", listOf("auth.failed"))),
+                        ),
+                    ),
             )
 
         val content = SchemeSettingsTransferSupport.export(listOf(scheme), temp.toString())
@@ -60,6 +76,7 @@ class SchemeSettingsTransferSupportTest {
                 .single()
                 .recognized,
         )
+        assertTrue(preview.schemes.single().dynamicSourceFiles.single().available)
         assertEquals(languageFile.toRealPath().toString(), imported.files.single())
         assertEquals(temp.toRealPath().toString(), imported.usageScanSettings.basePath)
         assertEquals(4_096, imported.usageScanSettings.maxLanguageFileKb)
@@ -68,7 +85,10 @@ class SchemeSettingsTransferSupportTest {
         assertEquals(150_000, imported.usageScanSettings.maxEntriesPerScheme)
         assertEquals(mapOf("es-MX" to "Mexican Spanish, formal tone"), imported.localeNotes)
         assertTrue("localeNotes" in content)
-        assertEquals(2, preview.formatVersion)
+        assertTrue("src/controller.php" in content)
+        assertEquals(sourceFile.toRealPath().toString(), imported.dynamicSourceRules.single().filePath)
+        assertEquals(listOf("auth.failed"), imported.dynamicSourceRules.single().groups.single().keys)
+        assertEquals(3, preview.formatVersion)
     }
 
     @Test

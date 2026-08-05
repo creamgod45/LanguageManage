@@ -17,6 +17,7 @@
                 factoryClass="cg.creamgod45.toolWindow.LanguageManagerToolWindowFactory"
                 icon="cg.creamgod45.LanguageManagerIcons.ToolWindow"/>
         <notificationGroup id="LanguageManager" displayType="BALLOON"/>
+        <postStartupActivity implementation="cg.creamgod45.localization.ui.DynamicSourceGutterStartupActivity"/>
     </extensions>
 
     <actions>
@@ -32,6 +33,27 @@
                popup="true">
             <action id="cg.creamgod45.localization.CreateTranslationFromSelection"
                     class="cg.creamgod45.localization.ui.CreateTranslationFromSelectionAction"/>
+            <group id="cg.creamgod45.localization.SearchSelectedTranslationGroup"
+                   class="cg.creamgod45.localization.ui.SearchSelectedTranslationGroup"
+                   popup="true">
+                <action id="cg.creamgod45.localization.SearchSelectedTranslationExact"
+                        class="cg.creamgod45.localization.ui.SearchSelectedTranslationExactAction"/>
+                <action id="cg.creamgod45.localization.SearchSelectedTranslationFuzzy"
+                        class="cg.creamgod45.localization.ui.SearchSelectedTranslationFuzzyAction"/>
+            </group>
+            <group id="cg.creamgod45.localization.DynamicSourceActionGroup"
+                   class="cg.creamgod45.localization.ui.DynamicSourceActionGroup"
+                   popup="true">
+                <action id="cg.creamgod45.localization.CreateDynamicMarker"
+                        class="cg.creamgod45.localization.ui.CreateDynamicMarkerAction"/>
+                <action id="cg.creamgod45.localization.AddNonInvasiveDynamicSource"
+                        class="cg.creamgod45.localization.ui.AddNonInvasiveDynamicSourceAction"/>
+                <action id="cg.creamgod45.localization.EditDynamicMarker"
+                        class="cg.creamgod45.localization.ui.EditDynamicMarkerAction"
+                        icon="AllIcons.Actions.Edit">
+                    <add-to-group group-id="Floating.CodeToolbar" anchor="last"/>
+                </action>
+            </group>
             <add-to-group group-id="EditorPopupMenu" anchor="last"/>
         </group>
     </actions>

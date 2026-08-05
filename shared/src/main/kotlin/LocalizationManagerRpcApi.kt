@@ -18,6 +18,8 @@ interface LocalizationManagerRpcApi : RemoteApi<Unit> {
 
     suspend fun loadProgress(projectId: ProjectId): Flow<LoadProgressDto>
 
+    suspend fun selectionScanProgress(projectId: ProjectId): Flow<SelectionScanProgressDto>
+
     suspend fun usageLocations(
         projectId: ProjectId,
         schemeId: String,
@@ -56,6 +58,25 @@ interface LocalizationManagerRpcApi : RemoteApi<Unit> {
         schemeId: String,
         name: String,
         settings: UsageScanSettingsDto,
+    )
+
+    suspend fun updateDynamicSourceRules(
+        projectId: ProjectId,
+        schemeId: String,
+        rules: List<DynamicSourceRuleDto>,
+    )
+
+    suspend fun convertDynamicMarkerToRule(
+        projectId: ProjectId,
+        schemeId: String,
+        request: DynamicMarkerConversionRequestDto,
+    ): String
+
+    suspend fun convertDynamicRuleToMarker(
+        projectId: ProjectId,
+        schemeId: String,
+        ruleId: String,
+        rules: List<DynamicSourceRuleDto>,
     )
 
     suspend fun addActiveSchemeExcludedDirectories(

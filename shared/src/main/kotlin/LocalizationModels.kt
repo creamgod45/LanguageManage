@@ -60,6 +60,36 @@ const val HARD_MAX_ENTRIES_PER_SCHEME = 250_000
 const val MAX_LOCALE_NOTE_CHARS = 500
 const val MAX_USAGE_EXCLUSIONS = 1_000
 const val MAX_SCHEME_NAME_LENGTH = 80
+const val MAX_DYNAMIC_SOURCE_RULES = 500
+const val MAX_DYNAMIC_SOURCE_GROUPS_PER_RULE = 20
+const val MAX_DYNAMIC_SOURCE_KEYS_PER_GROUP = 500
+
+@Serializable
+data class DynamicSourceGroupDto(
+    val name: String = "enum",
+    val keys: List<String> = emptyList(),
+)
+
+@Serializable
+data class DynamicSourceRuleDto(
+    val id: String,
+    val filePath: String,
+    val line: Int,
+    val column: Int,
+    val method: String = "dynamic",
+    val groups: List<DynamicSourceGroupDto> = emptyList(),
+)
+
+@Serializable
+data class DynamicMarkerConversionRequestDto(
+    val filePath: String,
+    val markerStartOffset: Int,
+    val markerEndOffsetExclusive: Int,
+    val expectedMarker: String,
+    val line: Int,
+    val column: Int,
+    val groups: List<DynamicSourceGroupDto>,
+)
 
 fun normalizeSchemeName(value: String): String? {
     val normalized = value.trim()
@@ -88,6 +118,7 @@ data class LanguageSchemeDto(
     val updatedAtEpochMs: Long,
     val usageScanSettings: UsageScanSettingsDto = UsageScanSettingsDto(),
     val localeNotes: Map<String, String> = emptyMap(),
+    val dynamicSourceRules: List<DynamicSourceRuleDto> = emptyList(),
 )
 
 @Serializable
@@ -197,6 +228,23 @@ data class SelectionReplacementCandidateDto(
 @Serializable
 data class SelectionReplacementScanDto(
     val files: List<SelectionReplacementCandidateDto> = emptyList(),
+    val truncated: Boolean = false,
+)
+
+@Serializable
+enum class SelectionScanStage { IDLE, PLANNING, WALKING, READING, COMPLETED, CANCELLED, FAILED }
+
+@Serializable
+data class SelectionScanProgressDto(
+    val schemeId: String? = null,
+    val stage: SelectionScanStage = SelectionScanStage.IDLE,
+    val visitedDirectories: Int = 0,
+    val visitedFiles: Int = 0,
+    val eligibleFiles: Int = 0,
+    val processedEligibleFiles: Int = 0,
+    val totalEligibleFiles: Int = 0,
+    val matchedFiles: Int = 0,
+    val currentPath: String = "",
     val truncated: Boolean = false,
 )
 
@@ -311,6 +359,7 @@ data class PortableLanguageSchemeDto(
     val files: List<String>,
     val usageScanSettings: UsageScanSettingsDto = UsageScanSettingsDto(),
     val localeNotes: Map<String, String> = emptyMap(),
+    val dynamicSourceRules: List<DynamicSourceRuleDto> = emptyList(),
 )
 
 @Serializable
@@ -332,6 +381,7 @@ data class SchemeImportFilePreviewDto(
 data class SchemeImportItemPreviewDto(
     val name: String,
     val files: List<SchemeImportFilePreviewDto>,
+    val dynamicSourceFiles: List<SchemeImportFilePreviewDto> = emptyList(),
 )
 
 @Serializable
@@ -342,5 +392,9 @@ data class SchemeImportPreviewDto(
 ) {
     val canImport: Boolean get() =
         schemes.isNotEmpty() &&
-            schemes.all { scheme -> scheme.files.isNotEmpty() && scheme.files.all { it.available } }
+            schemes.all { scheme ->
+                scheme.files.isNotEmpty() &&
+                    scheme.files.all { it.available } &&
+                    scheme.dynamicSourceFiles.all { it.available }
+            }
 }

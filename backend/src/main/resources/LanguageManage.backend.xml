@@ -7,5 +7,6 @@
 
     <extensions defaultExtensionNs="com.intellij">
         <platform.rpc.backend.remoteApiProvider implementation="cg.creamgod45.BackendRpcApiProvider"/>
+        <platform.backend.documentation.targetProvider implementation="cg.creamgod45.DynamicMarkerDocumentationTargetProvider"/>
     </extensions>
 </idea-plugin>

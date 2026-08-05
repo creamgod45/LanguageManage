@@ -7,6 +7,8 @@ import cg.creamgod45.localization.LanguageEntryDto
 import cg.creamgod45.localization.LanguageSchemeDto
 import cg.creamgod45.localization.ReplacementTemplateRuleDto
 import cg.creamgod45.localization.SelectionReplacementCandidateDto
+import cg.creamgod45.localization.SelectionScanProgressDto
+import cg.creamgod45.localization.SelectionScanStage
 import cg.creamgod45.localization.SelectionTranslationRequestDto
 import com.intellij.diff.DiffContentFactory
 import com.intellij.diff.DiffManager
@@ -14,11 +16,15 @@ import com.intellij.diff.requests.SimpleDiffRequest
 import com.intellij.notification.NotificationGroupManager
 import com.intellij.notification.NotificationType
 import com.intellij.openapi.application.EDT
+import com.intellij.openapi.application.ModalityState
+import com.intellij.openapi.application.asContextElement
 import com.intellij.openapi.actionSystem.ActionUpdateThread
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.actionSystem.CommonDataKeys
 import com.intellij.openapi.actionSystem.DefaultActionGroup
 import com.intellij.openapi.fileTypes.FileTypeManager
+import com.intellij.openapi.progress.ProgressIndicator
+import com.intellij.openapi.progress.Task
 import com.intellij.openapi.project.DumbAware
 import com.intellij.openapi.project.DumbAwareAction
 import com.intellij.openapi.project.Project
@@ -26,17 +32,23 @@ import com.intellij.openapi.ui.ComboBox
 import com.intellij.openapi.ui.DialogWrapper
 import com.intellij.openapi.ui.Messages
 import com.intellij.openapi.ui.ValidationInfo
-import com.intellij.ui.CollectionListModel
+import com.intellij.ui.CheckBoxList
 import com.intellij.ui.JBColor
 import com.intellij.ui.components.JBCheckBox
 import com.intellij.ui.components.JBLabel
-import com.intellij.ui.components.JBList
 import com.intellij.ui.components.JBScrollPane
 import com.intellij.ui.components.JBTextArea
 import com.intellij.ui.components.JBTextField
 import com.intellij.util.ui.JBUI
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import java.awt.BorderLayout
 import java.awt.Component
@@ -46,17 +58,17 @@ import java.awt.GridBagConstraints
 import java.awt.GridBagLayout
 import java.awt.event.MouseAdapter
 import java.awt.event.MouseEvent
-import javax.swing.Box
 import javax.swing.BoxLayout
 import javax.swing.DefaultListCellRenderer
 import javax.swing.JButton
 import javax.swing.JComponent
-import javax.swing.JLabel
 import javax.swing.JList
 import javax.swing.JMenu
 import javax.swing.JMenuItem
 import javax.swing.JPanel
 import javax.swing.JPopupMenu
+import javax.swing.JProgressBar
+import kotlin.coroutines.CoroutineContext
 
 class LanguageManagerEditorActionGroup : DefaultActionGroup(), DumbAware {
     override fun update(event: AnActionEvent) {
@@ -148,16 +160,25 @@ private class SelectionTranslationDialog(
     private val scanCheck = JBCheckBox(message("dialog.selection.scan.enable"))
     private val rulesPanel = JPanel().apply { layout = BoxLayout(this, BoxLayout.Y_AXIS) }
     private val ruleRows = mutableListOf<RuleRow>()
-    private val candidateModel = CollectionListModel<SelectionReplacementCandidateDto>()
-    private val candidateList = JBList(candidateModel).apply {
-        selectionMode = javax.swing.ListSelectionModel.MULTIPLE_INTERVAL_SELECTION
-        cellRenderer = CandidateRenderer()
+    private val candidateList = CheckBoxList<SelectionReplacementCandidateDto>().apply {
+        selectionMode = javax.swing.ListSelectionModel.SINGLE_SELECTION
         visibleRowCount = 7
     }
     private val scanButton = JButton(message("dialog.selection.scan.preview"))
+    private val stopScanButton = JButton(message("dialog.selection.scan.stop")).apply {
+        isEnabled = false
+        addActionListener { cancelScan("Cancelled from the modal stop button") }
+    }
     private val scanStatus = JBLabel(message("dialog.selection.scan.not.run"))
+    private val scanProgressBar = JProgressBar().apply {
+        isStringPainted = true
+        string = message("dialog.selection.scan.not.run")
+        isVisible = false
+    }
     private val scanControls = JPanel(BorderLayout())
     private var sourceLocale = ""
+    private var scanJob: Job? = null
+    private var scanIndicator: ProgressIndicator? = null
 
     init {
         title = message("dialog.selection.title")
@@ -167,7 +188,12 @@ private class SelectionTranslationDialog(
         scanButton.addActionListener { scanCandidates() }
         candidateList.addMouseListener(object : MouseAdapter() {
             override fun mouseClicked(event: MouseEvent) {
-                if (event.clickCount == 2) candidateList.selectedValue?.let(::previewCandidate)
+                if (event.clickCount == 2) {
+                    candidateList.locationToIndex(event.point)
+                        .takeIf { it >= 0 }
+                        ?.let(candidateList::getItemAt)
+                        ?.let(::previewCandidate)
+                }
             }
         })
         addRule(ReplacementTemplateRuleDto("__('%key%')", ".php"))
@@ -182,7 +208,7 @@ private class SelectionTranslationDialog(
             selectedText = selectedTextArea.text,
             replacementKey = qualifiedKey(),
             rules = if (scanCheck.isSelected) rules() else emptyList(),
-            replacementFiles = if (scanCheck.isSelected) candidateList.selectedValuesList.map { it.filePath } else emptyList(),
+            replacementFiles = if (scanCheck.isSelected) checkedReplacementFilePaths(candidateList) else emptyList(),
         )
 
     override fun createCenterPanel(): JComponent {
@@ -196,10 +222,22 @@ private class SelectionTranslationDialog(
         add(message("field.key"), keyField)
         add(message("dialog.selection.source.text"), JBScrollPane(selectedTextArea).apply { preferredSize = Dimension(JBUI.scale(600), JBUI.scale(72)) })
 
-        scanControls.add(scanToolbar(), BorderLayout.NORTH)
+        val effectiveScanRoot = scheme.usageScanSettings.basePath.ifBlank { project.basePath.orEmpty() }
+        scanControls.add(JPanel(BorderLayout(0, JBUI.scale(4))).apply {
+            add(scanToolbar(), BorderLayout.NORTH)
+            add(
+                JBLabel(message("dialog.selection.scan.scope", effectiveScanRoot, scheme.usageScanSettings.excludedDirectories.size)).apply {
+                    toolTipText = effectiveScanRoot
+                },
+                BorderLayout.SOUTH,
+            )
+        }, BorderLayout.NORTH)
         scanControls.add(JBScrollPane(rulesPanel).apply { preferredSize = Dimension(JBUI.scale(720), JBUI.scale(125)) }, BorderLayout.CENTER)
         scanControls.add(JPanel(BorderLayout()).apply {
-            add(scanStatus, BorderLayout.NORTH)
+            add(JPanel(BorderLayout(0, JBUI.scale(4))).apply {
+                add(scanStatus, BorderLayout.NORTH)
+                add(scanProgressBar, BorderLayout.SOUTH)
+            }, BorderLayout.NORTH)
             add(JBScrollPane(candidateList).apply { preferredSize = Dimension(JBUI.scale(720), JBUI.scale(130)) }, BorderLayout.CENTER)
         }, BorderLayout.SOUTH)
 
@@ -253,6 +291,7 @@ private class SelectionTranslationDialog(
         add(JButton(message("dialog.selection.rule.add")).apply { addActionListener { addRule() } })
         add(presetButton())
         add(scanButton)
+        add(stopScanButton)
         add(JBLabel(message("dialog.selection.scan.help")))
     }
 
@@ -278,26 +317,153 @@ private class SelectionTranslationDialog(
 
     private fun scanCandidates() {
         val validRules = runCatching { validatedRules() }.getOrElse { return Messages.showErrorDialog(project, message("dialog.selection.rule.invalid"), title) }
+        val modalUiContext = Dispatchers.EDT + ModalityState.current().asContextElement()
+        scanIndicator?.cancel()
+        scanJob?.cancel(CancellationException("Superseded by a newer selection scan"))
         scanButton.isEnabled = false
+        stopScanButton.isEnabled = true
         scanStatus.text = message("dialog.selection.scan.running")
-        CoroutineScopeHolder.getInstance(project).getPluginScope().launch {
-            runCatching { LocalizationFrontendRepository(project).scanSelectionReplacements(scheme.id, selectedTextArea.text, validRules) }
-                .onSuccess { result -> withContext(Dispatchers.EDT) {
-                    candidateModel.replaceAll(result.files)
-                    if (result.files.isNotEmpty()) candidateList.setSelectionInterval(0, result.files.lastIndex)
-                    scanStatus.text = message(if (result.truncated) "dialog.selection.scan.result.truncated" else "dialog.selection.scan.result", result.files.size)
-                    scanButton.isEnabled = true
-                }}.onFailure { error -> withContext(Dispatchers.EDT) {
-                    scanButton.isEnabled = true; scanStatus.text = message("dialog.selection.scan.failed"); Messages.showErrorDialog(project, safeMessage(error), title)
-                }}
+        scanProgressBar.apply {
+            isVisible = true
+            isIndeterminate = true
+            string = message("dialog.selection.scan.running")
         }
+        val selectedSource = selectedTextArea.text
+        object : Task.Backgroundable(project, message("dialog.selection.scan.background.title"), true) {
+            override fun run(indicator: ProgressIndicator) {
+                scanIndicator = indicator
+                val job = CoroutineScopeHolder.getInstance(project).getPluginScope().launch(start = CoroutineStart.LAZY) {
+                    val repository = LocalizationFrontendRepository(project)
+                    try {
+                        coroutineScope {
+                            var observedCurrentScan = false
+                            val reporting = launch {
+                                repository.selectionScanProgress.collect { progress ->
+                                    if (progress.schemeId != scheme.id) return@collect
+                                    if (!observedCurrentScan) {
+                                        observedCurrentScan = progress.stage in setOf(SelectionScanStage.PLANNING, SelectionScanStage.WALKING, SelectionScanStage.READING)
+                                        if (!observedCurrentScan) return@collect
+                                    }
+                                    updateScanProgress(indicator, progress, modalUiContext)
+                                }
+                            }
+                            try {
+                                val result = repository.scanSelectionReplacements(scheme.id, selectedSource, validRules)
+                                withContext(modalUiContext) {
+                                    candidateList.setItems(result.files) { candidate -> "${candidate.filePath} (${candidate.occurrenceCount})" }
+                                    result.files.forEach { candidate -> candidateList.setItemSelected(candidate, true) }
+                                    if (result.files.isNotEmpty()) candidateList.selectedIndex = 0
+                                    scanStatus.text = message(if (result.truncated) "dialog.selection.scan.result.truncated" else "dialog.selection.scan.result", result.files.size)
+                                    scanProgressBar.isIndeterminate = false
+                                    scanProgressBar.value = scanProgressBar.maximum
+                                    scanProgressBar.string = scanStatus.text
+                                    scanButton.isEnabled = true
+                                    stopScanButton.isEnabled = false
+                                }
+                            } finally {
+                                reporting.cancelAndJoin()
+                            }
+                        }
+                    } catch (_: CancellationException) {
+                        withContext(modalUiContext) {
+                            scanStatus.text = message("dialog.selection.scan.cancelled")
+                            scanProgressBar.isIndeterminate = false
+                            scanProgressBar.value = 0
+                            scanProgressBar.string = scanStatus.text
+                            scanButton.isEnabled = true
+                            stopScanButton.isEnabled = false
+                        }
+                    } catch (error: Exception) {
+                        withContext(modalUiContext) {
+                            scanButton.isEnabled = true
+                            stopScanButton.isEnabled = false
+                            scanStatus.text = message("dialog.selection.scan.failed")
+                            scanProgressBar.isIndeterminate = false
+                            scanProgressBar.value = 0
+                            scanProgressBar.string = scanStatus.text
+                            Messages.showErrorDialog(project, safeMessage(error), title)
+                        }
+                    } finally {
+                        scanJob = null
+                        scanIndicator = null
+                    }
+                }
+                scanJob = job
+                job.start()
+                runBlocking { job.join() }
+                indicator.checkCanceled()
+            }
+
+            override fun onCancel() {
+                scanJob?.cancel(CancellationException("Cancelled from the IDE progress indicator"))
+            }
+        }.queue()
+    }
+
+    private suspend fun updateScanProgress(
+        indicator: ProgressIndicator,
+        progress: SelectionScanProgressDto,
+        modalUiContext: CoroutineContext,
+    ) {
+        val stage = message("dialog.selection.scan.stage.${progress.stage.name.lowercase()}")
+        val hasExactTotal = progress.totalEligibleFiles > 0 && progress.stage in setOf(SelectionScanStage.READING, SelectionScanStage.COMPLETED)
+        val counters =
+            if (hasExactTotal) {
+                val percent = progress.processedEligibleFiles * 100 / progress.totalEligibleFiles
+                message(
+                    "dialog.selection.scan.progress.reading",
+                    progress.processedEligibleFiles,
+                    progress.totalEligibleFiles,
+                    percent,
+                    progress.matchedFiles,
+                )
+            } else {
+                message(
+                    "dialog.selection.scan.progress",
+                    progress.visitedDirectories,
+                    progress.visitedFiles,
+                    progress.eligibleFiles,
+                    progress.matchedFiles,
+                )
+            }
+        val detail = if (progress.currentPath.isBlank()) counters else "$counters — ${progress.currentPath.takeLast(240)}"
+        indicator.isIndeterminate = !hasExactTotal && progress.stage != SelectionScanStage.COMPLETED
+        indicator.text = stage
+        indicator.text2 = detail
+        if (hasExactTotal) {
+            indicator.fraction = progress.processedEligibleFiles.toDouble().div(progress.totalEligibleFiles).coerceIn(0.0, 1.0)
+        }
+        withContext(modalUiContext) {
+            scanStatus.text = stage
+            scanProgressBar.isIndeterminate = !hasExactTotal && progress.stage != SelectionScanStage.COMPLETED
+            if (hasExactTotal) {
+                scanProgressBar.minimum = 0
+                scanProgressBar.maximum = progress.totalEligibleFiles
+                scanProgressBar.value = progress.processedEligibleFiles.coerceAtMost(progress.totalEligibleFiles)
+            } else if (progress.stage == SelectionScanStage.COMPLETED) {
+                scanProgressBar.minimum = 0
+                scanProgressBar.maximum = 1
+                scanProgressBar.value = 1
+            }
+            scanProgressBar.string = detail
+            scanProgressBar.toolTipText = progress.currentPath
+        }
+    }
+
+    private fun cancelScan(reason: String) {
+        stopScanButton.isEnabled = false
+        scanIndicator?.cancel()
+        scanJob?.cancel(CancellationException(reason))
+        scanStatus.text = message("dialog.selection.scan.cancelling")
+        scanProgressBar.string = scanStatus.text
     }
 
     private fun previewCandidate(candidate: SelectionReplacementCandidateDto) {
         val validRules = runCatching { validatedRules() }.getOrElse { return }
+        val modalUiContext = Dispatchers.EDT + ModalityState.current().asContextElement()
         CoroutineScopeHolder.getInstance(project).getPluginScope().launch {
             runCatching { LocalizationFrontendRepository(project).previewSelectionReplacementFile(scheme.id, selectedTextArea.text, qualifiedKey(), validRules, candidate.filePath) }
-                .onSuccess { change -> withContext(Dispatchers.EDT) {
+                .onSuccess { change -> withContext(modalUiContext) {
                     val type = FileTypeManager.getInstance().getFileTypeByFileName(change.filePath)
                     val factory = DiffContentFactory.getInstance()
                     val marker = selectedTextArea.text.replace("\n", " ").take(80)
@@ -308,7 +474,7 @@ private class SelectionTranslationDialog(
                         message("dialog.selection.diff.before", marker),
                         message("dialog.selection.diff.after", validRules.first { candidate.filePath.lowercase().endsWith(it.fileSuffix.lowercase()) }.template.replace("%key%", qualifiedKey()).take(80)),
                     ))
-                }}.onFailure { error -> withContext(Dispatchers.EDT) { Messages.showErrorDialog(project, safeMessage(error), title) } }
+                }}.onFailure { error -> withContext(modalUiContext) { Messages.showErrorDialog(project, safeMessage(error), title) } }
         }
     }
 
@@ -316,6 +482,11 @@ private class SelectionTranslationDialog(
         scanControls.isVisible = scanCheck.isSelected
         scanControls.parent?.revalidate()
         scanControls.parent?.repaint()
+    }
+
+    override fun dispose() {
+        cancelScan("Selection translation dialog closed")
+        super.dispose()
     }
 
     private fun presetButton(): JButton {
@@ -342,18 +513,14 @@ private class SelectionTranslationDialog(
         }
     }
 
-    private class CandidateRenderer : DefaultListCellRenderer() {
-        override fun getListCellRendererComponent(list: JList<*>?, value: Any?, index: Int, selected: Boolean, focus: Boolean): Component {
-            val candidate = value as? SelectionReplacementCandidateDto
-            return super.getListCellRendererComponent(list, candidate?.let { "${it.filePath} (${it.occurrenceCount})" } ?: value, index, selected, focus)
-        }
-    }
-
     private class NamespaceRenderer : DefaultListCellRenderer() {
         override fun getListCellRendererComponent(list: JList<*>?, value: Any?, index: Int, selected: Boolean, focus: Boolean): Component =
             super.getListCellRendererComponent(list, value?.toString()?.ifBlank { message("field.namespace.root") }, index, selected, focus)
     }
 }
+
+internal fun checkedReplacementFilePaths(candidateList: CheckBoxList<SelectionReplacementCandidateDto>): List<String> =
+    candidateList.checkedItems.map(SelectionReplacementCandidateDto::filePath)
 
 private fun safeMessage(error: Throwable): String = (error.message ?: error.javaClass.simpleName)
     .replace(Regex("[\\u0000-\\u0008\\u000B\\u000C\\u000E-\\u001F]"), "?").take(500)

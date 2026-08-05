@@ -15,7 +15,27 @@ import com.intellij.openapi.project.DumbAwareAction
 import com.intellij.openapi.project.Project
 import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.launch
+
+internal sealed interface LocalizationUiCommand {
+    data class SearchTranslations(
+        val text: String,
+        val exact: Boolean,
+    ) : LocalizationUiCommand
+
+    data class AddDynamicSource(
+        val filePath: String,
+        val line: Int,
+        val column: Int,
+        val selectedText: String,
+    ) : LocalizationUiCommand
+
+    data class FocusDynamicSource(
+        val ruleId: String,
+    ) : LocalizationUiCommand
+}
 
 @Service(Service.Level.PROJECT)
 internal class LocalizationActionContext(
@@ -24,8 +44,11 @@ internal class LocalizationActionContext(
 ) {
     @Volatile
     private var localizationState = LocalizationStateDto()
+    private val mutableCommands = MutableSharedFlow<LocalizationUiCommand>(extraBufferCapacity = 16)
+    val commands = mutableCommands.asSharedFlow()
 
     init {
+        project.getService(DynamicSourceGutterService::class.java)
         coroutineScope.launch(CoroutineName("Language Manager project-view action state")) {
             LocalizationFrontendRepository(project).state.collect { localizationState = it }
         }
@@ -34,6 +57,10 @@ internal class LocalizationActionContext(
     fun hasActiveScheme(): Boolean = localizationState.activeSchemeId != null
 
     fun snapshot(): LocalizationStateDto = localizationState
+
+    fun submit(command: LocalizationUiCommand) {
+        mutableCommands.tryEmit(command)
+    }
 
     companion object {
         fun getInstance(project: Project): LocalizationActionContext = project.getService(LocalizationActionContext::class.java)

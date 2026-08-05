@@ -1,6 +1,8 @@
 package cg.creamgod45
 
 import cg.creamgod45.localization.LanguageEntryDto
+import cg.creamgod45.localization.DynamicSourceGroupDto
+import cg.creamgod45.localization.DynamicSourceRuleDto
 import cg.creamgod45.localization.MAX_USAGE_EXCLUSIONS
 import cg.creamgod45.localization.UsageScanSettingsDto
 import java.nio.file.Files
@@ -247,6 +249,36 @@ class UsageScanSupportTest {
         val second = result.locations.maxBy { it.offset }
         assertEquals(2 to 7, UsageLocationSupport.sourceLineColumn(source, second.offset))
         assertEquals(Files.getLastModifiedTime(source).toMillis(), second.sourceModifiedAtEpochMs)
+    }
+
+    @Test
+    fun `invasive markers and configured dynamic rules augment regex usage counts and locations`() {
+        val invasive = temp.resolve("src/invasive.php").apply {
+            parent.createDirectories()
+            writeText("// @languageManager(method: dynamic, enum: auth.failed,status.ready)\n")
+        }
+        val configured = temp.resolve("src/configured.php").apply { writeText("dynamic lookup\n") }
+        val auth = entry("auth", "failed")
+        val status = entry("status", "ready")
+        val settings = UsageScanSettingsDto(regexPatterns = listOf("no-static-match"), excludedDirectories = emptyList())
+        val rules =
+            listOf(
+                DynamicSourceRuleDto(
+                    "rule-1",
+                    configured.toString(),
+                    1,
+                    1,
+                    groups = listOf(DynamicSourceGroupDto("enum", listOf("auth.failed"))),
+                ),
+            )
+
+        val result = UsageScanSupport.scan(temp, listOf(auth, status), emptyList(), settings, dynamicSourceRules = rules)
+
+        assertEquals(2, result.counts[auth.id])
+        assertEquals(1, result.counts[status.id])
+        assertEquals(3, result.locations.sumOf { it.occurrenceCount })
+        assertTrue(result.locations.any { it.filePath == invasive.toRealPath().toString() && it.entryId == status.id })
+        assertTrue(result.locations.any { it.filePath == configured.toRealPath().toString() && it.entryId == auth.id })
     }
 
     @Test

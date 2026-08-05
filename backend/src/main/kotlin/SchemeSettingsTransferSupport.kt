@@ -12,10 +12,11 @@ internal data class ResolvedImportedScheme(
     val files: List<String>,
     val usageScanSettings: UsageScanSettingsDto,
     val localeNotes: Map<String, String>,
+    val dynamicSourceRules: List<DynamicSourceRuleDto>,
 )
 
 internal object SchemeSettingsTransferSupport {
-    private const val FORMAT_VERSION = 2
+    private const val FORMAT_VERSION = 3
     private val SUPPORTED_FORMAT_VERSIONS = 1..FORMAT_VERSION
     private const val MAX_CONTENT_LENGTH = 1_000_000
     private const val MAX_SCHEMES = 100
@@ -51,6 +52,10 @@ internal object SchemeSettingsTransferSupport {
                                     .orEmpty(),
                         ),
                     localeNotes = LocaleMetadataSupport.normalizeNotes(scheme.localeNotes),
+                    dynamicSourceRules =
+                        scheme.dynamicSourceRules.map { rule ->
+                            rule.copy(filePath = portablePath(rule.filePath, root))
+                        },
                 )
             }
         return json.encodeToString(SchemeSettingsTransferDto(FORMAT_VERSION, portable)) + "\n"
@@ -70,6 +75,11 @@ internal object SchemeSettingsTransferSupport {
                     SchemeImportItemPreviewDto(
                         name = scheme.name,
                         files = scheme.files.map { configured -> inspect(configured, root) },
+                        dynamicSourceFiles =
+                            scheme.dynamicSourceRules
+                                .map { it.filePath }
+                                .distinct()
+                                .map { configured -> inspectSource(configured, root) },
                     )
                 },
         )
@@ -95,11 +105,17 @@ internal object SchemeSettingsTransferSupport {
                     ?.let { configured ->
                         SafeLanguageFileAccess.validateDirectory(resolveConfiguredPath(configured, root).toString()).toString()
                     }.orEmpty()
+            val dynamicRoot = basePath.takeIf(String::isNotBlank)?.let(Path::of) ?: root
+            val dynamicRules =
+                scheme.dynamicSourceRules.map { rule ->
+                    rule.copy(filePath = resolveConfiguredPath(rule.filePath, root).toString())
+                }.let { DynamicSourceSupport.normalizeRules(it, dynamicRoot) }
             ResolvedImportedScheme(
                 name = scheme.name.trim(),
                 files = files,
                 usageScanSettings = UsageScanSupport.normalize(scheme.usageScanSettings.copy(basePath = basePath)),
                 localeNotes = LocaleMetadataSupport.normalizeNotes(scheme.localeNotes),
+                dynamicSourceRules = dynamicRules,
             )
         }
     }
@@ -118,6 +134,7 @@ internal object SchemeSettingsTransferSupport {
             require(scheme.name.trim().length in 1..80 && scheme.name.none(Char::isISOControl)) { backendMessage("scheme.name.length") }
             require(scheme.files.isNotEmpty()) { backendMessage("scheme.files.required") }
             LocaleMetadataSupport.normalizeNotes(scheme.localeNotes)
+            require(scheme.dynamicSourceRules.size <= MAX_DYNAMIC_SOURCE_RULES)
         }
         return transfer
     }
@@ -141,6 +158,22 @@ internal object SchemeSettingsTransferSupport {
                 recognized = errors.isEmpty(),
                 detail = errors.joinToString("; ") { it.message }.take(500),
             )
+        }.getOrElse { error ->
+            SchemeImportFilePreviewDto(configured, resolved.toString(), false, false, safeDetail(error))
+        }
+    }
+
+    private fun inspectSource(
+        configured: String,
+        root: Path,
+    ): SchemeImportFilePreviewDto {
+        val resolved =
+            runCatching { resolveConfiguredPath(configured, root) }.getOrElse { error ->
+                return SchemeImportFilePreviewDto(configured, "", false, false, safeDetail(error))
+            }
+        return runCatching {
+            require(java.nio.file.Files.isRegularFile(resolved))
+            SchemeImportFilePreviewDto(configured, resolved.toRealPath().toString(), true, true)
         }.getOrElse { error ->
             SchemeImportFilePreviewDto(configured, resolved.toString(), false, false, safeDetail(error))
         }

@@ -15,6 +15,9 @@ class BackendLocalizationManagerRpcApi : LocalizationManagerRpcApi {
 
     override suspend fun loadProgress(projectId: ProjectId): Flow<LoadProgressDto> = projectId.service()?.loadProgress ?: emptyFlow()
 
+    override suspend fun selectionScanProgress(projectId: ProjectId): Flow<SelectionScanProgressDto> =
+        projectId.service()?.selectionScanProgress ?: emptyFlow()
+
     override suspend fun usageLocations(
         projectId: ProjectId,
         schemeId: String,
@@ -72,6 +75,35 @@ class BackendLocalizationManagerRpcApi : LocalizationManagerRpcApi {
         settings: UsageScanSettingsDto,
     ) = withContext(Dispatchers.IO) {
         projectId.service()?.updateSchemeSettings(schemeId, name, settings)
+        Unit
+    }
+
+    override suspend fun updateDynamicSourceRules(
+        projectId: ProjectId,
+        schemeId: String,
+        rules: List<DynamicSourceRuleDto>,
+    ) = withContext(Dispatchers.IO) {
+        projectId.service()?.updateDynamicSourceRules(schemeId, rules)
+        Unit
+    }
+
+    override suspend fun convertDynamicMarkerToRule(
+        projectId: ProjectId,
+        schemeId: String,
+        request: DynamicMarkerConversionRequestDto,
+    ): String =
+        withContext(Dispatchers.IO) {
+            projectId.service()?.convertDynamicMarkerToRule(schemeId, request)
+                ?: error(LanguageManagerBackendBundle.message("project.unavailable"))
+        }
+
+    override suspend fun convertDynamicRuleToMarker(
+        projectId: ProjectId,
+        schemeId: String,
+        ruleId: String,
+        rules: List<DynamicSourceRuleDto>,
+    ) = withContext(Dispatchers.IO) {
+        projectId.service()?.convertDynamicRuleToMarker(schemeId, ruleId, rules)
         Unit
     }
 

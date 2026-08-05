@@ -64,7 +64,10 @@ internal class SchemeImportPreviewDialog(
     project: Project,
     private val preview: SchemeImportPreviewDto,
 ) : DialogWrapper(project, true) {
-    private val rows = preview.schemes.flatMap { scheme -> scheme.files.map { scheme.name to it } }
+    private val rows =
+        preview.schemes.flatMap { scheme ->
+            (scheme.files + scheme.dynamicSourceFiles).map { scheme.name to it }
+        }
     private val table = JBTable(SchemeImportPreviewTableModel(rows))
 
     init {

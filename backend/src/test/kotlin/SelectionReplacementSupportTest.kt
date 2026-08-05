@@ -2,6 +2,8 @@ package cg.creamgod45
 
 import cg.creamgod45.localization.ReplacementTemplateRuleDto
 import cg.creamgod45.localization.UsageScanSettingsDto
+import cg.creamgod45.localization.SelectionScanProgressDto
+import cg.creamgod45.localization.SelectionScanStage
 import java.nio.file.Files
 import kotlin.io.path.createDirectories
 import kotlin.io.path.writeBytes
@@ -35,18 +37,27 @@ class SelectionReplacementSupportTest {
         root.resolve("src/binary.php").writeBytes(byteArrayOf(0, 1, 2, 3))
         root.resolve("src/large.php").writeBytes(ByteArray(5 * 1024 * 1024 + 1) { 'W'.code.toByte() })
 
+        val progress = mutableListOf<SelectionScanProgressDto>()
         val result = SelectionReplacementSupport.scan(
             root,
             listOf(language.toString()),
             UsageScanSettingsDto(excludedDirectories = listOf("vendor")),
             "Welcome",
             listOf(ReplacementTemplateRuleDto("__('%key%')", ".php")),
+            progress = progress::add,
         )
 
         assertEquals(1, result.files.size)
         assertTrue(result.files.single().filePath.endsWith("src${java.io.File.separator}page.php"))
         assertEquals(2, result.files.single().occurrenceCount)
         assertFalse(result.truncated)
+        assertEquals(SelectionScanStage.PLANNING, progress.first().stage)
+        assertEquals(SelectionScanStage.COMPLETED, progress.last().stage)
+        assertTrue(progress.last().visitedDirectories >= 2)
+        assertTrue(progress.last().visitedFiles >= 3)
+        assertEquals(progress.last().totalEligibleFiles, progress.last().processedEligibleFiles)
+        assertEquals(3, progress.last().totalEligibleFiles)
+        assertEquals(1, progress.last().matchedFiles)
     }
 
     @Test

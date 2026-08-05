@@ -34,7 +34,7 @@ class LocalizationManagerService(
     private val coroutineScope: CoroutineScope,
 ) {
     companion object {
-        private const val CACHE_FORMAT_VERSION = 6
+        private const val CACHE_FORMAT_VERSION = 7
         private const val MAX_PERSISTED_STATE_BYTES = 10L * 1024 * 1024
         private const val MAX_DISK_CACHE_ENTRIES = 25_000
         private const val MAX_ESTIMATED_CACHE_CHARS = 5_000_000L
@@ -77,6 +77,8 @@ class LocalizationManagerService(
     private var activeUsageLocationsTruncated: Boolean = false
     private val mutableLoadProgress = MutableStateFlow(LoadProgressDto())
     val loadProgress: StateFlow<LoadProgressDto> = mutableLoadProgress.asStateFlow()
+    private val mutableSelectionScanProgress = MutableStateFlow(SelectionScanProgressDto())
+    val selectionScanProgress: StateFlow<SelectionScanProgressDto> = mutableSelectionScanProgress.asStateFlow()
 
     init {
         coroutineScope.launch(Dispatchers.IO + CoroutineName("Language Manager initialization")) {
@@ -180,6 +182,151 @@ class LocalizationManagerService(
         if (mutableState.value.activeSchemeId == id) {
             scheduleUsageSettingsReload(id)
         }
+    }
+
+    suspend fun updateDynamicSourceRules(
+        id: String,
+        rules: List<DynamicSourceRuleDto>,
+    ) = mutex.withLock {
+        val scheme = requireScheme(id)
+        val root = usageScanRoot(scheme) ?: error(backendMessage("usage.exclusion.root.unavailable"))
+        val normalizedRules = DynamicSourceSupport.normalizeRules(rules, root)
+        val updated = scheme.copy(dynamicSourceRules = normalizedRules, updatedAtEpochMs = System.currentTimeMillis())
+        mutableState.value =
+            mutableState.value.copy(
+                schemes = mutableState.value.schemes.map { if (it.id == id) updated else it },
+                errorMessage = null,
+            )
+        activeUsageLocations = emptyList()
+        activeUsageLocationsTruncated = false
+        Files.deleteIfExists(cacheFile(id))
+        persistSchemes()
+        if (mutableState.value.activeSchemeId == id) scheduleUsageSettingsReload(id)
+    }
+
+    suspend fun convertDynamicMarkerToRule(
+        id: String,
+        request: DynamicMarkerConversionRequestDto,
+    ): String = mutex.withLock {
+        val scheme = requireScheme(id)
+        val root = usageScanRoot(scheme) ?: error(backendMessage("usage.exclusion.root.unavailable"))
+        val file = DynamicSourceSupport.safeConversionSourceFile(request.filePath, root)
+        val original = Files.readString(file, StandardCharsets.UTF_8)
+        require(request.expectedMarker.length in 1..8_192)
+        require(request.markerStartOffset >= 0 && request.markerEndOffsetExclusive <= original.length)
+        require(original.substring(request.markerStartOffset, request.markerEndOffsetExclusive) == request.expectedMarker) {
+            backendMessage("dynamic.conversion.marker.changed")
+        }
+        val marker = DynamicMarkerSyntax.findAt(original, request.markerStartOffset, request.markerEndOffsetExclusive)
+            ?.takeIf { it.startOffset == request.markerStartOffset && it.endOffsetExclusive == request.markerEndOffsetExclusive }
+            ?: error(backendMessage("dynamic.conversion.marker.changed"))
+        require(DynamicMarkerSyntax.render(marker.groups) == request.expectedMarker) {
+            backendMessage("dynamic.conversion.marker.changed")
+        }
+        val (line, _) = sourceLineColumn(original, marker.startOffset)
+        val removesWholeLine = DynamicSourceSupport.markerOccupiesWholeCommentLine(
+            original,
+            marker.startOffset,
+            marker.endOffsetExclusive,
+        )
+        val ruleId = UUID.randomUUID().toString()
+        val shiftedRules =
+            scheme.dynamicSourceRules.map { rule ->
+                if (removesWholeLine && Path.of(rule.filePath).toAbsolutePath().normalize() == file && rule.line > line) {
+                    rule.copy(line = rule.line - 1)
+                } else {
+                    rule
+                }
+            }
+        val newRule = DynamicSourceRuleDto(ruleId, file.toString(), line, 1, groups = request.groups)
+        val normalizedRules = DynamicSourceSupport.normalizeRules(shiftedRules + newRule, root)
+        val updatedScheme = scheme.copy(dynamicSourceRules = normalizedRules, updatedAtEpochMs = System.currentTimeMillis())
+        val previousState = mutableState.value
+        val updatedContent = DynamicSourceSupport.removeMarker(original, marker.startOffset, marker.endOffsetExclusive)
+        try {
+            SafeLanguageFileAccess.atomicWrite(file, updatedContent)
+            mutableState.value = previousState.copy(
+                schemes = previousState.schemes.map { if (it.id == id) updatedScheme else it },
+                errorMessage = null,
+            )
+            persistSchemes()
+        } catch (error: Exception) {
+            mutableState.value = previousState
+            runCatching { SafeLanguageFileAccess.atomicWrite(file, original) }
+                .onFailure(error::addSuppressed)
+            throw error
+        }
+        finishDynamicSourceConversion(id, file)
+        ruleId
+    }
+
+    suspend fun convertDynamicRuleToMarker(
+        id: String,
+        ruleId: String,
+        rules: List<DynamicSourceRuleDto>,
+    ) = mutex.withLock {
+        require(ruleId.length in 1..100 && ruleId.none(Char::isISOControl))
+        val scheme = requireScheme(id)
+        val root = usageScanRoot(scheme) ?: error(backendMessage("usage.exclusion.root.unavailable"))
+        val normalizedRules = DynamicSourceSupport.normalizeRules(rules, root)
+        val rule = normalizedRules.firstOrNull { it.id == ruleId }
+            ?: error(backendMessage("dynamic.conversion.rule.missing"))
+        val file = DynamicSourceSupport.safeConversionSourceFile(rule.filePath, root)
+        val original = Files.readString(file, StandardCharsets.UTF_8)
+        val insertionOffset = DynamicSourceSupport.lineStartOffset(original, rule.line)
+        val lineEnd = original.indexOf('\n', insertionOffset).let { if (it < 0) original.length else it }
+        val indentation = original.substring(insertionOffset, lineEnd).takeWhile { it == ' ' || it == '\t' }
+        val markerLine = DynamicSourceSupport.markerCommentLine(file.toString(), rule.groups, indentation)
+        val updatedContent = original.substring(0, insertionOffset) + markerLine + original.substring(insertionOffset)
+        val remainingRules =
+            normalizedRules.filterNot { it.id == ruleId }.map { remaining ->
+                if (Path.of(remaining.filePath).toAbsolutePath().normalize() == file && remaining.line >= rule.line) {
+                    remaining.copy(line = remaining.line + 1)
+                } else {
+                    remaining
+                }
+            }.let { DynamicSourceSupport.normalizeRules(it, root) }
+        val updatedScheme =
+            scheme.copy(
+                dynamicSourceRules = remainingRules,
+                updatedAtEpochMs = System.currentTimeMillis(),
+            )
+        val previousState = mutableState.value
+        try {
+            SafeLanguageFileAccess.atomicWrite(file, updatedContent)
+            mutableState.value = previousState.copy(
+                schemes = previousState.schemes.map { if (it.id == id) updatedScheme else it },
+                errorMessage = null,
+            )
+            persistSchemes()
+        } catch (error: Exception) {
+            mutableState.value = previousState
+            runCatching { SafeLanguageFileAccess.atomicWrite(file, original) }
+                .onFailure(error::addSuppressed)
+            throw error
+        }
+        finishDynamicSourceConversion(id, file)
+    }
+
+    private fun finishDynamicSourceConversion(
+        schemeId: String,
+        file: Path,
+    ) {
+        activeUsageLocations = emptyList()
+        activeUsageLocationsTruncated = false
+        Files.deleteIfExists(cacheFile(schemeId))
+        reloadUserFiles(listOf(file))
+        if (mutableState.value.activeSchemeId == schemeId) scheduleUsageSettingsReload(schemeId)
+    }
+
+    private fun sourceLineColumn(
+        content: String,
+        offset: Int,
+    ): Pair<Int, Int> {
+        val safeOffset = offset.coerceIn(0, content.length)
+        val lineStart = content.lastIndexOf('\n', safeOffset - 1).let { if (it < 0) 0 else it + 1 }
+        val line = content.substring(0, lineStart).count { it == '\n' } + 1
+        return line to (safeOffset - lineStart + 1)
     }
 
     suspend fun addActiveSchemeExcludedDirectories(folderPaths: List<String>): ExclusionUpdateResultDto =
@@ -306,6 +453,7 @@ class LocalizationManagerService(
                         updatedAtEpochMs = now + index,
                         usageScanSettings = scheme.usageScanSettings,
                         localeNotes = scheme.localeNotes,
+                        dynamicSourceRules = scheme.dynamicSourceRules,
                     )
                 }
             val schemes = mutableState.value.schemes + newSchemes
@@ -355,6 +503,7 @@ class LocalizationManagerService(
             }
             throw error
         }
+        reloadUserFiles(written)
         loadScheme(scheme, true)
     }
 
@@ -385,6 +534,7 @@ class LocalizationManagerService(
             }
             throw error
         }
+        reloadUserFiles(written.map { Path.of(it.filePath) })
         loadScheme(scheme, true)
     }
 
@@ -396,8 +546,63 @@ class LocalizationManagerService(
         val scheme = requireScheme(schemeId)
         val root = usageScanRoot(scheme) ?: error(backendMessage("usage.exclusion.root.unavailable"))
         val context = currentCoroutineContext()
-        return SelectionReplacementSupport.scan(root, scheme.files, scheme.usageScanSettings, selectedText, rules) {
-            context.ensureActive()
+        val startedAt = System.nanoTime()
+        var lastPublishedAt = 0L
+        var lastLoggedEligible = 0
+        var lastLoggedVisited = 0
+        var lastLoggedProcessed = 0
+        mutableSelectionScanProgress.value = SelectionScanProgressDto(schemeId, SelectionScanStage.PLANNING, currentPath = root.toString())
+        LOG.info(
+            "Selection replacement scan started: schemeId=$schemeId, root=$root, exclusions=${scheme.usageScanSettings.excludedDirectories.size}, " +
+                "suffixes=${rules.map { it.fileSuffix }.distinct()}, limits=visited:100000/eligible:50000/matches:2000/fileBytes:5242880",
+        )
+        try {
+            val result = SelectionReplacementSupport.scan(
+                root,
+                scheme.files,
+                scheme.usageScanSettings,
+                selectedText,
+                rules,
+                cancellationCheck = { context.ensureActive() },
+                progress = { raw ->
+                    val progress = raw.copy(schemeId = schemeId)
+                    val now = System.nanoTime()
+                    if (raw.stage == SelectionScanStage.COMPLETED || now - lastPublishedAt >= PROGRESS_UPDATE_INTERVAL_NANOS) {
+                        mutableSelectionScanProgress.value = progress
+                        lastPublishedAt = now
+                    }
+                    if (
+                        raw.eligibleFiles >= lastLoggedEligible + 500 ||
+                        raw.visitedFiles >= lastLoggedVisited + 10_000 ||
+                        raw.processedEligibleFiles >= lastLoggedProcessed + 500
+                    ) {
+                        lastLoggedEligible = raw.eligibleFiles
+                        lastLoggedVisited = raw.visitedFiles
+                        lastLoggedProcessed = raw.processedEligibleFiles
+                        LOG.info(
+                            "Selection replacement scan progress: schemeId=$schemeId, directories=${raw.visitedDirectories}, " +
+                                "files=${raw.visitedFiles}, eligible=${raw.eligibleFiles}, processed=${raw.processedEligibleFiles}/${raw.totalEligibleFiles}, " +
+                                "matches=${raw.matchedFiles}, relativePath=${raw.currentPath}",
+                        )
+                    }
+                },
+            )
+            val finalProgress = mutableSelectionScanProgress.value.copy(stage = SelectionScanStage.COMPLETED, truncated = result.truncated)
+            mutableSelectionScanProgress.value = finalProgress
+            LOG.info(
+                "Selection replacement scan completed: schemeId=$schemeId, elapsedMs=${(System.nanoTime() - startedAt) / 1_000_000}, " +
+                    "directories=${finalProgress.visitedDirectories}, files=${finalProgress.visitedFiles}, eligible=${finalProgress.eligibleFiles}, " +
+                    "processed=${finalProgress.processedEligibleFiles}/${finalProgress.totalEligibleFiles}, matches=${result.files.size}, truncated=${result.truncated}",
+            )
+            return result
+        } catch (error: CancellationException) {
+            mutableSelectionScanProgress.value = mutableSelectionScanProgress.value.copy(stage = SelectionScanStage.CANCELLED)
+            LOG.info("Selection replacement scan cancelled: schemeId=$schemeId, elapsedMs=${(System.nanoTime() - startedAt) / 1_000_000}")
+            throw error
+        } catch (error: Exception) {
+            mutableSelectionScanProgress.value = mutableSelectionScanProgress.value.copy(stage = SelectionScanStage.FAILED)
+            LOG.warn("Selection replacement scan failed: schemeId=$schemeId, elapsedMs=${(System.nanoTime() - startedAt) / 1_000_000}", error)
+            throw error
         }
     }
 
@@ -416,7 +621,14 @@ class LocalizationManagerService(
     suspend fun previewSelectionTranslation(
         schemeId: String,
         request: SelectionTranslationRequestDto,
-    ): ChangePreviewDto = mutex.withLock { buildSelectionTranslationPreview(requireScheme(schemeId), request) }
+    ): ChangePreviewDto = mutex.withLock {
+        val preview = buildSelectionTranslationPreview(requireScheme(schemeId), request)
+        LOG.info(
+            "Built selection translation preview: schemeId=$schemeId, requestedReplacementFiles=${request.replacementFiles.distinct().size}, " +
+                "languageChanges=${preview.files.count { !it.editable }}, sourceChanges=${preview.files.count { it.editable }}",
+        )
+        preview
+    }
 
     suspend fun applyPreviewedSelectionTranslation(
         schemeId: String,
@@ -426,6 +638,10 @@ class LocalizationManagerService(
     ) = mutex.withLock {
         val scheme = requireScheme(schemeId)
         val preview = buildSelectionTranslationPreview(scheme, request)
+        LOG.info(
+            "Applying selection translation preview: schemeId=$schemeId, requestedReplacementFiles=${request.replacementFiles.distinct().size}, " +
+                "languageChanges=${preview.files.count { !it.editable }}, sourceChanges=${preview.files.count { it.editable }}",
+        )
         require(preview.files.associate { it.filePath to it.beforeSha256 } == expectedBeforeHashes) { backendMessage("preview.changed") }
         val editedByPath = editedFiles.associate { it.filePath to it.content }
         require(editedByPath.keys == preview.files.mapTo(linkedSetOf()) { it.filePath })
@@ -448,6 +664,8 @@ class LocalizationManagerService(
             }
             throw error
         }
+        reloadUserFiles(written.map { Path.of(it.filePath) })
+        LOG.info("Applied selection translation preview: schemeId=$schemeId, writtenFiles=${written.size}")
         loadScheme(scheme, true)
     }
 
@@ -505,6 +723,7 @@ class LocalizationManagerService(
         val scheme = requireScheme(schemeId)
         val selected = mutableState.value.entries.filter { it.id in ids }
         val documents = parseDocuments(scheme)
+        val written = mutableListOf<Path>()
         selected.groupBy { it.filePath }.forEach { (path, entries) ->
             val document = documents.firstOrNull { it.path.toString() == path } ?: return@forEach
             entries.forEach {
@@ -513,7 +732,9 @@ class LocalizationManagerService(
                 document.keyPaths.remove(it.key)
             }
             LanguageFileCodec.write(document)
+            written.add(document.path)
         }
+        reloadUserFiles(written)
         loadScheme(scheme, true)
     }
 
@@ -532,6 +753,7 @@ class LocalizationManagerService(
         }
         val documents = parseDocuments(scheme)
         var changed = false
+        val written = mutableListOf<Path>()
         documents.forEach { document ->
             if (document.namespace == namespace && oldKey in document.values) {
                 require(
@@ -549,10 +771,12 @@ class LocalizationManagerService(
                 document.values.clear()
                 document.values.putAll(rebuilt)
                 LanguageFileCodec.write(document)
+                written.add(document.path)
                 changed = true
             }
         }
         require(changed) { backendMessage("entry.key.not.found", oldKey) }
+        reloadUserFiles(written)
         loadScheme(scheme, true)
     }
 
@@ -606,6 +830,7 @@ class LocalizationManagerService(
             }
             throw error
         }
+        reloadUserFiles(written.map { Path.of(it.filePath) })
         loadScheme(scheme, true)
     }
 
@@ -681,6 +906,7 @@ class LocalizationManagerService(
                 document.values.replaceAll { key, value -> sanitizeText(value.ifBlank { key }, 100_000) }
                 LanguageFileCodec.write(document)
             }
+            reloadUserFiles(documents.map { it.path })
             loadScheme(scheme, true)
         }
 
@@ -695,11 +921,14 @@ class LocalizationManagerService(
         val documents = parseDocuments(scheme)
         val errors = documents.flatMap { it.issues }.filter { it.severity == IssueSeverity.ERROR }
         require(errors.isEmpty()) { backendMessage("repair.parse.blocked") }
+        val written = mutableListOf<Path>()
         selected.groupBy { it.filePath }.forEach { (path, entries) ->
             val document = documents.firstOrNull { it.path.toString() == path } ?: return@forEach
             entries.forEach { entry -> if (document.values[entry.key].isNullOrBlank()) document.values[entry.key] = entry.key }
             LanguageFileCodec.write(document)
+            written.add(document.path)
         }
+        reloadUserFiles(written)
         loadScheme(scheme, true)
     }
 
@@ -748,6 +977,7 @@ class LocalizationManagerService(
                     errorMessage = null,
                 )
             persistSchemes()
+            reloadUserFiles(createdFiles)
             loadScheme(updatedScheme, true)
         } catch (error: Exception) {
             createdFiles.asReversed().forEach { path -> runCatching { Files.deleteIfExists(path) } }
@@ -780,9 +1010,13 @@ class LocalizationManagerService(
                 backendMessage("preview.changed.file", path.fileName)
             }
         }
-        preview.files.forEach { change ->
-            SafeLanguageFileAccess.atomicWrite(SafeLanguageFileAccess.validate(change.filePath), change.afterContent)
-        }
+        val written =
+            preview.files.map { change ->
+                SafeLanguageFileAccess.validate(change.filePath).also { path ->
+                    SafeLanguageFileAccess.atomicWrite(path, change.afterContent)
+                }
+            }
+        reloadUserFiles(written)
         loadScheme(scheme, true)
     }
 
@@ -956,6 +1190,7 @@ class LocalizationManagerService(
                             scheme.files,
                             scheme.usageScanSettings,
                             cancellationCheck,
+                            scheme.dynamicSourceRules,
                         ) { path, scannedCount ->
                             completedSteps = scanStepStart + scannedCount.coerceAtMost(sourceFileCount)
                             val now = System.nanoTime()
@@ -1146,12 +1381,26 @@ class LocalizationManagerService(
     private fun requireScheme(id: String) =
         mutableState.value.schemes.firstOrNull { it.id == id } ?: error(backendMessage("scheme.not.found"))
 
-    private fun fingerprints(scheme: LanguageSchemeDto) =
-        scheme.files.associateWith { raw ->
-            runCatching {
-                Files.getLastModifiedTime(SafeLanguageFileAccess.validate(raw)).toMillis() xor
-                    Files.size(SafeLanguageFileAccess.validate(raw))
-            }.getOrDefault(-1L)
+    private fun fingerprints(scheme: LanguageSchemeDto): Map<String, Long> =
+        buildMap {
+            scheme.files.forEach { raw ->
+                put(
+                    raw,
+                    runCatching {
+                        Files.getLastModifiedTime(SafeLanguageFileAccess.validate(raw)).toMillis() xor
+                            Files.size(SafeLanguageFileAccess.validate(raw))
+                    }.getOrDefault(-1L),
+                )
+            }
+            scheme.dynamicSourceRules.map { it.filePath }.distinct().forEach { raw ->
+                put(
+                    "dynamic:$raw",
+                    runCatching {
+                        val path = Path.of(raw)
+                        Files.getLastModifiedTime(path).toMillis() xor Files.size(path)
+                    }.getOrDefault(-1L),
+                )
+            }
         }
 
     private fun entryId(
@@ -1203,6 +1452,24 @@ class LocalizationManagerService(
     ) {
         path.parent.createDirectories()
         SafeLanguageFileAccess.atomicWrite(path, content)
+    }
+
+    private fun reloadUserFiles(paths: Collection<Path>) {
+        runCatching { IdeFileReloadSupport.reloadFromDisk(paths) }
+            .onSuccess { result ->
+                LOG.info(
+                    "Reloaded updated user files from disk: requested=${result.requestedPaths}, " +
+                        "resolvedVirtualFiles=${result.resolvedVirtualFiles}, cachedDocuments=${result.cachedDocuments}, " +
+                        "reloadedDocuments=${result.reloadedDocuments}",
+                )
+                if (result.resolvedVirtualFiles < result.requestedPaths) {
+                    LOG.warn(
+                        "Some updated user files could not be resolved by VirtualFileManager for VFS reload: " +
+                            "requested=${result.requestedPaths}, unresolved=${result.requestedPaths - result.resolvedVirtualFiles}",
+                    )
+                }
+            }
+            .onFailure { error -> LOG.warn("Failed to reload ${paths.size} updated user files from disk", error) }
     }
 
     private fun safeMessage(error: Throwable) =

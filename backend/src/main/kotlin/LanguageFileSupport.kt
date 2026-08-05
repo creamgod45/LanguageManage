@@ -7,6 +7,11 @@ import cg.creamgod45.localization.LanguageFileCandidateDto
 import cg.creamgod45.localization.LanguageIssueDto
 import cg.creamgod45.localization.LanguageLoadBudget
 import cg.creamgod45.localization.UsageScanSettingsDto
+import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.application.ModalityState
+import com.intellij.openapi.fileEditor.FileDocumentManager
+import com.intellij.openapi.vfs.VfsUtil
+import com.intellij.openapi.vfs.VirtualFileManager
 import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -120,6 +125,47 @@ internal object SafeLanguageFileAccess {
         } finally {
             Files.deleteIfExists(temp)
         }
+    }
+}
+
+internal data class IdeFileReloadResult(
+    val requestedPaths: Int,
+    val resolvedVirtualFiles: Int,
+    val cachedDocuments: Int,
+    val reloadedDocuments: Int,
+)
+
+internal object IdeFileReloadSupport {
+    fun reloadFromDisk(paths: Collection<Path>): IdeFileReloadResult {
+        val requested = paths.asSequence().map(Path::toAbsolutePath).map(Path::normalize).distinct().toList()
+        val files =
+            requested.asSequence()
+                .mapNotNull { path ->
+                    VirtualFileManager.getInstance().refreshAndFindFileByNioPath(path)
+                }.toList()
+        if (files.isEmpty()) return IdeFileReloadResult(requested.size, 0, 0, 0)
+
+        VfsUtil.markDirtyAndRefresh(false, false, false, *files.toTypedArray())
+        val fileDocumentManager = FileDocumentManager.getInstance()
+        val documents = files.mapNotNull(fileDocumentManager::getCachedDocument).distinct()
+        var reloadedDocuments = 0
+        val reloadDocuments = Runnable {
+            documents.forEach {
+                fileDocumentManager.reloadFromDisk(it)
+                reloadedDocuments++
+            }
+        }
+        val application = ApplicationManager.getApplication()
+        if (application.isDispatchThread) {
+            reloadDocuments.run()
+        } else {
+            // reloadFromDisk mutates the IDE document model internally. Scheduling it with
+            // ModalityState.any() reaches the EDT but is still rejected by TransactionGuard as
+            // a write-unsafe context on recent IDE builds. User-file mutations finish outside a
+            // modal dialog, so NON_MODAL supplies the required write-safe transaction context.
+            application.invokeAndWait(reloadDocuments, ModalityState.nonModal())
+        }
+        return IdeFileReloadResult(requested.size, files.size, documents.size, reloadedDocuments)
     }
 }
 

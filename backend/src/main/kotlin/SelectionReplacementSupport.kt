@@ -4,6 +4,8 @@ import cg.creamgod45.localization.FileChangePreviewDto
 import cg.creamgod45.localization.ReplacementTemplateRuleDto
 import cg.creamgod45.localization.SelectionReplacementCandidateDto
 import cg.creamgod45.localization.SelectionReplacementScanDto
+import cg.creamgod45.localization.SelectionScanProgressDto
+import cg.creamgod45.localization.SelectionScanStage
 import cg.creamgod45.localization.UsageScanSettingsDto
 import java.nio.ByteBuffer
 import java.nio.charset.CodingErrorAction
@@ -19,6 +21,7 @@ import cg.creamgod45.LanguageManagerBackendBundle.message as backendMessage
 internal object SelectionReplacementSupport {
     private const val MAX_SOURCE_FILE_BYTES = 5L * 1024 * 1024
     private const val MAX_SCANNED_FILES = 50_000
+    private const val MAX_VISITED_FILES = 100_000
     private const val MAX_CANDIDATE_FILES = 2_000
     private const val MAX_RULES = 1_000
     private const val PLACEHOLDER = "%key%"
@@ -30,49 +33,98 @@ internal object SelectionReplacementSupport {
         selectedText: String,
         rawRules: List<ReplacementTemplateRuleDto>,
         cancellationCheck: () -> Unit = {},
+        progress: (SelectionScanProgressDto) -> Unit = {},
     ): SelectionReplacementScanDto {
         val text = validateSelectedText(selectedText)
         val rules = validateRules(rawRules)
         val languagePaths = languageFiles.mapNotNullTo(hashSetOf()) { runCatching { Path.of(it).toRealPath() }.getOrNull() }
-        val ignored = settings.excludedDirectories.map { it.replace('\\', '/').trim('/').lowercase() }.toSet()
+        val ignored = settings.excludedDirectories.map { it.replace('\\', '/').trim('/').lowercase() }.filter(String::isNotBlank).toSet()
+        val ignoredNames = ignored.filterTo(hashSetOf()) { '/' !in it }
+        val ignoredPaths = ignored.filterTo(hashSetOf()) { '/' in it }
         val candidates = mutableListOf<SelectionReplacementCandidateDto>()
-        var scanned = 0
+        val eligiblePaths = ArrayList<Path>()
+        var visitedDirectories = 0
+        var visitedFiles = 0
+        var eligibleFiles = 0
+        var processedEligibleFiles = 0
+        var totalEligibleFiles = 0
         var truncated = false
         val scanRoot = root.toRealPath()
+
+        fun report(stage: SelectionScanStage, path: Path = scanRoot) {
+            val relative = runCatching { scanRoot.relativize(path).joinToString("/") { it.toString() } }.getOrDefault("")
+            progress(
+                SelectionScanProgressDto(
+                    stage = stage,
+                    visitedDirectories = visitedDirectories,
+                    visitedFiles = visitedFiles,
+                    eligibleFiles = eligibleFiles,
+                    processedEligibleFiles = processedEligibleFiles,
+                    totalEligibleFiles = totalEligibleFiles,
+                    matchedFiles = candidates.size,
+                    currentPath = relative,
+                    truncated = truncated,
+                ),
+            )
+        }
+
+        report(SelectionScanStage.PLANNING)
 
         Files.walkFileTree(
             scanRoot,
             object : SimpleFileVisitor<Path>() {
                 override fun preVisitDirectory(dir: Path, attrs: BasicFileAttributes): FileVisitResult {
                     cancellationCheck()
-                    if (dir == scanRoot) return FileVisitResult.CONTINUE
-                    val relative = scanRoot.relativize(dir).joinToString("/") { it.toString() }.lowercase()
-                    val excluded = ignored.any { item ->
-                        if ('/' in item) relative == item || relative.startsWith("$item/")
-                        else dir.fileName.toString().lowercase() == item
+                    visitedDirectories++
+                    if (dir == scanRoot) {
+                        report(SelectionScanStage.WALKING, dir)
+                        return FileVisitResult.CONTINUE
                     }
+                    val relative = scanRoot.relativize(dir).joinToString("/") { it.toString() }.lowercase()
+                    val excludedByPath = generateSequence(relative) { value -> value.substringBeforeLast('/', "").takeIf(String::isNotEmpty) }.any(ignoredPaths::contains)
+                    val excluded = dir.fileName.toString().lowercase() in ignoredNames || excludedByPath
+                    if (visitedDirectories % 32 == 0) report(SelectionScanStage.WALKING, dir)
                     return if (excluded) FileVisitResult.SKIP_SUBTREE else FileVisitResult.CONTINUE
                 }
 
                 override fun visitFile(file: Path, attrs: BasicFileAttributes): FileVisitResult {
                     cancellationCheck()
-                    if (!attrs.isRegularFile || file in languagePaths || matchingRule(file, rules) == null) return FileVisitResult.CONTINUE
-                    scanned++
-                    if (scanned > MAX_SCANNED_FILES) {
+                    if (!attrs.isRegularFile) return FileVisitResult.CONTINUE
+                    visitedFiles++
+                    if (visitedFiles > MAX_VISITED_FILES) {
                         truncated = true
                         return FileVisitResult.TERMINATE
                     }
-                    val content = readSource(file) ?: return FileVisitResult.CONTINUE
-                    val count = literalOccurrenceCount(content, text)
-                    if (count > 0) candidates += SelectionReplacementCandidateDto(file.toString(), count)
-                    if (candidates.size >= MAX_CANDIDATE_FILES) {
+                    if (visitedFiles % 64 == 0) report(SelectionScanStage.WALKING, file)
+                    if (file in languagePaths || matchingRule(file, rules) == null) return FileVisitResult.CONTINUE
+                    eligibleFiles++
+                    if (eligibleFiles > MAX_SCANNED_FILES) {
                         truncated = true
                         return FileVisitResult.TERMINATE
                     }
+                    eligiblePaths.add(file)
                     return FileVisitResult.CONTINUE
                 }
             },
         )
+        totalEligibleFiles = eligiblePaths.size
+        for ((index, file) in eligiblePaths.withIndex()) {
+            cancellationCheck()
+            processedEligibleFiles = index
+            report(SelectionScanStage.READING, file)
+            val content = readSource(file)
+            if (content != null) {
+                val count = literalOccurrenceCount(content, text)
+                if (count > 0) candidates += SelectionReplacementCandidateDto(file.toString(), count)
+            }
+            processedEligibleFiles = index + 1
+            report(SelectionScanStage.READING, file)
+            if (candidates.size >= MAX_CANDIDATE_FILES) {
+                truncated = true
+                break
+            }
+        }
+        report(SelectionScanStage.COMPLETED)
         return SelectionReplacementScanDto(candidates.sortedBy { it.filePath }, truncated)
     }
 

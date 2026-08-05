@@ -5,6 +5,7 @@ import cg.creamgod45.localization.HARD_MAX_ENTRIES_PER_SCHEME
 import cg.creamgod45.localization.HARD_MAX_LANGUAGE_FILE_KB
 import cg.creamgod45.localization.HARD_MAX_LANGUAGE_SCHEME_MB
 import cg.creamgod45.localization.LanguageEntryDto
+import cg.creamgod45.localization.DynamicSourceRuleDto
 import cg.creamgod45.localization.MAX_USAGE_EXCLUSIONS
 import cg.creamgod45.localization.UsageScanSettingsDto
 import cg.creamgod45.localization.UsageLocationDto
@@ -132,6 +133,7 @@ internal object UsageScanSupport {
         languageFiles: List<String>,
         settings: UsageScanSettingsDto,
         cancellationCheck: () -> Unit = {},
+        dynamicSourceRules: List<DynamicSourceRuleDto> = emptyList(),
         fileProcessed: (Path, Int) -> Unit = { _, _ -> },
     ): UsageScanResult {
         cancellationCheck()
@@ -145,6 +147,22 @@ internal object UsageScanSupport {
                 needleOwners.getOrPut(needle) { linkedSetOf() } += entry.id
             }
         }
+        fun record(
+            candidate: String,
+            file: Path,
+            offset: Int,
+            modifiedAt: Long,
+        ) {
+            needleOwners[candidate].orEmpty().forEach { id ->
+                counts[id] = counts.getValue(id) + 1
+                val key = UsageLocationKey(id, file.toString(), offset, modifiedAt)
+                if (key in locationCounts || locationCounts.size < MAX_USAGE_LOCATION_RECORDS) {
+                    locationCounts[key] = (locationCounts[key] ?: 0) + 1
+                } else {
+                    locationsTruncated = true
+                }
+            }
+        }
         val patterns = settings.regexPatterns.map(::Regex)
         var visitedFiles = 0
         try {
@@ -156,15 +174,11 @@ internal object UsageScanSupport {
                     val modifiedAt = Files.getLastModifiedTime(file).toMillis()
                     occurrences.forEach { occurrence ->
                         cancellationCheck()
-                        needleOwners[occurrence.candidate].orEmpty().forEach { id ->
-                            counts[id] = counts.getValue(id) + 1
-                            val key = UsageLocationKey(id, file.toString(), occurrence.range.first, modifiedAt)
-                            if (key in locationCounts || locationCounts.size < MAX_USAGE_LOCATION_RECORDS) {
-                                locationCounts[key] = (locationCounts[key] ?: 0) + 1
-                            } else {
-                                locationsTruncated = true
-                            }
-                        }
+                        record(occurrence.candidate, file, occurrence.range.first, modifiedAt)
+                    }
+                    DynamicSourceSupport.markerOccurrences(content).forEach { occurrence ->
+                        cancellationCheck()
+                        record(occurrence.key, file, occurrence.offset, modifiedAt)
                     }
                 } catch (error: CancellationException) {
                     throw error
@@ -178,6 +192,15 @@ internal object UsageScanSupport {
             throw error
         } catch (error: Exception) {
             log.debug("Usage scan stopped early", error)
+        }
+        try {
+            DynamicSourceSupport.ruleOccurrences(dynamicSourceRules, root, cancellationCheck).forEach { (file, occurrence, modifiedAt) ->
+                record(occurrence.key, file, occurrence.offset, modifiedAt)
+            }
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Exception) {
+            log.debug("Unable to add configured dynamic source locations", error)
         }
         log.info("Usage scan checked $visitedFiles source files for ${entries.size} localization entries")
         return UsageScanResult(

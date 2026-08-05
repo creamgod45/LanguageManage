@@ -20,13 +20,17 @@ LanguageManager 是支援 JetBrains IDE split mode 的在地化檔案管理插�
 - 可從現有 locale 建立完整的新語言版本；目標代碼使用可自由輸入的文字欄位，右側按鈕會開啟 ISO／BCP 47 建議 Popup，只有使用者明確選取才會回填，輸入或刪除期間不會自動改寫。選填語言備註會保存於方案並帶入 AI，作為語言、地區、術語及語氣背景；新檔案仍須經 Diff 確認。
 - IDE Settings 可設定插件顯示語言、問題建議顯示偏好，以及新方案的 base path 模式、向上層級、Regex 與排除清單；既有方案由 Tool Window「方案設定」獨立調整。
 - 可從「方案設定」重新命名目前方案，不會改變列管檔案或隔離身分。每個方案最多支援 1,000 個排除項目，並可用逗號或換行大量新增。也可在 Project 檔案樹使用「在地化語言管理 → 從目前方案掃描中排除資料夾」，將選取資料夾以目前方案 base path 的精確相對路徑加入；沒有啟用方案時操作會停用。
-- 可在編輯器選取文字後使用「在地化管理器 → 以選取範圍建立翻譯文字」。選填的 `%key%` 樣板條件會依新增順序掃描目前方案工作目錄，候選檔案採 lazy 單檔預覽，最後以多檔 Diff 再次確認；程式碼結果可編輯，產生的語言檔維持唯讀。
+- 可在編輯器選取文字後使用「在地化管理器 → 以選取範圍建立翻譯文字」。選填的 `%key%` 樣板條件會依新增順序掃描目前方案工作目錄並套用方案排除清單；可取消的 JetBrains 背景任務與 Modal 進度條會顯示階段、目錄／檔案／命中統計及目前相對路徑。候選檔案採 lazy 單檔預覽，最後以多檔 Diff 再次確認；程式碼結果可編輯，產生的語言檔維持唯讀。
 - 偵測解析錯誤、空值、重複鍵、重複值、缺少語言及可能未使用的 key；重複值與可能未使用建議可在設定中隱藏。
 - 多個使用率 Regex 的實際命中會累加；同一行的重複呼叫分別計數，不同 Regex 若捕獲同一位置的相同 key 則只計一次。
+- 以兩種在地化動態使用來源補足執行期組合 key：一般方案掃描會辨識 `@languageManager(method: dynamic, enum: auth.failed,status.ready)` 程式碼備註標記；非侵入式方式則在 Tool Window「在地化動態使用來源」頁籤保存可重複的檔案／行／欄及 key 群組，不改寫程式碼。只要編輯器有游標即可建立任一形式，不需先選取文字；若有選取內容仍會預填 key。兩者都會併入相同的使用次數與使用位置。
+- 兩種動態來源編輯器都能捲動並支援批次貼上 Key，可選換行、逗號、分號或自訂純文字分隔符。將游標移到有效的 `@languageManager` 標記可查看說明，也能從編輯器右鍵選單或浮動式代碼工具欄使用「編輯在地化動態使用標記」修改既有或複製的標記。
+- 可在任一動態來源編輯表單無痛轉換為另一種表示方式。轉換以可回復流程一起更新來源檔與方案規則，並重新載入 VFS／Document、清除快取及重算。開啟的編輯器會為兩種類型顯示裝訂區圖示：marker 圖示在程式碼中導航，非侵入式圖示則開啟並定位對應 Tool Window 規則。
+- 有效的非侵入式規則也會在目標程式碼上一行顯示輕量 block inlay，並與登錄的程式碼位置對齊，外觀類似參數名稱提示。提示會顯示去重後的動態 key 數量，懸停可查看規則細節，點擊則定位到確切規則；失效座標不會被插入無關程式碼。
 - 雙擊翻譯 row 的「使用次數」cell 才會啟用按需載入的「使用位置」Tab；位置紀錄只保留於 backend，frontend 僅請求該 key 當頁最多 100 筆，開啟 row 時才計算及快取行／欄，再把 IDE 游標移到精確位置。
 - 預設使用率排除清單包含 `.git`、`.github`、`docs`、`vendor`、`storage`、`database`、`gradle`、`.gradle`、`build`、`out`、`dist`、`target`、`node_modules`，以及 `.idea`、`.fleet`、`.vs`、`.settings`、`.metadata`、`nbproject` 等 IDE 目錄，並允許使用者自訂。
 - 修復或刪除前顯示 IDE 雙欄 Diff；套用前驗證 SHA-256，避免覆蓋預覽後產生的外部修改。
-- 以記憶體與 `.idea/language-manager/` 磁碟快取降低重複解析成本。
+- 以記憶體與 `.idea/language-manager/` 磁碟快取解析結果及動態使用位置。儲存動態規則會使目前方案快取失效並啟動背景重讀；首次讀取、手動重讀、方案切換及匯入方案都會套用動態定義。
 - 每個方案可設定單檔大小、方案總容量、單檔翻譯筆數與方案總筆數上限；檔案會在讀入內容前先檢查大小，parser 建立資料時即限制筆數與巢狀深度，降低大檔造成 OOM 的風險。
 - PHP parser 只接受可選的 `declare(strict_types=1);` 加上 `return [...]`／`return array(...)` 靜態資料，不執行 PHP 程式碼。
 
@@ -129,7 +133,7 @@ flowchart LR
 | `BackendRpcApiProvider.kt` | 向 IntelliJ RPC backend 註冊 `LocalizationManagerRpcApi` |
 | `BackendLocalizationManagerRpcApi.kt` | RPC adapter；在 IO dispatcher 上把請求委派給 project service |
 | `LocalizationManagerService.kt` | 核心主程序：方案、狀態、快取、CRUD、修復預覽、衝突檢查與使用率掃描 |
-| `LanguageFileSupport.kt` | 安全路徑／資料夾驗證、受限遞迴探索、UTF-8 讀寫、原子寫入、JSON/YAML/PHP/Properties parse/render |
+| `LanguageFileSupport.kt` | 安全路徑／資料夾驗證、受限遞迴探索、UTF-8 讀寫、原子寫入、指定目標的 JetBrains VFS／document 重載、JSON/YAML/PHP/Properties parse/render |
 | `UsageScanSupport.kt` | 使用率設定驗證、Regex key 擷取、base path 掃描、排除目錄與計數限制 |
 | `UsageExclusionSupport.kt` | 將選取的本機資料夾安全轉成相對於方案掃描根目錄的精確排除路徑 |
 | `LanguageLoadBudget.kt` | 在單一隔離方案內套用解析前檔案大小與解析後翻譯筆數預算 |
@@ -227,6 +231,7 @@ flowchart LR
 2. Backend 驗證 scheme、路徑、locale、namespace、key 長度與控制字元；key 可為含空格、Unicode 與標點的自然語言句子。
 3. 重新 parse 方案檔案，避免以過期的 UI 狀態直接覆寫。
 4. 修改 `ParsedLanguageFile` 後 render 成原格式並執行原子寫入。
+5. 整個 mutation 成功後，只針對實際寫入的使用者檔案同步 refresh JetBrains VFS；IDE 已快取的 document 會從最終硬碟內容重新載入。
 5. 強制重載方案、重建分析及 cache，最新狀態再回推 UI。
 
 ### 5. 修復、正規化與問題處理

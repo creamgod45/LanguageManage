@@ -69,12 +69,14 @@ Scheme behavior:
 2. Enter the key and review the selected source text. The modal lists every locale target in the selected namespace in one scrollable form; the selected text is initially placed in the preferred `en` target when available.
 3. To find duplicate source literals, enable **Scan for similar text**. Add any number of ordered conditions, each with exactly one `%key%` placeholder and one filename suffix. For example, use `__('%key%')` with `.php`, or `@lang('%key%')` with `.blade.php`. Suggested framework templates fill these two ordinary fields; they do not create a Regex.
 4. Conditions retain their insertion order. For each filename, the first matching suffix wins—even when a later, more specific suffix would also match—so the visible row order is the actual execution order.
-5. Click **Preview Matches** to scan only the active scheme working directory. Managed language files and configured exclusions are skipped, as are binary, invalid UTF-8, and source files larger than 5 MB. The scan stops at 50,000 inspected files or 2,000 matched files.
-6. The candidate list is lazy. Double-clicking one file computes and opens only that file's Diff, with the matched source and generated replacement marked in the Diff labels. Select or clear candidate files to control which ones enter the final operation.
+5. Click **Preview Matches** to start a cancellable JetBrains background task. During the single planning walk, the IDE task and modal progress bar show directory/file/eligible counters and the current path relative to the scheme base path. Once planning establishes the exact suffix-matched file total, the content-search phase switches both bars to determinate `searched / total` plus percentage and match count; the project is not walked twice. Use the adjacent **Stop Scan** button to cancel both the IDE task and backend RPC; partial candidates are not presented as a completed result. The scan uses only the active scheme working directory and its exclusion list; managed language files, binary or invalid UTF-8 files, and source files larger than 5 MB are skipped. It stops at 100,000 visited files, 50,000 suffix-matched files, or 2,000 result files.
+6. The candidate list is lazy. Double-clicking one file computes and opens only that file's Diff, with the matched source and generated replacement marked in the Diff labels. Checkboxes independently control which files enter the final operation; changing the highlighted preview row or double-clicking it never clears other checked files.
 7. Confirm the modal to open the final multi-file Diff. Its file selector displays the full affected path and an editable/read-only state. Generated language-file results are read-only; replacement results for source-code files are editable on the right side.
 8. **Apply** regenerates the preview on the backend, verifies the exact file set and every original SHA-256, validates edited sizes, and writes atomically with rollback. Canceling either preview writes nothing.
 
 Replacement templates are data only. They are never compiled as Regex, evaluated as PHP, or executed as commands. The selected source text is searched literally.
+
+For a slow scan report, include IDE log lines containing `Selection replacement scan`. They show start/progress/completion/cancellation/failure counts and duration, but never include selected source text or replacement templates.
 
 ### Import and export scheme settings
 
@@ -373,6 +375,24 @@ Example for Vue/JavaScript `$t()`:
 
 Every distinct match is counted, so repeated calls on the same line and matches from different Regex formats accumulate. If multiple Regex patterns capture the same key at the same source position, that occurrence is counted once to avoid inflating the result. Dynamically concatenated keys usually cannot be detected reliably.
 
+### Dynamic translation sources
+
+For runtime-built keys, place the editor caret at the source location and use **Localization Manager → Create Localization Dynamic Usage Source**. Selecting one or more keys is optional; a selection prefills the key rows, while an empty selection opens editable blank rows at the caret line and column:
+
+- **Create Code Comment Marker** opens a small form with repeatable named groups and key rows, then inserts a comment such as `// @languageManager(method: dynamic, enum: custinfo,packinfo)`. The scanner accepts the marker only from a source-code comment and records its file offset as a usage location.
+- **Add Non-invasive Dynamic Source** opens the non-modal **Dynamic Sources** Tool Window tab and pre-fills the current file, line, column, and selected keys. Add/remove outer rules, named groups, and inner key rows freely; the key browse button suggests values from the active translation table. This method does not modify source code.
+- Both editors are scrollable. Use **Add Keys in Bulk** to paste keys separated by lines, commas, semicolons, or a custom literal separator; input order is preserved and duplicate keys are removed. Each group accepts at most 500 keys.
+- Hover a valid `@languageManager` marker to read its syntax and declared groups. Place the caret in an existing or copied marker and choose **Edit Localization Dynamic Usage Marker** from **Localization Manager → Create Localization Dynamic Usage Source** or the floating code toolbar; the form replaces only the marker body and preserves the surrounding comment.
+- In the marker editor, choose **Convert to Non-invasive Rule** to remove the verified comment marker and create a scheme rule at the same source position. On a non-invasive rule card, choose **Convert to Code Comment Marker** to insert the file-appropriate comment at its registered line and remove that rule. Current unsaved form values are included. File and scheme updates use one rollback-capable operation; success reloads the IDE document, invalidates usage cache, and recounts the active scheme.
+- Open source editors show a Language Manager gutter icon at invasive marker lines and registered non-invasive source lines. Clicking an invasive icon navigates to its marker. Clicking a non-invasive icon activates the **Dynamic Sources** tab and scrolls to the exact rule card; if scheme state is still arriving, the requested focus is retained until that card is rendered.
+- A valid non-invasive location also displays `Localization: N keys` as a parameter-hint-style block inlay on the line above the target, aligned with the saved code position. Hover it to inspect the method, file position, groups, and keys; click it to focus the exact rule card. If edits make the saved position invalid, no inlay is forced into the editor and the gutter tooltip asks you to review the rule.
+- Each non-invasive rule card also provides **Go to Marker Location**. It opens the source file at the file, line, and column currently shown in that form, so edited coordinates can be checked before saving the rule.
+- **Search Translation Table → Exact/Fuzzy Search** opens the Tool Window and searches using the selected editor text.
+
+Click **Save Dynamic Sources** after editing non-invasive rules. Paths must be regular local files inside the scheme usage base path; URI/device paths, control characters, out-of-root files, invalid keys, and excessive rule/group/key counts are rejected. Rules are isolated by scheme and included in scheme settings import/export.
+
+Regex occurrences, comment markers, and saved non-invasive rules are merged into one count/location result. They are applied during initial parsing, manual **Reload**, scheme switching when cache rebuild is required, and imported-scheme loading. Saving rules clears that scheme's cache and immediately schedules a background reload. The source path and offset are cached; line/column remain lazy until the user opens a location.
+
 The scanner applies the scheme Regex to the complete content of every regular file under the base path. It does not restrict scanning by extension, filename, or IDE file type, and therefore supports custom templates, extensionless scripts, generated source formats, long lines, and multiline Regex. Only directories explicitly listed in the scheme exclusions and the scheme's managed language files are skipped. This intentionally keeps usage definitions out of the count while leaving source-file scope under scheme control.
 
 ### Inspect usage locations
@@ -410,7 +430,7 @@ Schemes and caches are stored under:
 - Normal scheme switching uses cache when fingerprints are unchanged.
 - Scheme switching and **Reload** appear in the IDE background-task indicator and can be cancelled there. The task first counts eligible source files, then displays an exact total of preparation, language-file parsing, table build, source-file scanning, analysis, and cache steps. Starting another switch or reload cancels the previous read; cooperative parser and source-scan checkpoints release the old task, while a generation check blocks stale rows, issues, and cache writes. The Tool Window status uses the same dynamic completed/total values and returns to the entry/issue summary when the latest task finishes.
 - **Reload** forces parsing.
-- A source change, cache format upgrade, or fingerprint mismatch rebuilds the cache.
+- A managed-language or configured dynamic-source file change, cache format upgrade, or fingerprint mismatch rebuilds the cache. Other scanned source changes are picked up by manual **Reload**.
 - Do not edit cache manually. Deleting cache never deletes source language files.
 
 ## 12. Troubleshooting
@@ -457,6 +477,12 @@ Schemes and caches are stored under:
 - Check the editable source preview. A Key-only source may not contain enough context; select a populated source locale or rewrite the temporary source text more explicitly.
 - Correct generated values in the review table, or use **Give AI More Feedback**. Pressing **Back** from the feedback dialog preserves and reopens the current Diff.
 - Always inspect the target locale column and final Diff. AI output is a suggestion until **Apply** is selected.
+
+### An open editor still shows the value from before Apply
+
+- Every successful content mutation finishes by synchronously refreshing only the written language/source files through JetBrains VFS.
+- If a target file already has a cached IDE document, the plugin invokes the IDE's reload-from-disk path with the final content after the complete transaction succeeds.
+- Scheme and cache metadata files are intentionally excluded. If the editor still differs, check for a separate unsaved editor change or another process rewriting the file after the plugin completed.
 
 ## 13. Reporting an Issue
 

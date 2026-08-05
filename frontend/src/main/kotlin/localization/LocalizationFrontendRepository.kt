@@ -20,6 +20,11 @@ internal class LocalizationFrontendRepository(
             durable { LocalizationManagerRpcApi.getInstance().loadProgress(project.projectId()).collect { emit(it) } }
         }
 
+    val selectionScanProgress: Flow<SelectionScanProgressDto> =
+        flow {
+            durable { LocalizationManagerRpcApi.getInstance().selectionScanProgress(project.projectId()).collect { emit(it) } }
+        }
+
     suspend fun createScheme(
         name: String,
         files: List<String>,
@@ -35,6 +40,22 @@ internal class LocalizationFrontendRepository(
         name: String,
         settings: UsageScanSettingsDto,
     ) = LocalizationManagerRpcApi.getInstance().updateSchemeSettings(project.projectId(), id, name, settings)
+
+    suspend fun updateDynamicSourceRules(
+        id: String,
+        rules: List<DynamicSourceRuleDto>,
+    ) = LocalizationManagerRpcApi.getInstance().updateDynamicSourceRules(project.projectId(), id, rules)
+
+    suspend fun convertDynamicMarkerToRule(
+        id: String,
+        request: DynamicMarkerConversionRequestDto,
+    ) = LocalizationManagerRpcApi.getInstance().convertDynamicMarkerToRule(project.projectId(), id, request)
+
+    suspend fun convertDynamicRuleToMarker(
+        id: String,
+        ruleId: String,
+        rules: List<DynamicSourceRuleDto>,
+    ) = LocalizationManagerRpcApi.getInstance().convertDynamicRuleToMarker(project.projectId(), id, ruleId, rules)
 
     suspend fun addActiveSchemeExcludedDirectories(folderPaths: List<String>) =
         LocalizationManagerRpcApi.getInstance().addActiveSchemeExcludedDirectories(project.projectId(), folderPaths)

@@ -4,13 +4,32 @@
 
 ### English
 
+- Split non-invasive rule-card metadata and actions into two rows, preventing long source paths from forcing navigation and removal buttons beyond narrow Tool Window bounds.
+- Add **Go to Marker Location** to every non-invasive dynamic-source rule card. It navigates with the form's current file, line, and column values, including edits that have not been saved yet.
+- Fix `Write-unsafe context` after dynamic-source conversion and other file mutations. Cached IDE documents are now reloaded on the EDT with a write-safe non-modal transaction context instead of `ModalityState.any()`.
+- Add safe two-way conversion between invasive `@languageManager` comment markers and non-invasive scheme rules. Conversion applies current form edits, verifies stale marker content, updates the source file and scheme state as one rollback-capable transaction, reloads the IDE document, invalidates usage cache, and recounts the active scheme.
+- Add Language Manager gutter icons for both dynamic-source types in open editors. Invasive icons navigate to the marker; non-invasive icons open the Dynamic Sources Tool Window tab and scroll to the registered rule card.
+- Add bulk key entry to both invasive marker and non-invasive dynamic-source forms. Users can paste newline-, comma-, semicolon-, or custom literal-delimited keys; order is preserved, duplicates are removed, and per-group safety limits are validated before save.
+- Make both repeatable dynamic-source editors scrollable so large nested group/key forms remain usable without compressing or hiding input rows.
+- Add IDE hover documentation for `@languageManager` markers and an **Edit Localization Dynamic Usage Marker** action in both the editor context menu and JetBrains floating code toolbar. The action recognizes copied markers under the caret, reopens the repeatable form, and replaces only the marker body while preserving its surrounding comment syntax.
+
 - Add **Localization Manager → Create Translation from Selection** to the editor context menu. It is enabled only when text is selected and an active scheme exists, then opens one modal for the key, all locale values, and optional similar-text replacement assistance.
 - Add ordered placeholder replacement conditions such as `__('%key%')` for `.php` and `@lang('%key%')` for `.blade.php`, plus framework suggestions. Conditions remain in insertion order and the first matching suffix wins; templates are treated only as data and never as Regex or executable code.
 - Scan only the active scheme working directory, honor its exclusion list, skip managed language files, binary/invalid UTF-8 files and oversized source files, and cap candidate discovery. The match list is lazy: double-clicking a file generates its Diff only then.
 - Add a final multi-file confirmation Diff that lists every affected path and its state. Generated language-file changes are read-only, source-code results are editable, and apply regenerates the preview, verifies the exact file set and SHA-256 hashes, then writes atomically with rollback.
+- Run similar-text discovery as a cancellable JetBrains background task and show live modal/IDE progress for directory walking, suffix-matched file reads, match counts, and the current relative path. The scanner uses the active scheme base path and exclusions, stops after 100,000 visited files, and optimizes up to 1,000 exclusion entries with set/ancestor lookups.
+- Add an explicit **Stop Scan** button beside **Preview Matches**. It cancels both the IDE progress task and RPC coroutine, reports the stopping/cancelled state, and never presents a partial candidate list as a completed result.
+- Split scanning into one directory-planning pass and one content-search pass. After planning determines the exact suffix-matched file total, both progress bars switch to determinate `searched / total` and percentage display without walking the project twice.
+- Keep scan progress, completion, cancellation, errors, and lazy Diff previews on the active modal's UI context. Background work can now update the open dialog immediately instead of waiting for the modal to close after the backend has already completed.
+- Reload every successfully written language or source-code file through JetBrains VFS at the end of the mutation transaction. Target files are synchronously marked dirty and refreshed, and any cached IDE document is reloaded from its final disk content; scheme/cache metadata files are excluded.
+- Add privacy-conscious lifecycle diagnostics for selection scans. Start, throttled progress, completion, cancellation, and failure logs include scheme/root, counts, suffixes, limits, relative position, duration, and truncation state without recording selected translation text or replacement templates.
 - Add scheme renaming to **Scheme Settings**. The name and usage-scan settings are validated and saved together while the scheme ID, managed files, cache ownership, and isolation remain unchanged.
 - Make the folder-based creation dialog's scheme-name field prominent and fully editable before creation. Shared validation trims the name and rejects blank, over-80-character, or control-character input in both file- and folder-based creation and settings.
 - Split GitHub Issue Forms into dedicated English and Traditional Chinese versions for bug reports, feature requests, and format compatibility reports. The New Issue page now presents six clearly labeled templates plus separate English and Traditional Chinese user-manual links.
+- Add editor shortcuts to search selected text in the active translation table, create a localization dynamic usage comment marker, or open the non-modal **Localization Dynamic Usage Sources** Tool Window tab. Creating either source no longer requires a text selection: the caret supplies line and column, while an optional selection still prefills keys.
+- Add repeatable dynamic source rules and nested key groups with translation-key suggestions. Invasive comment markers and non-invasive scheme rules augment the normal Regex usage count/location results; saving rules invalidates cache and reloads the active scheme, and scheme import/export preserves the definitions.
+- Fix final replacement applying only the last previewed candidate: checked inclusion is now independent from the highlighted lazy-preview row, so double-clicking one file cannot silently collapse a multi-file operation. Add preview/apply/write and VFS/document reload count logs, and resolve updated files through `VirtualFileManager` for UNC/WSL paths.
+- Show a parameter-hint-style block inlay on the line above every valid non-invasive dynamic source in open editors, aligned with its registered code position. The label reports the distinct key count, hover details show method, location, groups, and keys, and clicking focuses the exact Dynamic Sources rule. Stale positions keep their gutter navigation but do not force an inlay into unrelated code.
 
 ---
 
@@ -20,9 +39,30 @@
 - 新增依加入順序執行的 placeholder 替換條件，例如 `.php` 使用 `__('%key%')`、`.blade.php` 使用 `@lang('%key%')`，並提供框架建議樣板。條件不會自動排序，第一個符合副檔名的條件優先；樣板只當作字串資料，不會被當成 Regex 或程式碼執行。
 - 掃描範圍只限目前方案工作目錄，遵守排除清單並略過列管語言檔、二進位／無效 UTF-8 與過大程式碼檔案，同時限制候選數量。檔案清單採 lazy 流程，只有雙擊項目時才建立該檔案 Diff。
 - 新增最終多檔再次確認 Diff，列出所有變更檔案位置與狀態。產生的語言檔維持唯讀，程式碼替換結果可編輯；套用時後端會重新計算預覽、核對完整檔案集合與 SHA-256，再以具回復機制的原子寫入完成。
+- 類似文字搜尋改為可取消的 JetBrains 背景任務，Modal 與 IDE 背景進度會即時顯示資料夾走訪、符合副檔名檔案讀取、命中數與目前相對路徑。掃描沿用目前方案 base path 與排除清單，最多走訪 100,000 個檔案，且以集合／祖先路徑查找優化最多 1,000 筆排除條件。
+- 在「預覽符合項目」旁新增明確的「**停止掃描**」按鈕，同時取消 IDE 背景任務與 RPC coroutine，顯示停止中／已取消狀態，且不會把未完成的候選清單當成完整結果。
+- 將掃描拆成一次目錄規劃與一次內容搜尋。規劃取得符合副檔名的精確檔案總數後，Modal 與 IDE 進度條會切換為 determinate，顯示「已搜尋／總數」及百分比，且不需重複走訪專案。
+- 掃描進度、完成、取消、錯誤及 lazy Diff 預覽會沿用目前 Modal 的 UI context。後端完成後可立即更新仍開啟的對話框，不再因等待 Modal 關閉才執行 UI 更新而停留在初始載入狀態。
+- 所有成功寫入的語言檔或程式碼檔，會在 mutation 交易最後透過 JetBrains VFS 重新載入：精確標記目標檔案為 dirty、同步 refresh，並將 IDE 已快取的 document 從最終硬碟內容重載；方案與 cache 中繼檔不會納入。
+- 新增兼顧隱私的掃描生命週期診斷 log。開始、節流後的進度、完成、取消與失敗會記錄方案／根目錄、統計、副檔名、安全上限、相對位置、耗時及截斷狀態，但不記錄選取原文或替換樣板。
 - 在「**方案設定**」加入方案改名。方案名稱與使用率掃描設定會一起驗證並儲存，方案 ID、列管檔案、快取歸屬及隔離狀態皆維持不變。
 - 將資料夾建立方案視窗的名稱欄位改為醒目且可完整編輯的獨立欄位。依檔案／資料夾建立及方案設定共用相同驗證：名稱會自動去除前後空白，並拒絕空白、超過 80 個字元或包含控制字元的輸入。
 - 將 GitHub Issue Forms 的錯誤回報、功能需求與格式相容性拆分為獨立英文及繁體中文版本。New Issue 頁面會清楚顯示六份模板，並分別提供英文與繁中使用者手冊連結。
+- 編輯器右鍵選單新增以選取文字精準／模糊搜尋翻譯表，以及建立在地化動態使用備註標記或開啟非 Modal「在地化動態使用來源」Tool Window 頁籤。建立來源不再要求選取文字，行／欄改由游標提供；若有選取內容仍會預填 key。
+- 新增可重複的動態來源規則及巢狀 key 群組，並提供翻譯 key 建議。侵入式備註標記與非侵入式方案規則會併入原有 Regex 使用次數／位置；儲存規則會清除快取並重讀目前方案，方案匯入／匯出也會保留設定。
+- 修正最終取代只套用最後預覽候選檔案：核取狀態與 lazy 預覽的反白 row 已分離，雙擊單檔不會再無聲縮減多檔操作。另新增預覽／套用／寫入及 VFS／Document 重載數量 log，並透過 `VirtualFileManager` 解析 UNC／WSL 更新檔案。
+
+### 繁體中文（本次補充）
+
+- 已開啟編輯器會在每個有效的非侵入式動態來源上一行顯示類似參數名稱提示的 block inlay，並與登錄的程式碼位置對齊。標籤顯示去重後 key 數量，懸停可查看方法、位置、群組及 key，點擊會定位到確切的「動態來源」規則；失效座標保留裝訂區導航，但不會把提示強行插入無關程式碼。
+- 將非侵入式規則卡片的來源欄位與操作按鈕拆成兩排，避免長檔案路徑在較窄的 Tool Window 中把導航與移除按鈕擠出可視範圍。
+- 每張非侵入式動態來源規則卡片新增「**前往標記位置**」，依表單當下的檔案、行、欄導航，尚未儲存的欄位調整也能先行確認。
+- 修正動態來源轉換及其他寫檔操作完成後可能出現的 `Write-unsafe context`。IDE 快取文件現在會在 EDT 使用 write-safe 的非 Modal transaction context 重新載入，不再使用 `ModalityState.any()`。
+- 侵入式 `@languageManager` 備註標記與非侵入式方案規則新增安全雙向轉換。轉換會套用目前表單內容、檢查 marker 是否已變更，以可回復交易同時更新來源檔與方案狀態，接著重新載入 IDE 文件、清除使用率快取並重算目前方案。
+- 已開啟編輯器中的兩種動態來源都會顯示在地化管理器裝訂區圖示。侵入式圖示會前往 marker；非侵入式圖示會開啟「動態來源」Tool Window 頁籤並捲動定位已註冊的規則卡片。
+- 侵入式備註標記與非侵入式動態來源表單皆新增批次加入 Key；可貼上以換行、逗號、分號或自訂純文字分隔符切割的內容，維持輸入順序、移除重複值，並於儲存前檢查每群組安全上限。
+- 兩種可重複新增的動態來源編輯器都加入捲動面板，群組或 Key 較多時不再壓縮或遮蔽輸入欄位。
+- `@languageManager` 標記新增 IDE 懸停說明，並在編輯器右鍵選單與 JetBrains 浮動式代碼工具欄提供「編輯在地化動態使用標記」。游標位於複製而來的有效標記時也能重新開啟表單；確認後只替換標記本體並保留外層備註語法。
 
 ## 1.5.5
 
