@@ -8,12 +8,42 @@
 
 AppCode 並未宣告為目標產品。Marketplace 未將它列入支援產品時，不能藉由在 `plugin.xml` 加入產品名稱來強制覆寫。
 
-已核准的 LanguageManager `1.5.3`、`1.5.4` 與 `1.5.5` 使用以下 descriptor 設定：
+已核准的 LanguageManager `1.5.3`、`1.5.4`、`1.5.5` 與 `1.5.6` 使用以下 descriptor 設定：
 
 - 最低版本：JetBrains Platform build `253.5`（IntelliJ IDEA 2025.3.5）
 - 最高版本：不限制
 - 編譯與最低版本測試平台：IntelliJ IDEA 2025.3.5
 - JVM bytecode target：Java 21
+
+## 1.5.6 Marketplace 發布狀態
+
+| 欄位 | 結果 |
+|---|---|
+| 狀態 | 已核准（Approved） |
+| 核准日期 | 2026 年 8 月 5 日 |
+| 相容範圍 | `253.5+` |
+| Marketplace 安裝包大小 | 1.32 MB |
+| 上傳者 | Laifu來福（來福Laifu） |
+| 報告當時的版本下載數 | 0 |
+
+## 1.5.6 Marketplace 相容性驗證結果
+
+JetBrains Marketplace Compatibility Verification 於 2026 年 8 月 5 日回報以下 LanguageManager `1.5.6` 結果：
+
+| 狀態 | 產品 | 版本 | 日期與時間 | 驗證方式 | 結果 |
+|---|---|---|---|---|---|
+| Success | IntelliJ IDEA | 2026.2.1 RC (`262.9437.65`) | 2026-08-05 17:43 | IDE | 安裝插件後執行 IDE，未發生問題 |
+| Warning | IntelliJ IDEA | 2026.2.1 RC (`262.9437.65`) | 2026-08-05 17:37 | Plugin Verifier `1.408` | Compatible；使用 1 個 experimental API |
+| Warning | IntelliJ IDEA | 2026.2.0.1 | 2026-08-05 17:44 | Plugin Verifier `1.408` | Compatible；使用 1 個 experimental API |
+| Warning | IntelliJ IDEA | 2026.2 | 2026-08-05 17:45 | Plugin Verifier `1.408` | Compatible；使用 1 個 experimental API |
+| Warning | IntelliJ IDEA | 2026.1.4 | 2026-08-05 17:37 | Plugin Verifier `1.408` | Compatible；使用 3 個 experimental API |
+| Warning | IntelliJ IDEA | 2026.1.3 | 2026-08-05 17:44 | Plugin Verifier `1.408` | Compatible；使用 3 個 experimental API |
+| Warning | IntelliJ IDEA | 2026.1.2 | 2026-08-05 17:44 | Plugin Verifier `1.408` | Compatible；使用 3 個 experimental API |
+| Warning | IntelliJ IDEA | 2026.1.1 | 2026-08-05 17:44 | Plugin Verifier `1.408` | Compatible；使用 3 個 experimental API |
+| Warning | IntelliJ IDEA | 2026.1 | 2026-08-05 17:44 | Plugin Verifier `1.408` | Compatible；使用 146 個 experimental API |
+| Warning | IntelliJ IDEA | 2025.3.6.1 | 2026-08-05 17:36 | Plugin Verifier `1.408` | Compatible；使用 10 個 experimental API |
+
+LanguageManager `1.5.6` 與表中所有 IDE 版本皆相容，並已在 2026.2.1 RC 完成獨立 IDE 安裝執行測試。Plugin Verifier 依 IDE 版本回報 1 至 146 個 experimental API 使用，但沒有 binary incompatibility。
 
 ## 1.5.5 Marketplace 發布狀態
 
