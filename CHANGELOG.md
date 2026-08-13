@@ -1,5 +1,27 @@
 # Language Manager Changelog
 
+## 1.6.0
+
+### English
+
+- Add an **Analysis** Tool Window content tab at the same level as **Language Schemes**. Expensive analysis remains completely lazy: it starts only when the user manually switches to Analysis or requests **Analyze Again**, runs as a cancellable JetBrains background task, and never runs merely because a scheme reloads.
+- Add incremental detection of likely untranslated hardcoded quoted text under the active scheme base path. The scan honors file and folder exclusions, skips managed language files, does not restrict candidates by filename extension, excludes ranges already covered by the scheme usage Regex, and reuses unchanged per-file results during later runs.
+- Present every candidate location as `Value`, `File path`, `Line`, and `Col`, preserving separate rows for repeated values at different locations. Add search, confidence filtering, double-click navigation, 100-row pagination, progress counters, and separate statistics for scanned, cached, skipped, matched, candidate, unique, and high/medium/low-confidence totals.
+- Add **Export Results** to save every location matching the current search text, confidence, and naming-format exclusions as UTF-8 CSV. Export includes all matching pages and safely quotes commas, quotation marks, and multiline values.
+- Add independent multi-select display exclusions for plain English words, `camelCase`, `PascalCase / UpperCamelCase`, `snake_case`, `MACRO_CASE`, `kebab-case`, and `dot.case`. Checked naming conventions are combined as a union and update both the result table and export count immediately without rescanning.
+- Bound the high-cost scan to 200,000 discovered files, 5 MB per source file, 32,768 characters per line, and 100,000 candidate locations. Binary, unreadable, oversized, and abnormally long-line files are skipped independently without failing the whole analysis.
+
+---
+
+### 繁體中文
+
+- 新增與「語言方案」同級的 Tool Window「分析」頁籤。高成本分析採完整 lazy 流程：只有使用者手動切換到分析或按下「重新分析」才會啟動，並註冊為可取消的 JetBrains 背景任務；方案重新載入本身不會觸發分析。
+- 新增作用中方案 base path 內的疑似未翻譯硬編碼引號文字增量分析。掃描會遵守檔案與資料夾排除規則、略過列管語言檔、不以副檔名限制候選檔案、排除已被方案使用率 Regex 覆蓋的範圍，並在後續分析重用未變更檔案的結果。
+- 每個候選位置以 `Value`、`File path`、`Line`、`Col` 獨立列出；相同文字出現在不同位置時不會合併。支援搜尋、可信度篩選、雙擊導航、每頁 100 列、進度計數，以及掃描、快取、略過、命中、候選、唯一文字與高／中／低可信度等分項統計。
+- 新增「匯出結果」，可將符合目前搜尋文字、可信度及命名格式排除條件的所有頁面位置儲存為 UTF-8 CSV，並安全處理逗號、雙引號與多行 Value。
+- 新增可獨立多選的顯示排除條件：純英文單字、`camelCase`、`PascalCase / UpperCamelCase`、`snake_case`、`MACRO_CASE`、`kebab-case` 與 `dot.case`。勾選規則採聯集立即更新表格與匯出筆數，不需重新掃描。
+- 高成本掃描限制為最多尋找 200,000 個檔案、單一來源檔 5 MB、單行 32,768 字元與 100,000 個候選位置。二進位、無法讀取、過大或異常長單行檔案只會個別略過，不會中斷整體分析。
+
 ## 1.5.7
 
 ### English

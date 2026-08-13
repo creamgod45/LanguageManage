@@ -18,6 +18,19 @@ class BackendLocalizationManagerRpcApi : LocalizationManagerRpcApi {
     override suspend fun selectionScanProgress(projectId: ProjectId): Flow<SelectionScanProgressDto> =
         projectId.service()?.selectionScanProgress ?: emptyFlow()
 
+    override suspend fun hardcodedAnalysisProgress(projectId: ProjectId): Flow<HardcodedAnalysisProgressDto> =
+        projectId.service()?.hardcodedAnalysisProgress ?: emptyFlow()
+
+    override suspend fun analyzeHardcodedText(
+        projectId: ProjectId,
+        schemeId: String,
+        force: Boolean,
+    ): HardcodedAnalysisResultDto =
+        withContext(Dispatchers.IO) {
+            projectId.service()?.analyzeHardcodedText(schemeId, force)
+                ?: error(LanguageManagerBackendBundle.message("project.unavailable"))
+        }
+
     override suspend fun usageLocations(
         projectId: ProjectId,
         schemeId: String,

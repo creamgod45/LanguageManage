@@ -1,6 +1,6 @@
 # LanguageManager 功能總覽
 
-> 給開發者的簡短精確功能索引。版本 **1.5.7**。詳細操作見 [`user_manual_book.zh.md`](user_manual_book.zh.md)，完整需求見 [`需求.md`](需求.md)，工程規範見 [`../AGENTS.md`](../AGENTS.md)。
+> 給開發者的簡短精確功能索引。版本 **1.6.0**。詳細操作見 [`user_manual_book.zh.md`](user_manual_book.zh.md)，完整需求見 [`需求.md`](需求.md)，工程規範見 [`../AGENTS.md`](../AGENTS.md)。
 
 ## 一句話定位
 
@@ -23,6 +23,16 @@ JSON、YAML/YML、Laravel PHP 靜態 `return [...]`／`return array(...)`、JetB
 PHP **只 parse 不執行**：只接受選填的 `declare(strict_types=1);` + 靜態陣列，支援類別子目錄（`en/components/pagination.php`）、字串串接、heredoc/nowdoc；拒絕變數、函式呼叫、include、eval 與可執行運算式。
 
 ## 核心功能
+
+### 獨立分析工作區
+
+- Tool Window 提供與「語言方案」同級的「分析」content；只有使用者手動切換或按「重新分析」才執行，不隨方案載入自動掃描。
+- 第一個分析項目會尋找 base path 內疑似未翻譯的硬編碼引號文字，遵守方案檔案／資料夾排除項目、略過列管語言檔，且不以副檔名或 IDE FileType 限制來源。
+- 已被方案使用率 Regex 覆蓋的程式碼範圍不列為候選；結果以 `Value / File path / Line / Col` 逐位置顯示，相同 Value 的不同位置仍各自保留。
+- 提供掃描檔案、快取命中、略過檔案、命中檔案、候選位置、唯一文字及高／中／低可信度統計；支援可取消背景任務、動態進度、搜尋、可信度篩選、每頁 100 列與雙擊導航。
+- 「匯出結果」使用 JetBrains 儲存位置選擇器輸出目前搜尋文字、可信度與命名格式排除後的所有頁面資料；Value 與路徑依 CSV 規則處理逗號、引號及換行。
+- 顯示過濾提供可同時勾選的純英文單字、camelCase、PascalCase／UpperCamelCase、snake_case、MACRO_CASE、kebab-case 與 dot.case 排除規則；採聯集即時套用，不重新執行專案掃描。
+- 逐檔快取以修改時間及大小判斷是否重用。安全上限為 200,000 個候選檔案、單檔 5 MB、單行 32,768 字元及 100,000 個候選位置，單檔失敗不影響其他檔案。
 
 ### 方案（Scheme）
 - 從明確選取的檔案或一個以上資料夾建立隔離方案；資料夾模式先 parse、預覽辨識結果（格式/locale/namespace/筆數/錯誤），並由使用者在獨立欄位確認或修改方案名稱後才建立。

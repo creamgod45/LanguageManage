@@ -43,6 +43,10 @@ The plugin follows the IDE display language by default and includes:
 
 After installation, the LanguageManager icon appears in the IDE Tool Window sidebar. The IDE automatically selects the 16x16 or 20x20 Light/Dark variant for the current theme and UI scale; no separate icon setting is required.
 
+The Tool Window has two top-level contents: **Language Schemes** for translation management and **Analysis** for high-cost project inspection. Analysis is lazy and never starts while Language Schemes remains selected. Manually switch to **Analysis** to scan the active scheme, or use **Analyze Again** to refresh it; **Stop** cancels the JetBrains background task.
+
+The untranslated-hardcoded-text analyzer scans the active scheme base path, honors its file/folder exclusions, skips managed language files, and does not impose a filename-extension filter. Source ranges already recognized by the scheme usage Regex are excluded. Results keep every location as a separate `Value / File path / Line / Col` row; use search or confidence filters, or independently check plain English word, camelCase, PascalCase/UpperCamelCase, snake_case, MACRO_CASE, kebab-case, and dot.case exclusions. Selected formats form a union and update the table without rescanning. Page through at most 100 rows at once and double-click a row to navigate. **Export Results** applies the current search text, confidence, and naming-format exclusions and writes all matching pages as UTF-8 CSV; its button shows the export count. Summary counters distinguish scanned, cached, skipped, matched, candidate, unique, and high/medium/low-confidence totals. Results are heuristic review candidates, not automatic errors or automatic file changes.
+
 ## 3. Creating Your First Scheme
 
 1. Open the **LanguageManager** Tool Window.

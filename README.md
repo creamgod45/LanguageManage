@@ -10,6 +10,7 @@ The UI and diagnostics are available in English, Traditional Chinese, Simplified
 
 - Scheme switching and manual reloads run as cancellable JetBrains background tasks. A newer request supersedes an older load, and stale results are prevented from updating the table or cache.
 - Background loading displays an exact dynamic step total covering planning, each language file, table construction, each eligible source file, analysis, and cache writing.
+- Open the top-level **Analysis** Tool Window tab to find likely untranslated hardcoded quoted text under the active scheme. The scan starts only after a manual tab switch or refresh, honors the scheme base path and file/folder exclusions, reuses unchanged file results, and lists every `Value / File path / Line / Col` location with progress, statistics, confidence and multi-select naming-format exclusions, pagination, cancellation, editor navigation, and filtered all-page UTF-8 CSV export.
 - Create isolated language management schemes from explicitly selected files or one or more folders. Folder mode parses files first, previews recognition results, and lets the user add more folders before confirming the managed files.
 - Import and export portable scheme settings as JSON from the Tool Window dropdown. Project paths are converted to relative paths when possible, and every imported file receives a parser and security preview.
 - JOIN translations with the same `namespace + key` into one table row, with a separate column for each locale.
@@ -113,6 +114,7 @@ The root project uses the IntelliJ Platform Gradle Plugin to assemble three cont
 | --- | --- |
 | `toolWindow/LanguageManagerToolWindowFactory.kt` | Creates the Tool Window and localizes its title according to the IDE/plugin language |
 | `localization/LocalizationManagerPanel.kt` | Main UI: scheme dropdown, folder recognition, translation and issue tables, clipboard, Diff, and actions |
+| `localization/HardcodedAnalysisPanel.kt` | Lazy top-level analysis workspace with progress, statistics, filtering, pagination, cancellation, and source navigation |
 | `localization/MultiLanguageEntryDialog.kt` | Scrollable add/edit form that lists every locale textarea for one namespace and builds batch mutations |
 | `localization/AiTranslationDialogs.kt` | Source/target locale selection, editable AI review, and feedback dialogs for iterative translation rounds |
 | `RegexPresetUi.kt` | Framework-aware Regex recommendation menu shared by default and active-scheme settings |
@@ -124,7 +126,7 @@ The root project uses the IntelliJ Platform Gradle Plugin to assemble three cont
 | `localization/SchemeUsageSettingsDialog.kt` | Edits managed files, scan path, Regex patterns, and exclusions for the active scheme |
 | `localization/ProjectViewExclusionActions.kt` | Provides the Project-tree action group and active-scheme exclusion shortcut |
 | `LanguageManagerBundle.kt` | Frontend resource bundle access |
-| `resources/messages/LanguageManagerFrontendBundle*.properties` | Five-language UI dictionaries for buttons, tabs, fields, prompts, and Diff text |
+| `resources/messages/LanguageManagerFrontendBundle*.properties` | Seven-language UI dictionaries for buttons, tabs, fields, prompts, and Diff text |
 | `resources/icons/toolWindow*.svg` | LanguageManager Tool Window artwork in 16x16/20x20 Light and Dark variants selected automatically by the IDE |
 
 ### `backend`
@@ -136,6 +138,7 @@ The root project uses the IntelliJ Platform Gradle Plugin to assemble three cont
 | `LocalizationManagerService.kt` | Core workflow for schemes, state, cache, CRUD, repair previews, conflict checks, and usage scans |
 | `LanguageFileSupport.kt` | Safe path/folder validation, bounded discovery, UTF-8 IO, atomic writes, targeted JetBrains VFS/document reload, and JSON/YAML/PHP/Properties parsing/rendering |
 | `UsageScanSupport.kt` | Usage setting validation, Regex key extraction, base path scanning, exclusions, and resource limits |
+| `HardcodedTextAnalysisSupport.kt` | Incremental per-file detection and statistics for likely untranslated quoted source text |
 | `UsageExclusionSupport.kt` | Converts selected local folders into safe, precise exclusions relative to the scheme scan root |
 | `LanguageLoadBudget.kt` | Applies pre-parse file-size and post-parse entry budgets across one isolated scheme |
 | `EntryMutationSupport.kt` | Applies validated multi-locale add/edit mutations to parsed documents before coordinated atomic writes |
@@ -144,7 +147,7 @@ The root project uses the IntelliJ Platform Gradle Plugin to assemble three cont
 | `TranslationInputValidation.kt` | Allows spaces, Unicode, and punctuation in keys while rejecting blank, control-character, and oversized input |
 | `LocalizationAnalysis.kt` | Builds diagnostics for empty values, duplicate keys/values, missing translations, and unused keys |
 | `LanguageManagerBackendBundle.kt` | Backend resource bundle access |
-| `resources/messages/LanguageManagerBackendBundle*.properties` | Five-language parser, validation, and diagnostic dictionaries |
+| `resources/messages/LanguageManagerBackendBundle*.properties` | Seven-language parser, validation, and diagnostic dictionaries |
 
 ### Regression tests
 
@@ -166,12 +169,14 @@ The root project uses the IntelliJ Platform Gradle Plugin to assemble three cont
 | API | Purpose | Writes language files |
 | --- | --- | --- |
 | `state(projectId)` | Streams schemes, entries, issues, busy state, and errors | No |
+| `hardcodedAnalysisProgress(projectId)` | Streams lazy hardcoded-analysis discovery, scan, cache, match, and current-path progress | No |
+| `analyzeHardcodedText(...)` | Runs the active scheme's cancellable incremental hardcoded-text analysis and returns locations plus separate statistics | No |
 | `createScheme(...)` | Validates user-selected files, persists the scheme, and loads it | No; writes plugin scheme data only |
 | `deleteScheme(...)` | Deletes a scheme and its cache without deleting language files | No |
 | `activateScheme(...)` | Switches the active scheme and loads cache or reparses | No |
 | `reload(...)` | Reloads forcibly or according to fingerprints | No |
 | `updateSchemeSettings(...)` | Validates and stores the scheme name, base path, Regex, and exclusions, invalidates cache, and recounts | No; writes plugin scheme data only |
-| `addActiveSchemeExcludedDirectories(...)` | Validates Project-tree folders against the active scheme base path, adds relative exclusions, invalidates cache, and recounts | No; writes plugin scheme data only |
+| `addActiveSchemeExcludedDirectories(...)` | Validates Project-tree files/folders against the active scheme base path, adds relative exclusions, invalidates cache, and recounts | No; writes plugin scheme data only |
 | `discoverLanguageFiles(...)` | Safely scans selected folders with the new-scheme loading budget, deduplicates files, and returns recognition results | No |
 | `exportSchemeSettings()` | Serializes every scheme into portable, versioned JSON | No |
 | `previewSchemeSettingsImport(...)` | Parses JSON, resolves relative paths, and reports file/parser status | No |

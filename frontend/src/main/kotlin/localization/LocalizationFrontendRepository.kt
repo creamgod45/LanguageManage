@@ -25,6 +25,16 @@ internal class LocalizationFrontendRepository(
             durable { LocalizationManagerRpcApi.getInstance().selectionScanProgress(project.projectId()).collect { emit(it) } }
         }
 
+    val hardcodedAnalysisProgress: Flow<HardcodedAnalysisProgressDto> =
+        flow {
+            durable { LocalizationManagerRpcApi.getInstance().hardcodedAnalysisProgress(project.projectId()).collect { emit(it) } }
+        }
+
+    suspend fun analyzeHardcodedText(
+        schemeId: String,
+        force: Boolean,
+    ) = LocalizationManagerRpcApi.getInstance().analyzeHardcodedText(project.projectId(), schemeId, force)
+
     suspend fun createScheme(
         name: String,
         files: List<String>,

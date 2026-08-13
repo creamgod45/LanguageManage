@@ -68,7 +68,9 @@ class LocalizationManagerService(
             ignoreUnknownKeys = true
         }
     private val mutex = Mutex()
+    private val hardcodedAnalysisMutex = Mutex()
     private val loadController = LatestLoadController()
+    private val hardcodedTextAnalysis = HardcodedTextAnalysisSupport()
     private val storageDir: Path = Path.of(project.basePath ?: System.getProperty("java.io.tmpdir"), ".idea", "language-manager")
     private val schemeFile = storageDir.resolve("schemes.json")
     private val mutableState = MutableStateFlow(LocalizationStateDto())
@@ -79,6 +81,47 @@ class LocalizationManagerService(
     val loadProgress: StateFlow<LoadProgressDto> = mutableLoadProgress.asStateFlow()
     private val mutableSelectionScanProgress = MutableStateFlow(SelectionScanProgressDto())
     val selectionScanProgress: StateFlow<SelectionScanProgressDto> = mutableSelectionScanProgress.asStateFlow()
+    private val mutableHardcodedAnalysisProgress = MutableStateFlow(HardcodedAnalysisProgressDto())
+    val hardcodedAnalysisProgress: StateFlow<HardcodedAnalysisProgressDto> = mutableHardcodedAnalysisProgress.asStateFlow()
+
+    suspend fun analyzeHardcodedText(
+        schemeId: String,
+        force: Boolean,
+    ): HardcodedAnalysisResultDto =
+        hardcodedAnalysisMutex.withLock {
+            val scheme = requireScheme(schemeId)
+            require(mutableState.value.activeSchemeId == schemeId) { backendMessage("scheme.not.active") }
+            val root = usageScanRoot(scheme) ?: error(backendMessage("usage.exclusion.root.unavailable"))
+            val context = currentCoroutineContext()
+            try {
+                hardcodedTextAnalysis.analyze(
+                    scheme.id,
+                    root,
+                    scheme.files,
+                    mutableState.value.entries,
+                    scheme.usageScanSettings,
+                    force,
+                    { context.ensureActive() },
+                ) { progress -> mutableHardcodedAnalysisProgress.value = progress }
+                    .also { result ->
+                        mutableHardcodedAnalysisProgress.value =
+                            mutableHardcodedAnalysisProgress.value.copy(
+                                stage = HardcodedAnalysisStage.COMPLETED,
+                                processedFiles = result.statistics.scannedFiles,
+                                totalFiles = result.statistics.scannedFiles,
+                                cachedFiles = result.statistics.cachedFiles,
+                                matchedFiles = result.statistics.matchedFiles,
+                                currentPath = "",
+                            )
+                    }
+            } catch (error: CancellationException) {
+                mutableHardcodedAnalysisProgress.value = mutableHardcodedAnalysisProgress.value.copy(stage = HardcodedAnalysisStage.CANCELLED)
+                throw error
+            } catch (error: Exception) {
+                mutableHardcodedAnalysisProgress.value = mutableHardcodedAnalysisProgress.value.copy(stage = HardcodedAnalysisStage.FAILED)
+                throw error
+            }
+        }
 
     init {
         coroutineScope.launch(Dispatchers.IO + CoroutineName("Language Manager initialization")) {

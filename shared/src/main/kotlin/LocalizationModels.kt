@@ -249,6 +249,55 @@ data class SelectionScanProgressDto(
 )
 
 @Serializable
+enum class HardcodedAnalysisStage { IDLE, DISCOVERING, SCANNING, COMPLETED, CANCELLED, FAILED }
+
+@Serializable
+enum class HardcodedTextConfidence { HIGH, MEDIUM, LOW }
+
+@Serializable
+data class HardcodedAnalysisProgressDto(
+    val schemeId: String? = null,
+    val stage: HardcodedAnalysisStage = HardcodedAnalysisStage.IDLE,
+    val discoveredFiles: Int = 0,
+    val processedFiles: Int = 0,
+    val totalFiles: Int = 0,
+    val cachedFiles: Int = 0,
+    val matchedFiles: Int = 0,
+    val currentPath: String = "",
+)
+
+@Serializable
+data class HardcodedTextCandidateDto(
+    val filePath: String,
+    val line: Int,
+    val column: Int,
+    val text: String,
+    val confidence: HardcodedTextConfidence,
+)
+
+@Serializable
+data class HardcodedAnalysisStatisticsDto(
+    val scannedFiles: Int = 0,
+    val cachedFiles: Int = 0,
+    val skippedFiles: Int = 0,
+    val matchedFiles: Int = 0,
+    val candidateLocations: Int = 0,
+    val uniqueTexts: Int = 0,
+    val highConfidence: Int = 0,
+    val mediumConfidence: Int = 0,
+    val lowConfidence: Int = 0,
+)
+
+@Serializable
+data class HardcodedAnalysisResultDto(
+    val schemeId: String,
+    val items: List<HardcodedTextCandidateDto> = emptyList(),
+    val statistics: HardcodedAnalysisStatisticsDto = HardcodedAnalysisStatisticsDto(),
+    val truncated: Boolean = false,
+    val analyzedAtEpochMs: Long = 0,
+)
+
+@Serializable
 data class SelectionTranslationRequestDto(
     val mutations: List<EntryMutationDto>,
     val selectedText: String,

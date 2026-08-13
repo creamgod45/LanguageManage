@@ -10,6 +10,7 @@ LanguageManager 是支援 JetBrains IDE split mode 的在地化檔案管理插�
 
 - 切換方案與手動重新讀取會註冊為 JetBrains 原生可取消背景任務；較新的請求會取代舊讀取，過時結果不得更新表格或快取。
 - 背景載入會動態顯示精確總步驟，包含規劃、每個語言檔、建表、每個符合條件的來源檔、分析與快取寫入。
+- 可手動切換至與「語言方案」同級的 Tool Window「分析」頁籤，尋找作用中方案內疑似未翻譯的硬編碼引號文字。只有切換或重新分析時才會執行，並遵守方案 base path、檔案／資料夾排除規則及增量檔案快取；結果逐一列出 `Value / File path / Line / Col`，包含進度、分項統計、可信度及命名格式多選排除、分頁、取消、編輯器導航，以及套用搜尋／可信度／命名格式條件但不受頁碼限制的 UTF-8 CSV 匯出。
 - 依指定檔案或一個／多個資料夾建立互相隔離的語言管理方案；資料夾模式會先解析並預覽識別結果，也可在 Popup 繼續增加資料夾，再由使用者確認列管檔案。
 - 可在 Tool Window 下拉選單匯入／匯出方案設定 JSON；專案內路徑可攜化為相對路徑，匯入前會顯示逐檔解析與安全預覽。
 - 將相同 `namespace + key` 的多國語言翻譯 JOIN 成單一表格，每種語言各為一個欄位。
@@ -112,6 +113,7 @@ flowchart LR
 | --- | --- |
 | `toolWindow/LanguageManagerToolWindowFactory.kt` | 建立工具視窗內容、設定依 IDE 語言變化的標題 |
 | `localization/LocalizationManagerPanel.kt` | 主要 UI；方案建立下拉選單、資料夾識別視窗、翻譯／問題表、剪貼簿、Diff 與操作事件 |
+| `localization/HardcodedAnalysisPanel.kt` | 延遲啟動的同級分析工作區，負責進度、分項統計、篩選、分頁、取消與來源導航 |
 | `localization/MultiLanguageEntryDialog.kt` | 同頁列出單一 namespace 全部語言 textarea 的可捲動新增／編輯表單，並建立批量 mutation |
 | `localization/AiTranslationDialogs.kt` | AI 批量翻譯的來源／目標語言選擇、可編輯結果檢視及多輪意見對話框 |
 | `RegexPresetUi.kt` | 新方案預設與目前方案設定共用的框架 Regex 推薦選單 |
@@ -123,7 +125,7 @@ flowchart LR
 | `localization/SchemeUsageSettingsDialog.kt` | Tool Window 目前方案的列管檔案、掃描路徑、Regex 與排除清單編輯視窗 |
 | `localization/ProjectViewExclusionActions.kt` | Project 檔案樹的插件操作群組與目前方案排除快捷操作 |
 | `LanguageManagerBundle.kt` | frontend `DynamicBundle` 存取入口 |
-| `resources/messages/LanguageManagerFrontendBundle*.properties` | 按鈕、頁籤、欄位、提示及 Diff 的五語言字典 |
+| `resources/messages/LanguageManagerFrontendBundle*.properties` | 按鈕、頁籤、欄位、提示及 Diff 的七語言字典 |
 | `resources/icons/toolWindow*.svg` | IDE 自動選用的 LanguageManager Tool Window 16×16／20×20 Light、Dark 四種圖示資源 |
 
 ### `backend`
@@ -135,6 +137,7 @@ flowchart LR
 | `LocalizationManagerService.kt` | 核心主程序：方案、狀態、快取、CRUD、修復預覽、衝突檢查與使用率掃描 |
 | `LanguageFileSupport.kt` | 安全路徑／資料夾驗證、受限遞迴探索、UTF-8 讀寫、原子寫入、指定目標的 JetBrains VFS／document 重載、JSON/YAML/PHP/Properties parse/render |
 | `UsageScanSupport.kt` | 使用率設定驗證、Regex key 擷取、base path 掃描、排除目錄與計數限制 |
+| `HardcodedTextAnalysisSupport.kt` | 疑似未翻譯引號文字的逐檔增量分析、位置建立與分項統計 |
 | `UsageExclusionSupport.kt` | 將選取的本機資料夾安全轉成相對於方案掃描根目錄的精確排除路徑 |
 | `LanguageLoadBudget.kt` | 在單一隔離方案內套用解析前檔案大小與解析後翻譯筆數預算 |
 | `EntryMutationSupport.kt` | 在協調式原子寫入前，將驗證完成的多語言新增／編輯 mutation 套用到解析文件 |
@@ -143,7 +146,7 @@ flowchart LR
 | `TranslationInputValidation.kt` | 翻譯 key 輸入驗證；允許空格、Unicode 與標點，拒絕空白、控制字元與超長 key |
 | `LocalizationAnalysis.kt` | 建立缺失值、重複鍵／值、缺少翻譯及未使用 key 的診斷 |
 | `LanguageManagerBackendBundle.kt` | backend `DynamicBundle` 存取入口 |
-| `resources/messages/LanguageManagerBackendBundle*.properties` | parser、驗證與診斷的五語言字典 |
+| `resources/messages/LanguageManagerBackendBundle*.properties` | parser、驗證與診斷的七語言字典 |
 
 ### 關鍵回歸測試
 
@@ -166,12 +169,14 @@ flowchart LR
 | API | 用途 | 是否寫入語言檔 |
 | --- | --- | --- |
 | `state(projectId)` | 持續推送方案、entries、issues、busy 與錯誤狀態 | 否 |
+| `hardcodedAnalysisProgress(projectId)` | 推送延遲硬編碼分析的檔案尋找、掃描、快取、命中與目前路徑進度 | 否 |
+| `analyzeHardcodedText(...)` | 依作用中方案執行可取消的逐檔增量硬編碼文字分析，回傳位置與各項統計 | 否 |
 | `createScheme(...)` | 驗證使用者選取的檔案、保存方案並載入 | 否，僅寫入插件方案資料 |
 | `deleteScheme(...)` | 刪除方案及其 cache，不刪除語言檔 | 否 |
 | `activateScheme(...)` | 切換方案並載入 cache 或重新解析 | 否 |
 | `reload(...)` | 強制或依 fingerprint 重新載入 | 否 |
 | `updateSchemeSettings(...)` | 驗證並儲存方案名稱、base path、Regex 與排除清單，清除 cache 後重新計算 | 否，僅寫入插件方案資料 |
-| `addActiveSchemeExcludedDirectories(...)` | 驗證檔案樹所選資料夾、加入目前方案相對排除路徑、清除 cache 並重新計算 | 否，僅寫入插件方案資料 |
+| `addActiveSchemeExcludedDirectories(...)` | 驗證檔案樹所選檔案／資料夾、加入目前方案相對排除路徑、清除 cache 並重新計算 | 否，僅寫入插件方案資料 |
 | `discoverLanguageFiles(...)` | 依新方案載入預算安全掃描一個／多個指定資料夾，去重後回傳逐檔解析與識別結果 | 否 |
 | `exportSchemeSettings()` | 將所有方案轉成可攜式、有版本的 JSON 內容 | 否 |
 | `previewSchemeSettingsImport(...)` | 解析 JSON，將相對路徑對應到目前專案並回傳可用性／parser 結果 | 否 |

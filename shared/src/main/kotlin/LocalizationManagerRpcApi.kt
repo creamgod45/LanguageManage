@@ -20,6 +20,14 @@ interface LocalizationManagerRpcApi : RemoteApi<Unit> {
 
     suspend fun selectionScanProgress(projectId: ProjectId): Flow<SelectionScanProgressDto>
 
+    suspend fun hardcodedAnalysisProgress(projectId: ProjectId): Flow<HardcodedAnalysisProgressDto>
+
+    suspend fun analyzeHardcodedText(
+        projectId: ProjectId,
+        schemeId: String,
+        force: Boolean,
+    ): HardcodedAnalysisResultDto
+
     suspend fun usageLocations(
         projectId: ProjectId,
         schemeId: String,
