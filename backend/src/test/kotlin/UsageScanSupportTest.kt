@@ -291,6 +291,38 @@ class UsageScanSupportTest {
         assertEquals(1, UsageScanSupport.sourceFileCount(temp, listOf(language.toString()), settings), source.toString())
     }
 
+    @Test
+    fun `usage scan excludes an exact file while retaining its siblings`() {
+        val excluded = temp.resolve("src/generated.php").apply { parent.createDirectories(); writeText("tr(\"auth.failed\")") }
+        val retained = temp.resolve("src/application.php").apply { writeText("tr(\"auth.failed\")") }
+        val entry = entry("auth", "failed")
+        val settings =
+            UsageScanSettingsDto(
+                regexPatterns = listOf("""tr\(\"(?<key>[^\"]+)\"\)"""),
+                excludedDirectories = listOf("src/generated.php"),
+            )
+
+        val result = UsageScanSupport.scan(temp, listOf(entry), emptyList(), settings)
+
+        assertEquals(1, result.counts[entry.id], "$excluded must be skipped while $retained remains")
+        assertEquals(listOf(retained.toRealPath().toString()), result.locations.map { it.filePath }.distinct())
+    }
+
+    @Test
+    fun `bare exclusion name applies to matching files as well as directories`() {
+        temp.resolve("first/ignored.generated").apply { parent.createDirectories(); writeText("tr(\"auth.failed\")") }
+        temp.resolve("second/ignored.generated").apply { parent.createDirectories(); writeText("tr(\"auth.failed\")") }
+        temp.resolve("second/kept.php").writeText("tr(\"auth.failed\")")
+        val entry = entry("auth", "failed")
+        val settings =
+            UsageScanSettingsDto(
+                regexPatterns = listOf("""tr\(\"(?<key>[^\"]+)\"\)"""),
+                excludedDirectories = listOf("ignored.generated"),
+            )
+
+        assertEquals(1, UsageScanSupport.counts(temp, listOf(entry), emptyList(), settings)[entry.id])
+    }
+
     // Case C — every selected folder is BELOW the scan root and one is already excluded (explicit
     // relative path). Merging must keep the already-excluded entry once and still add the new one,
     // never aborting the batch.

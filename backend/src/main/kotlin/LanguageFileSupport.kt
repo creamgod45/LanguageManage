@@ -107,6 +107,12 @@ internal object SafeLanguageFileAccess {
         return path.toRealPath()
     }
 
+    fun validateExistingPath(raw: String): Path {
+        val path = safeNormalizedPath(raw)
+        require(Files.isDirectory(path) || Files.isRegularFile(path)) { backendMessage("path.not.file.or.directory", path) }
+        return path.toRealPath()
+    }
+
     fun read(path: Path): String = Files.newBufferedReader(path, StandardCharsets.UTF_8).use { it.readText() }
 
     fun atomicWrite(

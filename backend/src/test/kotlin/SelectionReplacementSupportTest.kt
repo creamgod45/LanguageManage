@@ -34,6 +34,7 @@ class SelectionReplacementSupportTest {
         val language = root.resolve("lang/en.php").apply { parent.createDirectories(); writeText("Welcome") }
         root.resolve("src/page.php").apply { parent.createDirectories(); writeText("Welcome Welcome") }
         root.resolve("vendor/package.php").apply { parent.createDirectories(); writeText("Welcome") }
+        root.resolve("src/excluded.php").writeText("Welcome")
         root.resolve("src/binary.php").writeBytes(byteArrayOf(0, 1, 2, 3))
         root.resolve("src/large.php").writeBytes(ByteArray(5 * 1024 * 1024 + 1) { 'W'.code.toByte() })
 
@@ -41,7 +42,7 @@ class SelectionReplacementSupportTest {
         val result = SelectionReplacementSupport.scan(
             root,
             listOf(language.toString()),
-            UsageScanSettingsDto(excludedDirectories = listOf("vendor")),
+            UsageScanSettingsDto(excludedDirectories = listOf("vendor", "src/excluded.php")),
             "Welcome",
             listOf(ReplacementTemplateRuleDto("__('%key%')", ".php")),
             progress = progress::add,

@@ -1,6 +1,6 @@
 # LanguageManager 功能總覽
 
-> 給開發者的簡短精確功能索引。版本 **1.5.6**。詳細操作見 [`user_manual_book.zh.md`](user_manual_book.zh.md)，完整需求見 [`需求.md`](需求.md)，工程規範見 [`../AGENTS.md`](../AGENTS.md)。
+> 給開發者的簡短精確功能索引。版本 **1.5.7**。詳細操作見 [`user_manual_book.zh.md`](user_manual_book.zh.md)，完整需求見 [`需求.md`](需求.md)，工程規範見 [`../AGENTS.md`](../AGENTS.md)。
 
 ## 一句話定位
 
@@ -32,7 +32,7 @@ PHP **只 parse 不執行**：只接受選填的 `declare(strict_types=1);` + �
 
 ### 翻譯表
 - 以 `namespace + key` JOIN 成一列，每個 locale 一欄，每頁上限 100 列。
-- 模糊/精確搜尋、locale 篩選、缺翻譯與零使用率篩選、分頁。
+- 模糊／精確搜尋、locale 篩選、缺翻譯與零使用率篩選、分頁。相同方案重讀或 mutation state 更新保留目前頁碼，只有搜尋／篩選改變或切換方案才重設。
 - 一張捲動表單編輯所有 locale 值並存為單一驗證批次；批量刪除、跨 locale 改 key、複製/貼上 cell、IDE 原生 Find in Files。
 - **Rename Key** 可選同步已記錄的原始碼使用位置，透過可編輯 code Diff 後才寫檔。Diff 的檔案下拉選單以圖示＋文字標籤（可編輯／唯讀）逐檔標示，切換時即時反映當前檔案是否可編輯。
 - 從既有 locale 建立完整新 locale（如 `en/*.php` → `es/*.php`），附 ISO/BCP 47 建議 popup 與選填語言備註。

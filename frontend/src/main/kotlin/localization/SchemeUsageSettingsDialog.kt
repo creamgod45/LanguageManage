@@ -28,6 +28,7 @@ import com.intellij.util.ui.JBUI
 import java.awt.BorderLayout
 import java.awt.Dimension
 import java.awt.FlowLayout
+import java.nio.file.Path
 import javax.swing.DefaultListModel
 import javax.swing.JButton
 import javax.swing.JComponent
@@ -124,6 +125,7 @@ internal class SchemeUsageSettingsDialog(
                         message("settings.exclusion.edit.prompt"),
                         DEFAULT_USAGE_EXCLUDED_DIRECTORIES,
                         bulkInput = true,
+                        pathPicker = true,
                     ),
                 ).addTooltip(message("settings.usage.exclusions.help"))
                 .panel
@@ -165,6 +167,7 @@ internal class SchemeUsageSettingsDialog(
         defaultValues: List<String>,
         regexInput: Boolean = false,
         bulkInput: Boolean = false,
+        pathPicker: Boolean = false,
     ): JComponent {
         val list = JBList(model).apply { visibleRowCount = 5 }
         return JPanel(BorderLayout(0, JBUI.scale(4))).apply {
@@ -217,6 +220,13 @@ internal class SchemeUsageSettingsDialog(
                             },
                         )
                     }
+                    if (pathPicker) {
+                        add(
+                            JButton(message("settings.exclusion.choose.paths")).apply {
+                                addActionListener { chooseExclusionPaths(model) }
+                            },
+                        )
+                    }
                     if (regexInput) {
                         add(
                             RegexPresetUi.button { patterns ->
@@ -226,6 +236,37 @@ internal class SchemeUsageSettingsDialog(
                     }
                 },
                 BorderLayout.SOUTH,
+            )
+        }
+    }
+
+    private fun chooseExclusionPaths(model: DefaultListModel<String>) {
+        val configuredRoot = basePathField.text.trim().ifBlank { dialogProject.basePath.orEmpty() }
+        val root = runCatching { Path.of(configuredRoot).toAbsolutePath().normalize() }.getOrNull()
+        if (root == null) {
+            Messages.showErrorDialog(dialogProject, message("settings.exclusion.choose.base.required"), title)
+            return
+        }
+        val descriptor =
+            FileChooserDescriptor(true, true, false, false, false, true)
+                .withTitle(message("settings.exclusion.choose.title"))
+                .withDescription(message("settings.exclusion.choose.description"))
+        val selected = FileChooserFactory.getInstance().createFileChooser(descriptor, dialogProject, null).choose(dialogProject)
+        val existing = model.values().toMutableSet()
+        var skipped = 0
+        selected.forEach { virtualFile ->
+            val path = runCatching { Path.of(virtualFile.path).toAbsolutePath().normalize() }.getOrNull()
+            val relative =
+                path?.takeIf { it != root && it.startsWith(root) }
+                    ?.let { root.relativize(it).joinToString("/") { part -> part.toString() } }
+                    ?.takeIf(String::isNotBlank)
+            if (relative == null) skipped++ else if (existing.add(relative)) model.addElement(relative)
+        }
+        if (skipped > 0) {
+            Messages.showWarningDialog(
+                dialogProject,
+                message("settings.exclusion.choose.skipped", skipped),
+                message("settings.exclusion.choose.title"),
             )
         }
     }

@@ -243,7 +243,7 @@ internal object UsageScanSupport {
         visit: (Path) -> Unit,
     ) {
         val scanRoot = root.toRealPath()
-        val ignoredDirectories = settings.excludedDirectories.map { it.replace('\\', '/').trim('/').lowercase() }.toSet()
+        val exclusions = UsagePathExclusions(scanRoot, settings.excludedDirectories)
         val normalizedLanguageFiles =
             languageFiles.mapTo(hashSetOf()) {
                 runCatching { SafeLanguageFileAccess.validate(it).toString() }.getOrDefault(it)
@@ -257,12 +257,7 @@ internal object UsageScanSupport {
                 ): FileVisitResult {
                     cancellationCheck()
                     if (dir == scanRoot) return FileVisitResult.CONTINUE
-                    val relative = scanRoot.relativize(dir).joinToString("/") { it.toString() }.lowercase()
-                    val excluded =
-                        ignoredDirectories.any { item ->
-                            if ('/' in item) relative == item || relative.startsWith("$item/") else dir.fileName.toString().lowercase() == item
-                        }
-                    return if (excluded) FileVisitResult.SKIP_SUBTREE else FileVisitResult.CONTINUE
+                    return if (exclusions.excludesDirectory(dir)) FileVisitResult.SKIP_SUBTREE else FileVisitResult.CONTINUE
                 }
 
                 override fun visitFile(
@@ -270,7 +265,7 @@ internal object UsageScanSupport {
                     attrs: BasicFileAttributes,
                 ): FileVisitResult {
                     cancellationCheck()
-                    if (attrs.isRegularFile && file.toString() !in normalizedLanguageFiles) visit(file)
+                    if (attrs.isRegularFile && !exclusions.excludesFile(file) && file.toString() !in normalizedLanguageFiles) visit(file)
                     return FileVisitResult.CONTINUE
                 }
             },

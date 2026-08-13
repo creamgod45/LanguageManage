@@ -122,6 +122,7 @@ internal class LocalizationManagerPanel(
     private val loadProgressState = MutableStateFlow(LoadProgressDto())
     private var current = LocalizationStateDto()
     private var updatingSchemes = false
+    private var updatingFilters = false
     private var currentPage = 0
     private var currentUsagePage = 0
     private var currentUsageLocations = UsageLocationPageDto()
@@ -342,9 +343,9 @@ internal class LocalizationManagerPanel(
                     }
             }
         }
-        searchMode.addActionListener { applyFilter() }
-        localeBox.addActionListener { applyFilter() }
-        rowFilterBox.addActionListener { applyFilter() }
+        searchMode.addActionListener { if (!updatingFilters) applyFilter() }
+        localeBox.addActionListener { if (!updatingFilters) applyFilter() }
+        rowFilterBox.addActionListener { if (!updatingFilters) applyFilter() }
         entryTable.selectionModel.addListSelectionListener { event ->
             if (!event.valueIsAdjusting && !updatingEntryTable) {
                 val selected = selectedRows()
@@ -399,7 +400,9 @@ internal class LocalizationManagerPanel(
     }
 
     private fun render(state: LocalizationStateDto) {
-        if (current.activeSchemeId != state.activeSchemeId || (state.busy && !current.busy)) clearUsageLocationTarget()
+        val schemeChanged = current.activeSchemeId != state.activeSchemeId
+        currentPage = retainedTranslationPage(currentPage, current.activeSchemeId, state.activeSchemeId)
+        if (schemeChanged || (state.busy && !current.busy)) clearUsageLocationTarget()
         current = state
         if (state.busy && schemeLoadPending) schemeLoadObservedBusy = true
         if (!state.busy && schemeLoadObservedBusy) schemeLoadPending = false
@@ -431,13 +434,17 @@ internal class LocalizationManagerPanel(
                     .distinct()
                     .sorted()
         val previousLocale = localeBox.selectedItem?.toString()
-        localeBox.model = DefaultComboBoxModel(locales.toTypedArray())
-        localeBox.selectedItem =
-            previousLocale?.takeIf { it in locales } ?: allLocales
+        updatingFilters = true
+        try {
+            localeBox.model = DefaultComboBoxModel(locales.toTypedArray())
+            localeBox.selectedItem = previousLocale?.takeIf { it in locales } ?: allLocales
+        } finally {
+            updatingFilters = false
+        }
         val displayedIssues = displayedIssues(state.issues)
         issueModel.items = displayedIssues
         dynamicSourcePanel.render(state.schemes.firstOrNull { it.id == state.activeSchemeId }, state.entries)
-        applyFilter()
+        applyFilter(resetPage = false)
         renderUsageLocationTable()
         refreshStatus(displayedIssues)
     }

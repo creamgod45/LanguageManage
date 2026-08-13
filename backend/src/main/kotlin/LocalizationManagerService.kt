@@ -338,7 +338,7 @@ class LocalizationManagerService(
             val scheme = requireScheme(activeId)
             val root = usageScanRoot(scheme) ?: error(backendMessage("usage.exclusion.root.unavailable"))
             val resolution = UsageExclusionSupport.resolve(root, folderPaths)
-            val merge = UsageScanSupport.mergeExclusions(scheme.usageScanSettings, resolution.relativeDirectories)
+            val merge = UsageScanSupport.mergeExclusions(scheme.usageScanSettings, resolution.relativePaths)
             if (merge.added.isNotEmpty()) {
                 val updated = scheme.copy(usageScanSettings = merge.settings, updatedAtEpochMs = System.currentTimeMillis())
                 mutableState.value =
@@ -350,7 +350,7 @@ class LocalizationManagerService(
                 persistSchemes()
                 scheduleUsageSettingsReload(activeId)
             }
-            ExclusionUpdateResultDto(scheme.name, merge.added, resolution.skippedDirectories + merge.skipped)
+            ExclusionUpdateResultDto(scheme.name, merge.added, resolution.skippedPaths + merge.skipped)
         }
 
     suspend fun reload(

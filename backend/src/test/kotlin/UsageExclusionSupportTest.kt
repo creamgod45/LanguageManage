@@ -50,8 +50,8 @@ class UsageExclusionSupportTest {
         val resolution =
             UsageExclusionSupport.resolve(root, listOf(cache.toString(), reports.toString(), cache.toString()))
 
-        assertEquals(listOf("src/generated/cache", "src/generated/reports"), resolution.relativeDirectories)
-        assertTrue(resolution.skippedDirectories.isEmpty())
+        assertEquals(listOf("src/generated/cache", "src/generated/reports"), resolution.relativePaths)
+        assertTrue(resolution.skippedPaths.isEmpty())
     }
 
     // Case A — scheme base path points at a subfolder (scan root = proj/resources/lang). The user
@@ -74,8 +74,8 @@ class UsageExclusionSupportTest {
         val resolution =
             UsageExclusionSupport.resolve(scanRoot, listOf(generated.toString(), outsideVendor.toString()))
 
-        assertEquals(listOf("generated"), resolution.relativeDirectories)
-        assertEquals(listOf(outsideVendor.toString()), resolution.skippedDirectories)
+        assertEquals(listOf("generated"), resolution.relativePaths)
+        assertEquals(listOf(outsideVendor.toString()), resolution.skippedPaths)
     }
 
     // Case B — scan root = project root. The user multi-selects a folder to exclude but also (easily,
@@ -94,8 +94,8 @@ class UsageExclusionSupportTest {
         // Fixed behavior: src is excluded, the scan root itself is skipped and reported.
         val resolution = UsageExclusionSupport.resolve(proj, listOf(proj.toString(), src.toString()))
 
-        assertEquals(listOf("src"), resolution.relativeDirectories)
-        assertEquals(listOf(proj.toString()), resolution.skippedDirectories)
+        assertEquals(listOf("src"), resolution.relativePaths)
+        assertEquals(listOf(proj.toString()), resolution.skippedPaths)
     }
 
     @Test
@@ -105,7 +105,22 @@ class UsageExclusionSupportTest {
 
         val resolution = UsageExclusionSupport.resolve(root, listOf(root.toString(), outside.toString()))
 
-        assertTrue(resolution.relativeDirectories.isEmpty())
-        assertEquals(listOf(root.toString(), outside.toString()), resolution.skippedDirectories)
+        assertTrue(resolution.relativePaths.isEmpty())
+        assertEquals(listOf(root.toString(), outside.toString()), resolution.skippedPaths)
+    }
+
+    @Test
+    fun `accepts files and folders in one exclusion batch`() {
+        val root = newTempDir("lm-path-exclusions")
+        val folder = root.resolve("generated").createDirectories()
+        val file = root.resolve("src/legacy.php").apply {
+            parent.createDirectories()
+            Files.writeString(this, "legacy")
+        }
+
+        val resolution = UsageExclusionSupport.resolve(root, listOf(file.toString(), folder.toString()))
+
+        assertEquals(listOf("src/legacy.php", "generated"), resolution.relativePaths)
+        assertTrue(resolution.skippedPaths.isEmpty())
     }
 }

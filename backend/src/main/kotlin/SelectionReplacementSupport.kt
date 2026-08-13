@@ -38,9 +38,6 @@ internal object SelectionReplacementSupport {
         val text = validateSelectedText(selectedText)
         val rules = validateRules(rawRules)
         val languagePaths = languageFiles.mapNotNullTo(hashSetOf()) { runCatching { Path.of(it).toRealPath() }.getOrNull() }
-        val ignored = settings.excludedDirectories.map { it.replace('\\', '/').trim('/').lowercase() }.filter(String::isNotBlank).toSet()
-        val ignoredNames = ignored.filterTo(hashSetOf()) { '/' !in it }
-        val ignoredPaths = ignored.filterTo(hashSetOf()) { '/' in it }
         val candidates = mutableListOf<SelectionReplacementCandidateDto>()
         val eligiblePaths = ArrayList<Path>()
         var visitedDirectories = 0
@@ -50,6 +47,7 @@ internal object SelectionReplacementSupport {
         var totalEligibleFiles = 0
         var truncated = false
         val scanRoot = root.toRealPath()
+        val exclusions = UsagePathExclusions(scanRoot, settings.excludedDirectories)
 
         fun report(stage: SelectionScanStage, path: Path = scanRoot) {
             val relative = runCatching { scanRoot.relativize(path).joinToString("/") { it.toString() } }.getOrDefault("")
@@ -80,11 +78,8 @@ internal object SelectionReplacementSupport {
                         report(SelectionScanStage.WALKING, dir)
                         return FileVisitResult.CONTINUE
                     }
-                    val relative = scanRoot.relativize(dir).joinToString("/") { it.toString() }.lowercase()
-                    val excludedByPath = generateSequence(relative) { value -> value.substringBeforeLast('/', "").takeIf(String::isNotEmpty) }.any(ignoredPaths::contains)
-                    val excluded = dir.fileName.toString().lowercase() in ignoredNames || excludedByPath
                     if (visitedDirectories % 32 == 0) report(SelectionScanStage.WALKING, dir)
-                    return if (excluded) FileVisitResult.SKIP_SUBTREE else FileVisitResult.CONTINUE
+                    return if (exclusions.excludesDirectory(dir)) FileVisitResult.SKIP_SUBTREE else FileVisitResult.CONTINUE
                 }
 
                 override fun visitFile(file: Path, attrs: BasicFileAttributes): FileVisitResult {
@@ -96,7 +91,9 @@ internal object SelectionReplacementSupport {
                         return FileVisitResult.TERMINATE
                     }
                     if (visitedFiles % 64 == 0) report(SelectionScanStage.WALKING, file)
-                    if (file in languagePaths || matchingRule(file, rules) == null) return FileVisitResult.CONTINUE
+                    if (exclusions.excludesFile(file) || file in languagePaths || matchingRule(file, rules) == null) {
+                        return FileVisitResult.CONTINUE
+                    }
                     eligibleFiles++
                     if (eligibleFiles > MAX_SCANNED_FILES) {
                         truncated = true

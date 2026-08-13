@@ -139,7 +139,8 @@ Example:
 
 - Every page contains at most 100 rows.
 - Use **Previous** and **Next** below the table.
-- Changing search conditions returns to the first page.
+- Manual/background reloads and state updates after add, edit, delete, key rename, AI translation, repair, or normalization retain the current page. If fewer pages remain, the table moves to the last valid page.
+- Changing the search text, exact/fuzzy mode, locale, or translation-status filter returns to the first page.
 
 ### Cell selection and clipboard
 
@@ -399,7 +400,7 @@ The scanner applies the scheme Regex to the complete content of every regular fi
 
 The **Usage Locations** tab is disabled and empty by default, so ordinary scheme loading does not build a Swing table for unused location records. Location records remain in the backend and are not included in the normal state Flow. Double-click the **Usage** cell of one translation row to select that logical `namespace + key`, enable the tab, and request only its current page from the backend. The table shows source file, line, column, and occurrences with at most 100 rows per RPC page. Initially line and column say **On open**: the scan caches only the character offset and source modification time. Double-click a location or click **Open Location** to calculate line/column in the backend, cache the result, and navigate the IDE caret. If the source changed after scanning, the plugin refuses the stale offset and asks for a reload.
 
-### Excluded directories
+### Excluded files and directories
 
 Defaults include:
 
@@ -413,7 +414,8 @@ When upgrading, an untouched old default list is migrated with new defaults. A c
 - A single name such as `vendor` excludes every directory with that name.
 - A relative path such as `tests/fixtures` excludes only that branch under the base path.
 - Use **Add/Edit/Delete** to prevent fixtures, tests, or generated code from inflating counts. **Bulk Add** accepts directory names and relative paths separated by commas or new lines, removes blanks and duplicates, and leaves final safety validation to the backend.
-- In the Project file tree, select one or more folders and open **Localization Manager → Exclude Folders from Current Scheme Scan**. The plugin stores precise paths relative to the active scheme base path, then invalidates the cache and recounts. The command is disabled without an active scheme or when the selection contains a file; the scan root itself and folders outside it are rejected.
+- Enter names/relative paths in Scheme Settings, paste them in bulk, or use **Choose Files/Folders** to select multiple files and folders together. A bare name excludes matching files or directories at any depth. A relative file path excludes only that file; a relative directory path excludes its subtree.
+- In the Project file tree, select one or more files and/or folders and open **Localization Manager → Exclude Files/Folders from Current Scheme Scan**. The plugin stores precise paths relative to the active scheme base path, then invalidates the cache and recounts. The command is disabled without an active scheme; the scan root, outside paths, unsafe paths, and excess entries are rejected or reported without aborting valid siblings.
 
 Applying settings persists modified schemes, invalidates their caches, and recounts the active scheme in the background. A scheme supports at most 20 Regex patterns of 512 characters each and 1,000 exclusions.
 
@@ -460,7 +462,7 @@ Schemes and caches are stored under:
 
 - Dynamic keys, template helpers, or non-text references may not be detected.
 - Select the scheme and open **Scheme Settings** to verify base path, Regex, and exclusions.
-- Excluded directories are skipped. New schemes exclude `.git`, `.github`, `docs`, `vendor`, and common AI/IDE configuration folders by default.
+- Excluded files and directory subtrees are skipped. New schemes exclude `.git`, `.github`, `docs`, `vendor`, and common AI/IDE configuration folders by default.
 - Zero means the bounded scan found nothing; it does not prove that a key is unused.
 
 ### AI translation returns HTTP 400 or no review table

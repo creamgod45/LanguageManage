@@ -1,5 +1,21 @@
 # Language Manager Changelog
 
+## 1.5.7
+
+### English
+
+- Preserve the current translation-table page across manual reloads, background reloads, and state refreshes after key rename, add/edit/delete, AI translation, repair, normalization, and other mutations. Changing the search text, search mode, locale, or row filter still resets to page 1; a reduced result set safely clamps to its last valid page.
+- Extend usage-scan exclusions from directories to both files and directories without breaking existing scheme settings. A bare name excludes matching files or directories at any depth, while a relative path excludes one exact file or an entire directory subtree.
+- Add a JetBrains multi-selection file/folder picker to Scheme Settings and allow the Project view shortcut to accept mixed file and folder selections. Selected paths are stored relative to the active scheme scan base path; outside, unsafe, duplicate, and over-limit entries remain rejected or reported.
+
+---
+
+### 繁體中文
+
+- 手動重新讀取、背景重新讀取，以及 Key 改名、新增／編輯／刪除翻譯、AI 翻譯、修復、正規化等 mutation 更新狀態後，翻譯表會保留使用者目前頁碼。搜尋文字、搜尋模式、語言或列篩選條件改變時仍會回到第 1 頁；若結果數量縮減，則安全調整至最後一個有效頁面。
+- 使用率掃描排除清單由僅支援資料夾擴充為同時支援檔案及資料夾，且既有方案設定保持相容。單一名稱可排除任意層級的同名檔案／資料夾，相對路徑則可精準排除單一檔案或整個資料夾子樹。
+- 方案設定新增 JetBrains 原生檔案／資料夾混合多選器，Project 檔案樹快捷操作也能同時接受檔案與資料夾。選取項目會轉成目前方案掃描基準路徑下的相對路徑；根目錄外、不安全、重複或超量項目仍會拒絕或回報。
+
 ## 1.5.6
 
 ### English

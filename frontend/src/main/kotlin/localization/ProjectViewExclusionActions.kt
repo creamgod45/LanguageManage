@@ -82,12 +82,11 @@ class ExcludeFoldersFromActiveSchemeAction : DumbAwareAction() {
     override fun update(event: AnActionEvent) {
         event.presentation.text = message("action.project.view.exclude")
         val project = event.project
-        val folders = event.getData(CommonDataKeys.VIRTUAL_FILE_ARRAY).orEmpty()
+        val paths = event.getData(CommonDataKeys.VIRTUAL_FILE_ARRAY).orEmpty()
         val hasActiveScheme = project?.let { LocalizationActionContext.getInstance(it).hasActiveScheme() } == true
         event.presentation.isEnabled =
             project != null &&
-            folders.isNotEmpty() &&
-            folders.all { it.isDirectory } &&
+            paths.isNotEmpty() &&
             hasActiveScheme
         event.presentation.description =
             if (project != null && !hasActiveScheme) {
@@ -100,15 +99,14 @@ class ExcludeFoldersFromActiveSchemeAction : DumbAwareAction() {
     override fun actionPerformed(event: AnActionEvent) {
         val project = event.project ?: return
         if (!LocalizationActionContext.getInstance(project).hasActiveScheme()) return
-        val folderPaths =
+        val selectedPaths =
             event.getData(CommonDataKeys.VIRTUAL_FILE_ARRAY)
                 .orEmpty()
-                .filter { it.isDirectory }
                 .map { it.path }
                 .distinct()
-        if (folderPaths.isEmpty()) return
+        if (selectedPaths.isEmpty()) return
         CoroutineScopeHolder.getInstance(project).getPluginScope().launch {
-            runCatching { LocalizationFrontendRepository(project).addActiveSchemeExcludedDirectories(folderPaths) }
+            runCatching { LocalizationFrontendRepository(project).addActiveSchemeExcludedDirectories(selectedPaths) }
                 .onSuccess { result ->
                     val added = result.addedDirectories.size
                     val skipped = result.skippedDirectories.size
