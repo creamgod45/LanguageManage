@@ -8,7 +8,7 @@
 
 ### 支援的 IDE 版本
 
-插件最低支援 JetBrains Platform build `253.5`（IntelliJ IDEA 2025.3.5），且不設定最高版本。目前已由 Marketplace Plugin Verifier 驗證 IntelliJ IDEA 2025.3.5、2025.3.6、2026.1.1～2026.1.4、2026.2、2026.2.0.1 與 2026.2.1 EAP 相容；完整紀錄請參閱 [相容性驗證](compatibility.zh.md)。
+插件最低支援 JetBrains Platform build `253.5`（IntelliJ IDEA 2025.3.5），且不設定最高版本。目前已由 Marketplace Plugin Verifier 驗證 IntelliJ IDEA 2025.3.5、2025.3.6.1、2026.1～2026.1.5、2026.2、2026.2.0.1 與 2026.2.1 相容；完整紀錄請參閱 [相容性驗證](compatibility.zh.md)。
 
 ## 1. 支援內容
 
