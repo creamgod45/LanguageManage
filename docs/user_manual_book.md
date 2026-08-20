@@ -8,7 +8,7 @@ This manual explains how to use LanguageManager in a JetBrains IDE to create iso
 
 ### Supported IDE versions
 
-The minimum supported version is JetBrains Platform build `253.5` (IntelliJ IDEA 2025.3.5), with no configured upper bound. Marketplace Plugin Verifier has confirmed compatibility with IntelliJ IDEA 2025.3.5, 2025.3.6, 2026.1.1 through 2026.1.4, 2026.2, 2026.2.0.1, and 2026.2.1 EAP. See [Compatibility Verification](compatibility.md) for the complete record.
+The minimum supported version is JetBrains Platform build `253.5` (IntelliJ IDEA 2025.3.5), with no configured upper bound. Marketplace Plugin Verifier has confirmed compatibility with IntelliJ IDEA 2025.3.5, 2025.3.6.1, 2026.1 through 2026.1.5, 2026.2, 2026.2.0.1, and 2026.2.1. See [Compatibility Verification](compatibility.md) for the complete record.
 
 ## 1. Supported Content
 

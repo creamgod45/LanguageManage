@@ -8,12 +8,43 @@
 
 AppCode is not declared as a target. Its absence from Marketplace's supported-product list cannot be overridden by adding a product name to `plugin.xml`.
 
-The approved LanguageManager `1.5.3`, `1.5.4`, `1.5.5`, and `1.5.6` releases use the following plugin descriptor settings:
+The approved LanguageManager `1.5.3`, `1.5.4`, `1.5.5`, `1.5.6`, and `1.6.0` releases use the following plugin descriptor settings:
 
 - Minimum version: JetBrains Platform build `253.5` (IntelliJ IDEA 2025.3.5)
 - Maximum version: unrestricted
 - Compilation and minimum-version test platform: IntelliJ IDEA 2025.3.5
 - JVM bytecode target: Java 21
+
+## Marketplace release status for 1.6.0
+
+| Field | Value |
+|---|---|
+| Status | Approved |
+| Approval date | August 13, 2026 |
+| Compatibility range | `253.5+` |
+| Marketplace package size | 1.43 MB |
+| Uploaded by | Laifu來福（來福Laifu） |
+| Version downloads at report time | 0 |
+
+## Marketplace verification results for 1.6.0
+
+JetBrains Marketplace Compatibility Verification reported the following LanguageManager `1.6.0` results on August 13, 2026:
+
+| Status | Product | Version | Date and time | Verifier | Verdict |
+|---|---|---|---|---|---|
+| Success | IntelliJ IDEA | 2026.2.1 | 2026-08-13 14:32 | IDE | No issues occurred during an IDE run with the plugin installed |
+| Warning | IntelliJ IDEA | 2026.2.1 | 2026-08-13 14:26 | Plugin Verifier `1.408` | Compatible; 1 experimental API usage |
+| Warning | IntelliJ IDEA | 2026.2.0.1 | 2026-08-13 14:28 | Plugin Verifier `1.408` | Compatible; 1 experimental API usage |
+| Warning | IntelliJ IDEA | 2026.2 | 2026-08-13 14:28 | Plugin Verifier `1.408` | Compatible; 1 experimental API usage |
+| Warning | IntelliJ IDEA | 2026.1.5 | 2026-08-13 14:27 | Plugin Verifier `1.408` | Compatible; 3 experimental API usages |
+| Warning | IntelliJ IDEA | 2026.1.4 | 2026-08-13 14:29 | Plugin Verifier `1.408` | Compatible; 3 experimental API usages |
+| Warning | IntelliJ IDEA | 2026.1.3 | 2026-08-13 14:29 | Plugin Verifier `1.408` | Compatible; 3 experimental API usages |
+| Warning | IntelliJ IDEA | 2026.1.2 | 2026-08-13 14:29 | Plugin Verifier `1.408` | Compatible; 3 experimental API usages |
+| Warning | IntelliJ IDEA | 2026.1.1 | 2026-08-13 14:29 | Plugin Verifier `1.408` | Compatible; 3 experimental API usages |
+| Warning | IntelliJ IDEA | 2026.1 | 2026-08-13 14:29 | Plugin Verifier `1.408` | Compatible; 152 experimental API usages |
+| Warning | IntelliJ IDEA | 2025.3.6.1 | 2026-08-13 14:26 | Plugin Verifier `1.408` | Compatible; 10 experimental API usages |
+
+Every listed IDE version is compatible with LanguageManager `1.6.0`, and the standalone IDE run completed successfully on 2026.2.1. Plugin Verifier reported experimental API usages ranging from 1 to 152 depending on the IDE version, but no binary incompatibility.
 
 ## Marketplace release status for 1.5.6
 
