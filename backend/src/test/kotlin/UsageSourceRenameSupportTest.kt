@@ -78,6 +78,35 @@ class UsageSourceRenameSupportTest {
     }
 
     @Test
+    fun `merge rewrites Laravel nested and vendor references from a leaf capture`() {
+        val source =
+            temp.resolve("src/example.php").apply {
+                parent.createDirectories()
+                writeText("""__('admin/customer.old'); __('courier::admin/customer.old');""")
+            }
+        val content = Files.readString(source)
+        val modifiedAt = Files.getLastModifiedTime(source).toMillis()
+        val firstLeaf = content.indexOf("old")
+        val secondLeaf = content.lastIndexOf("old")
+
+        val preview =
+            UsageSourceRenameSupport.buildMergePreview(
+                root = temp,
+                locations = listOf(location("entry", source, firstLeaf, modifiedAt), location("entry", source, secondLeaf, modifiedAt)),
+                allowedEntryIds = setOf("entry"),
+                sourceNamespace = "admin.customer",
+                sourceKey = "old",
+                targetUsageReference = "shared/messages.account_missing",
+                targetKey = "account_missing",
+            )
+
+        assertEquals(
+            """__('shared/messages.account_missing'); __('courier::shared/messages.account_missing');""",
+            preview.single().afterContent,
+        )
+    }
+
+    @Test
     fun `rejects cached paths outside the scheme root`() {
         val outside = Files.createTempFile("language-manager-outside", ".kt")
         try {

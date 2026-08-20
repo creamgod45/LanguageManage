@@ -19,6 +19,51 @@ internal object UsageSourceRenameSupport {
         oldKey: String,
         newKey: String,
         cancellationCheck: () -> Unit = {},
+    ): List<FileChangePreviewDto> =
+        buildPreview(
+            root,
+            locations,
+            allowedEntryIds,
+            namespace,
+            oldKey,
+            if (namespace.isBlank()) newKey else "$namespace.$newKey",
+            newKey,
+            true,
+            cancellationCheck,
+        )
+
+    fun buildMergePreview(
+        root: Path,
+        locations: List<UsageLocationDto>,
+        allowedEntryIds: Set<String>,
+        sourceNamespace: String,
+        sourceKey: String,
+        targetUsageReference: String,
+        targetKey: String,
+        cancellationCheck: () -> Unit = {},
+    ): List<FileChangePreviewDto> =
+        buildPreview(
+            root,
+            locations,
+            allowedEntryIds,
+            sourceNamespace,
+            sourceKey,
+            targetUsageReference,
+            targetKey,
+            false,
+            cancellationCheck,
+        )
+
+    private fun buildPreview(
+        root: Path,
+        locations: List<UsageLocationDto>,
+        allowedEntryIds: Set<String>,
+        sourceNamespace: String,
+        sourceKey: String,
+        targetUsageReference: String,
+        targetKey: String,
+        preserveSourceStyle: Boolean,
+        cancellationCheck: () -> Unit,
     ): List<FileChangePreviewDto> {
         val scanRoot = root.toRealPath()
         val locationsByFile = linkedMapOf<String, MutableMap<Int, UsageLocationDto>>()
@@ -48,7 +93,15 @@ internal object UsageSourceRenameSupport {
                 positions.keys
                     .map { offset ->
                         cancellationCheck()
-                        replacementAt(before, offset, namespace, oldKey, newKey)
+                        replacementAt(
+                            before,
+                            offset,
+                            sourceNamespace,
+                            sourceKey,
+                            targetUsageReference,
+                            targetKey,
+                            preserveSourceStyle,
+                        )
                             ?: error(backendMessage("usage.rename.capture.mismatch", realPath.fileName))
                     }.sortedWith(
                         compareBy<Replacement>(Replacement::start)
@@ -95,15 +148,38 @@ internal object UsageSourceRenameSupport {
     private fun replacementAt(
         content: String,
         offset: Int,
-        namespace: String,
-        oldKey: String,
-        newKey: String,
+        sourceNamespace: String,
+        sourceKey: String,
+        targetUsageReference: String,
+        targetKey: String,
+        preserveSourceStyle: Boolean,
     ): Replacement? {
         if (offset !in 0..content.length) return null
+        quotedLiteralAt(content, offset)?.let { literal ->
+            if (matchesSourceReference(literal.value, sourceNamespace, sourceKey)) {
+                val vendorPrefix = literal.value.substringBefore("::", "").takeIf { "::" in literal.value }
+                val replacement =
+                    if (preserveSourceStyle) {
+                        val body = literal.value.substringAfter("::", literal.value)
+                        val namespacePart = body.removeSuffix(sourceKey).removeSuffix(".")
+                        listOfNotNull(vendorPrefix?.let { "$it::" }, namespacePart.takeIf(String::isNotBlank)?.let { "$it." }, targetKey)
+                            .joinToString("")
+                    } else if (vendorPrefix != null && "::" !in targetUsageReference) {
+                        "$vendorPrefix::$targetUsageReference"
+                    } else {
+                        targetUsageReference
+                    }
+                return Replacement(literal.start, literal.endExclusive, replacement)
+            }
+        }
+        val slashNamespace = sourceNamespace.replace('.', '/')
         val candidates =
             buildList {
-                if (namespace.isNotBlank()) add("$namespace.$oldKey" to "$namespace.$newKey")
-                add(oldKey to newKey)
+                if (sourceNamespace.isNotBlank()) {
+                    add("$sourceNamespace.$sourceKey" to targetUsageReference)
+                    add("$slashNamespace.$sourceKey" to targetUsageReference)
+                }
+                add(sourceKey to targetKey)
             }
         return candidates.firstNotNullOfOrNull { (candidate, replacement) ->
             if (content.regionMatches(offset, candidate, 0, candidate.length)) {
@@ -114,6 +190,49 @@ internal object UsageSourceRenameSupport {
         }
     }
 
+    private fun matchesSourceReference(
+        value: String,
+        namespace: String,
+        key: String,
+    ): Boolean {
+        if (value == key) return true
+        if (namespace.isBlank()) return false
+        val withoutVendor = value.substringAfter("::", value)
+        return withoutVendor == "$namespace.$key" || withoutVendor == "${namespace.replace('.', '/')}.$key"
+    }
+
+    private fun quotedLiteralAt(
+        content: String,
+        offset: Int,
+    ): QuotedLiteral? {
+        val searchStart = (offset - 512).coerceAtLeast(0)
+        for (start in offset.coerceAtMost(content.lastIndex) downTo searchStart) {
+            val quote = content[start]
+            if (quote != '\'' && quote != '"') continue
+            if (isEscaped(content, start)) continue
+            var end = start + 1
+            while (end < content.length) {
+                if (content[end] == quote && !isEscaped(content, end)) {
+                    if (offset in (start + 1)..end) return QuotedLiteral(start + 1, end, content.substring(start + 1, end))
+                    break
+                }
+                if (content[end] == '\n' || content[end] == '\r') break
+                end++
+            }
+        }
+        return null
+    }
+
+    private fun isEscaped(content: String, index: Int): Boolean {
+        var slashCount = 0
+        var cursor = index - 1
+        while (cursor >= 0 && content[cursor] == '\\') {
+            slashCount++
+            cursor--
+        }
+        return slashCount % 2 == 1
+    }
+
     private fun sha256(content: String): String =
         MessageDigest
             .getInstance("SHA-256")
@@ -121,6 +240,12 @@ internal object UsageSourceRenameSupport {
             .joinToString("") { "%02x".format(it) }
 
     private data class Replacement(
+        val start: Int,
+        val endExclusive: Int,
+        val value: String,
+    )
+
+    private data class QuotedLiteral(
         val start: Int,
         val endExclusive: Int,
         val value: String,

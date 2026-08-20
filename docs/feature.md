@@ -1,6 +1,6 @@
 # LanguageManager 功能總覽
 
-> 給開發者的簡短精確功能索引。版本 **1.6.0**。詳細操作見 [`user_manual_book.zh.md`](user_manual_book.zh.md)，完整需求見 [`需求.md`](需求.md)，工程規範見 [`../AGENTS.md`](../AGENTS.md)。
+> 給開發者的簡短精確功能索引。版本 **1.7.0**。詳細操作見 [`user_manual_book.zh.md`](user_manual_book.zh.md)，完整需求見 [`需求.md`](需求.md)，工程規範見 [`../AGENTS.md`](../AGENTS.md)。
 
 ## 一句話定位
 
@@ -31,12 +31,15 @@ PHP **只 parse 不執行**：只接受選填的 `declare(strict_types=1);` + �
 - 已被方案使用率 Regex 覆蓋的程式碼範圍不列為候選；結果以 `Value / File path / Line / Col` 逐位置顯示，相同 Value 的不同位置仍各自保留。
 - 提供掃描檔案、快取命中、略過檔案、命中檔案、候選位置、唯一文字及高／中／低可信度統計；支援可取消背景任務、動態進度、搜尋、可信度篩選、每頁 100 列與雙擊導航。
 - 「匯出結果」使用 JetBrains 儲存位置選擇器輸出目前搜尋文字、可信度與命名格式排除後的所有頁面資料；Value 與路徑依 CSV 規則處理逗號、引號及換行。
-- 顯示過濾提供可同時勾選的純英文單字、camelCase、PascalCase／UpperCamelCase、snake_case、MACRO_CASE、kebab-case 與 dot.case 排除規則；採聯集即時套用，不重新執行專案掃描。
+- 顯示過濾提供可同時勾選的純英文單字、camelCase、PascalCase／UpperCamelCase、snake_case、MACRO_CASE、kebab-case、dot.case 與 PHP `$variable` 排除規則；採聯集即時套用，不重新執行專案掃描。
 - 逐檔快取以修改時間及大小判斷是否重用。安全上限為 200,000 個候選檔案、單檔 5 MB、單行 32,768 字元及 100,000 個候選位置，單檔失敗不影響其他檔案。
 
 ### 方案（Scheme）
 - 從明確選取的檔案或一個以上資料夾建立隔離方案；資料夾模式先 parse、預覽辨識結果（格式/locale/namespace/筆數/錯誤），並由使用者在獨立欄位確認或修改方案名稱後才建立。
 - 目前方案可從「方案設定」重新命名；改名不改變方案 ID、列管檔案、快取歸屬或方案隔離。
+- 既有方案可從方案下拉選單混合選擇檔案／資料夾，先顯示逐檔解析辨識表，再將勾選的可識別檔案追加到原方案；方案 ID 與既有設定不變。
+- PHP／Properties 方案可從操作選單選一個列管檔作為目錄家族參考，輸入新 Namespace 並以多檔 Diff 預覽同一家族各 locale 的空白檔案；套用後建立檔案並自動追加追蹤。
+- PHP／Properties Namespace 亦可依列管參考檔找出同一家族各 locale 檔案，以刪除 Diff 與 SHA-256 確認後暫移檔案、更新追蹤資料；交易失敗會回復，且不允許移除方案最後一組檔案。
 - 方案間完全隔離，mutation 只寫入該方案檔案。
 - 可從 Tool Window dropdown 以 JSON 匯入/匯出可攜方案設定（路徑盡量轉相對，每檔含 parser 與安全預覽）。
 

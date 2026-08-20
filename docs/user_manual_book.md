@@ -45,7 +45,7 @@ After installation, the LanguageManager icon appears in the IDE Tool Window side
 
 The Tool Window has two top-level contents: **Language Schemes** for translation management and **Analysis** for high-cost project inspection. Analysis is lazy and never starts while Language Schemes remains selected. Manually switch to **Analysis** to scan the active scheme, or use **Analyze Again** to refresh it; **Stop** cancels the JetBrains background task.
 
-The untranslated-hardcoded-text analyzer scans the active scheme base path, honors its file/folder exclusions, skips managed language files, and does not impose a filename-extension filter. Source ranges already recognized by the scheme usage Regex are excluded. Results keep every location as a separate `Value / File path / Line / Col` row; use search or confidence filters, or independently check plain English word, camelCase, PascalCase/UpperCamelCase, snake_case, MACRO_CASE, kebab-case, and dot.case exclusions. Selected formats form a union and update the table without rescanning. Page through at most 100 rows at once and double-click a row to navigate. **Export Results** applies the current search text, confidence, and naming-format exclusions and writes all matching pages as UTF-8 CSV; its button shows the export count. Summary counters distinguish scanned, cached, skipped, matched, candidate, unique, and high/medium/low-confidence totals. Results are heuristic review candidates, not automatic errors or automatic file changes.
+The untranslated-hardcoded-text analyzer scans the active scheme base path, honors its file/folder exclusions, skips managed language files, and does not impose a filename-extension filter. Source ranges already recognized by the scheme usage Regex are excluded. Results keep every location as a separate `Value / File path / Line / Col` row; use search or confidence filters, or independently check plain English word, camelCase, PascalCase/UpperCamelCase, snake_case, MACRO_CASE, kebab-case, dot.case, and PHP/Blade variable values such as `$name`, `${name}`, `{{ $name }}`, or `{!! $html !!}`. Blade expressions with property, function, index, prefix, or suffix content are also covered. Selected formats form a union and update the table without rescanning. Page through at most 100 rows at once and double-click a row to navigate. **Export Results** applies the current search text, confidence, and naming-format exclusions and writes all matching pages as UTF-8 CSV; its button shows the export count. Summary counters distinguish scanned, cached, skipped, matched, candidate, unique, and high/medium/low-confidence totals. Results are heuristic review candidates, not automatic errors or automatic file changes.
 
 ## 3. Creating Your First Scheme
 
@@ -55,6 +55,12 @@ The untranslated-hardcoded-text analyzer scans the active scheme base path, hono
    - **Select Files**: select one or more JSON, YAML/YML, PHP, or Properties files, then enter a scheme name.
    - **Select Folders**: select one or more folders—such as `en`, `zh_CN`, and `zh_TW`—and wait for the backend to combine, scan, and parse the supported files.
 4. The folder-recognition dialog displays each full path, format, locale, namespace, entry count, and recognition result. A failed file keeps its error message but cannot be selected. Use **Add Folder** to merge another folder into the scan.
+
+To extend an existing scheme later, open the scheme dropdown and choose **Add Tracked Files**. Use **Add Files** and **Add Folders** repeatedly to build the complete path list before inspection; selecting separate roots such as `en` and `zh_TW` keeps and scans both. Review the parser-recognition table and check only the files to add. This keeps the existing scheme ID, settings, and tracked files.
+
+For PHP or Properties file families, choose **Operations → Add Namespace Files**. Select a tracked file that represents the intended directory family, enter a dot-separated namespace such as `components.filament`, review the generated file for every locale in the Diff, and apply. Existing targets are never overwritten; accepted files are created and tracked together.
+
+Choose **Operations → Delete Namespace Files** to remove a file-based namespace. Select one tracked file as the family reference, inspect every locale's full deletion Diff, and apply only if the files are unchanged. The operation removes the files from both disk and scheme tracking and restores moved files if the transaction fails. It does not delete the scheme's final tracked file set.
 5. Enter or edit a recognizable scheme name in the dedicated name field, select the recognized files to manage, and click **Create Scheme**. Names are trimmed and must contain 1–80 characters without control characters.
 6. Wait for loading to finish. Parsed entries then appear in the translation table.
 
@@ -249,7 +255,17 @@ Select one or more rows, choose **Actions ▾ → Copy Key to Locale Values**, s
 5. Enable the checkbox to build a preview from the selected row's cached usage locations. Language-file changes remain read-only, while the right side of matched source-code files is editable.
 6. Review every file and choose **Apply** to write the edited result. Cancel closes the preview without modifying language or source files.
 
-The backend accepts only cached positions that still contain the exact `oldKey` or `namespace.oldKey`. It preserves uncertain prefixes around a captured key, rejects changed, out-of-root, or oversized source files, regenerates the preview before apply, and compares SHA-256 hashes. If any affected language file already contains the new key, the entire write is rejected to prevent overwriting.
+The backend accepts only cached positions that still contain the exact key, dotted namespace reference, or Laravel slash-group reference. It preserves vendor prefixes, rejects changed, out-of-root, or oversized source files, regenerates the preview before apply, and compares SHA-256 hashes. If any affected language file already contains the new key, the entire write is rejected to prevent overwriting.
+
+### Merge translations
+
+1. Select exactly two translation rows and choose **Actions ▾ → Merge Translations**.
+2. Confirm which row is the source to remove and which is the target to keep; use **Swap Source and Target** when needed.
+3. Existing nonblank target values win. A missing or blank target locale is filled from the corresponding source locale before the source key is removed.
+4. When source synchronization is enabled, review the editable target reference. For Laravel, an internal namespace such as `admin.customer` defaults to `admin/customer.key`; vendor or custom aliases may be entered as `package::admin/customer.key`.
+5. Review every language and source-code file in the final Diff. Language files are read-only generated results, while matched source files are editable. **Apply** verifies the preview hashes and writes the complete transaction.
+
+Only usage locations recorded by the latest scheme scan are changed. The updater recognizes full dotted, Laravel slash-group, vendor-prefixed, and key-only captures around the stored offset. If a source locale has no unambiguous target namespace file, or any scanned file changed since analysis, the merge stops without a partial write.
 
 ### IDE Find in Files
 

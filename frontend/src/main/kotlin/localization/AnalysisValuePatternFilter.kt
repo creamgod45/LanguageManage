@@ -11,6 +11,7 @@ internal enum class AnalysisValuePatternFilter {
     MACRO_CASE,
     KEBAB_CASE,
     DOT_CASE,
+    PHP_VARIABLE,
     ;
 
     fun matches(value: String): Boolean =
@@ -24,7 +25,35 @@ internal enum class AnalysisValuePatternFilter {
             MACRO_CASE -> value.matches(Regex("[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+"))
             KEBAB_CASE -> value.matches(Regex("[a-z][a-z0-9]*(?:-[a-z0-9]+)+"))
             DOT_CASE -> value.matches(Regex("[a-z][a-z0-9]*(?:\\.[a-z0-9]+)+"))
+            PHP_VARIABLE -> matchesPhpVariableOrBladeEcho(value)
         }
+}
+
+private val PHP_VARIABLE_TOKEN = Regex("\\$(?:[A-Za-z_][A-Za-z0-9_]*|\\{[A-Za-z_][A-Za-z0-9_]*})")
+
+private fun matchesPhpVariableOrBladeEcho(value: String): Boolean {
+    val trimmed = value.trim()
+    if (PHP_VARIABLE_TOKEN.matches(trimmed)) return true
+    return containsBladeEchoWithPhpVariable(trimmed, "{{", "}}") ||
+        containsBladeEchoWithPhpVariable(trimmed, "{!!", "!!}")
+}
+
+private fun containsBladeEchoWithPhpVariable(
+    value: String,
+    opening: String,
+    closing: String,
+): Boolean {
+    var searchFrom = 0
+    while (searchFrom < value.length) {
+        val start = value.indexOf(opening, searchFrom)
+        if (start < 0) return false
+        val contentStart = start + opening.length
+        val end = value.indexOf(closing, contentStart)
+        if (end < 0) return false
+        if (PHP_VARIABLE_TOKEN.containsMatchIn(value.substring(contentStart, end))) return true
+        searchFrom = end + closing.length
+    }
+    return false
 }
 
 internal fun excludedByValuePatterns(

@@ -148,6 +148,25 @@ class BackendLocalizationManagerRpcApi : LocalizationManagerRpcApi {
                 ?: FolderDiscoveryDto(folderPaths.firstOrNull().orEmpty(), folderPaths = folderPaths)
         }
 
+    override suspend fun discoverAdditionalLanguageFiles(
+        projectId: ProjectId,
+        schemeId: String,
+        selectedPaths: List<String>,
+    ): FolderDiscoveryDto =
+        withContext(Dispatchers.IO) {
+            projectId.service()?.discoverAdditionalLanguageFiles(schemeId, selectedPaths)
+                ?: FolderDiscoveryDto(selectedPaths.firstOrNull().orEmpty())
+        }
+
+    override suspend fun addTrackedFiles(
+        projectId: ProjectId,
+        schemeId: String,
+        filePaths: List<String>,
+    ) = withContext(Dispatchers.IO) {
+        projectId.service()?.addTrackedFiles(schemeId, filePaths)
+        Unit
+    }
+
     override suspend fun exportSchemeSettings(projectId: ProjectId): String =
         withContext(Dispatchers.IO) { projectId.service()?.exportSchemeSettings().orEmpty() }
 
@@ -291,6 +310,26 @@ class BackendLocalizationManagerRpcApi : LocalizationManagerRpcApi {
         Unit
     }
 
+    override suspend fun previewMergeTranslations(
+        projectId: ProjectId,
+        schemeId: String,
+        request: MergeTranslationsRequestDto,
+    ): ChangePreviewDto =
+        withContext(Dispatchers.IO) {
+            projectId.service()?.previewMergeTranslations(schemeId, request) ?: ChangePreviewDto()
+        }
+
+    override suspend fun applyPreviewedMergeTranslations(
+        projectId: ProjectId,
+        schemeId: String,
+        request: MergeTranslationsRequestDto,
+        editedFiles: List<EditedFileContentDto>,
+        expectedBeforeHashes: Map<String, String>,
+    ) = withContext(Dispatchers.IO) {
+        projectId.service()?.applyPreviewedMergeTranslations(schemeId, request, editedFiles, expectedBeforeHashes)
+        Unit
+    }
+
     override suspend fun repair(
         projectId: ProjectId,
         schemeId: String,
@@ -321,6 +360,42 @@ class BackendLocalizationManagerRpcApi : LocalizationManagerRpcApi {
         expectedTargetHashes: Map<String, String>,
     ) = withContext(Dispatchers.IO) {
         projectId.service()?.createLocaleVersion(schemeId, request, expectedTargetHashes)
+        Unit
+    }
+
+    override suspend fun previewNamespaceFiles(
+        projectId: ProjectId,
+        schemeId: String,
+        request: NamespaceFilesRequestDto,
+    ): ChangePreviewDto = withContext(Dispatchers.IO) {
+        projectId.service()?.previewNamespaceFiles(schemeId, request) ?: ChangePreviewDto()
+    }
+
+    override suspend fun createNamespaceFiles(
+        projectId: ProjectId,
+        schemeId: String,
+        request: NamespaceFilesRequestDto,
+        expectedTargetHashes: Map<String, String>,
+    ) = withContext(Dispatchers.IO) {
+        projectId.service()?.createNamespaceFiles(schemeId, request, expectedTargetHashes)
+        Unit
+    }
+
+    override suspend fun previewDeleteNamespaceFiles(
+        projectId: ProjectId,
+        schemeId: String,
+        request: NamespaceFilesDeleteRequestDto,
+    ): ChangePreviewDto = withContext(Dispatchers.IO) {
+        projectId.service()?.previewDeleteNamespaceFiles(schemeId, request) ?: ChangePreviewDto()
+    }
+
+    override suspend fun deleteNamespaceFiles(
+        projectId: ProjectId,
+        schemeId: String,
+        request: NamespaceFilesDeleteRequestDto,
+        expectedBeforeHashes: Map<String, String>,
+    ) = withContext(Dispatchers.IO) {
+        projectId.service()?.deleteNamespaceFiles(schemeId, request, expectedBeforeHashes)
         Unit
     }
 

@@ -143,7 +143,11 @@ internal object UsageScanSupport {
         val needleOwners = mutableMapOf<String, MutableSet<String>>()
         entries.forEach { entry ->
             cancellationCheck()
-            setOf(entry.key, if (entry.namespace.isBlank()) entry.key else "${entry.namespace}.${entry.key}").forEach { needle ->
+            setOf(
+                entry.key,
+                if (entry.namespace.isBlank()) entry.key else "${entry.namespace}.${entry.key}",
+                if (entry.namespace.isBlank()) entry.key else "${entry.namespace.replace('.', '/')}.${entry.key}",
+            ).forEach { needle ->
                 needleOwners.getOrPut(needle) { linkedSetOf() } += entry.id
             }
         }
@@ -153,7 +157,12 @@ internal object UsageScanSupport {
             offset: Int,
             modifiedAt: Long,
         ) {
-            needleOwners[candidate].orEmpty().forEach { id ->
+            val matchingIds =
+                buildSet {
+                    addAll(needleOwners[candidate].orEmpty())
+                    if ("::" in candidate) addAll(needleOwners[candidate.substringAfter("::")].orEmpty())
+                }
+            matchingIds.forEach { id ->
                 counts[id] = counts.getValue(id) + 1
                 val key = UsageLocationKey(id, file.toString(), offset, modifiedAt)
                 if (key in locationCounts || locationCounts.size < MAX_USAGE_LOCATION_RECORDS) {

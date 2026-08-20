@@ -91,6 +91,16 @@ internal class LocalizationFrontendRepository(
         settings: UsageScanSettingsDto,
     ) = LocalizationManagerRpcApi.getInstance().discoverLanguageFiles(project.projectId(), folderPaths, settings)
 
+    suspend fun discoverAdditionalLanguageFiles(
+        schemeId: String,
+        selectedPaths: List<String>,
+    ) = LocalizationManagerRpcApi.getInstance().discoverAdditionalLanguageFiles(project.projectId(), schemeId, selectedPaths)
+
+    suspend fun addTrackedFiles(
+        schemeId: String,
+        filePaths: List<String>,
+    ) = LocalizationManagerRpcApi.getInstance().addTrackedFiles(project.projectId(), schemeId, filePaths)
+
     suspend fun exportSchemeSettings() = LocalizationManagerRpcApi.getInstance().exportSchemeSettings(project.projectId())
 
     suspend fun previewSchemeSettingsImport(content: String) =
@@ -183,6 +193,20 @@ internal class LocalizationFrontendRepository(
         expectedBeforeHashes,
     )
 
+    suspend fun previewMergeTranslations(
+        id: String,
+        request: MergeTranslationsRequestDto,
+    ) = LocalizationManagerRpcApi.getInstance().previewMergeTranslations(project.projectId(), id, request)
+
+    suspend fun applyPreviewedMergeTranslations(
+        id: String,
+        request: MergeTranslationsRequestDto,
+        editedFiles: List<EditedFileContentDto>,
+        expectedBeforeHashes: Map<String, String>,
+    ) = LocalizationManagerRpcApi.getInstance().applyPreviewedMergeTranslations(
+        project.projectId(), id, request, editedFiles, expectedBeforeHashes,
+    )
+
     suspend fun repair(id: String) = LocalizationManagerRpcApi.getInstance().repair(project.projectId(), id)
 
     suspend fun repairEntries(
@@ -200,6 +224,28 @@ internal class LocalizationFrontendRepository(
         request: LocaleVersionRequestDto,
         expectedTargetHashes: Map<String, String>,
     ) = LocalizationManagerRpcApi.getInstance().createLocaleVersion(project.projectId(), id, request, expectedTargetHashes)
+
+    suspend fun previewNamespaceFiles(
+        id: String,
+        request: NamespaceFilesRequestDto,
+    ) = LocalizationManagerRpcApi.getInstance().previewNamespaceFiles(project.projectId(), id, request)
+
+    suspend fun createNamespaceFiles(
+        id: String,
+        request: NamespaceFilesRequestDto,
+        expectedTargetHashes: Map<String, String>,
+    ) = LocalizationManagerRpcApi.getInstance().createNamespaceFiles(project.projectId(), id, request, expectedTargetHashes)
+
+    suspend fun previewDeleteNamespaceFiles(
+        id: String,
+        request: NamespaceFilesDeleteRequestDto,
+    ) = LocalizationManagerRpcApi.getInstance().previewDeleteNamespaceFiles(project.projectId(), id, request)
+
+    suspend fun deleteNamespaceFiles(
+        id: String,
+        request: NamespaceFilesDeleteRequestDto,
+        expectedBeforeHashes: Map<String, String>,
+    ) = LocalizationManagerRpcApi.getInstance().deleteNamespaceFiles(project.projectId(), id, request, expectedBeforeHashes)
 
     suspend fun previewChanges(
         id: String,

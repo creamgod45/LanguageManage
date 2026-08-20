@@ -15,12 +15,13 @@ LanguageManager 是支援 JetBrains IDE split mode 的在地化檔案管理插�
 - 可在 Tool Window 下拉選單匯入／匯出方案設定 JSON；專案內路徑可攜化為相對路徑，匯入前會顯示逐檔解析與安全預覽。
 - 將相同 `namespace + key` 的多國語言翻譯 JOIN 成單一表格，每種語言各為一個欄位。
 - 支援模糊搜尋、精準搜尋、語言篩選、缺少翻譯／使用次數為 0 狀態篩選，及每頁最多 100 列的分頁。重新讀取與 mutation 更新後保留目前頁碼；搜尋或篩選條件改變時才回到第 1 頁。
-- 新增或編輯時可在單一可捲動表單同時處理全部語言，經一次完整驗證後批量儲存；另支援批量刪除、跨語言 key 改名、儲存格複製／貼上及 IDE 原生全文搜尋。Key 改名可選擇同步已記錄的程式碼使用位置，所有檔案會先進入可編輯程式碼 Diff，確認後才寫入。
+- 新增或編輯時可在單一可捲動表單同時處理全部語言，經一次完整驗證後批量儲存；另支援批量刪除、跨語言 key 改名、合併兩筆翻譯、儲存格複製／貼上及 IDE 原生全文搜尋。Key 改名與翻譯合併可同步已記錄的程式碼使用位置，所有檔案會先進入可編輯程式碼 Diff；合併時保留既有目標值、只補缺少語系，並支援 `admin/customer.key`、`package::admin/customer.key` 等 Laravel 引用。
 - 可透過 OpenAI-compatible 或 Anthropic Claude 端點，一次 AI 翻譯最多 100 個已選 row；Modal 有 `en` 時預設帶入 `en` 原文，否則帶入 Key，原文可逐列編輯且不改寫來源檔；目標語言可多選，結果以每個目標語言一欄合併檢視後進入同一份檔案 Diff。API Token 儲存在 JetBrains PasswordSafe，Temperature 為選填且預設不傳送。只有「套用」會寫檔，「提出其他意見 AI」會帶入已編輯原文、各語言已檢視建議與意見。
 - 可將多個所選 key 一次複製到指定語言 value，並提供 PHP 主流框架、Spring／Java／Kotlin、ResourceBundle 與 JetBrains Plugin 的使用率 Regex 推薦格式；另有選用的 Laravel「僅擷取 key」規則，可在不適合精準 namespace 配對時忽略 `filament::components/button.` 等不確定 package／group 前綴。
 - 可從現有 locale 建立完整的新語言版本；目標代碼使用可自由輸入的文字欄位，右側按鈕會開啟 ISO／BCP 47 建議 Popup，只有使用者明確選取才會回填，輸入或刪除期間不會自動改寫。選填語言備註會保存於方案並帶入 AI，作為語言、地區、術語及語氣背景；新檔案仍須經 Diff 確認。
 - IDE Settings 可設定插件顯示語言、問題建議顯示偏好，以及新方案的 base path 模式、向上層級、Regex 與排除清單；既有方案由 Tool Window「方案設定」獨立調整。
 - 可從「方案設定」重新命名目前方案，不會改變列管檔案或隔離身分。每個方案最多支援 1,000 個檔案／資料夾排除項目，可用逗號或換行大量新增，或透過「選擇檔案／資料夾」原生多選器混合選取。單一名稱會匹配任意層級的同名檔案或資料夾，相對路徑則精準排除單檔或資料夾子樹。Project 檔案樹快捷操作也接受混合選取；沒有啟用方案時操作會停用。
+- 既有方案可隨時使用「增加追蹤檔案」混合選擇檔案／資料夾，經安全解析與可勾選的辨識表確認後直接加入，不必刪除重建。「操作 → 新增 Namespace 檔案」可建立並追蹤各語言的 PHP／Properties 空白檔；「刪除 Namespace 檔案」則以 Diff 預覽後，用可回復交易從硬碟及追蹤清單移除整個語言家族。
 - 可在編輯器選取文字後使用「在地化管理器 → 以選取範圍建立翻譯文字」。選填的 `%key%` 樣板條件會依新增順序掃描目前方案工作目錄並套用方案排除清單；可取消的 JetBrains 背景任務與 Modal 進度條會顯示階段、目錄／檔案／命中統計及目前相對路徑。候選檔案採 lazy 單檔預覽，最後以多檔 Diff 再次確認；程式碼結果可編輯，產生的語言檔維持唯讀。
 - 偵測解析錯誤、空值、重複鍵、重複值、缺少語言及可能未使用的 key；重複值與可能未使用建議可在設定中隱藏。
 - 多個使用率 Regex 的實際命中會累加；同一行的重複呼叫分別計數，不同 Regex 若捕獲同一位置的相同 key 則只計一次。
@@ -178,6 +179,7 @@ flowchart LR
 | `updateSchemeSettings(...)` | 驗證並儲存方案名稱、base path、Regex 與排除清單，清除 cache 後重新計算 | 否，僅寫入插件方案資料 |
 | `addActiveSchemeExcludedDirectories(...)` | 驗證檔案樹所選檔案／資料夾、加入目前方案相對排除路徑、清除 cache 並重新計算 | 否，僅寫入插件方案資料 |
 | `discoverLanguageFiles(...)` | 依新方案載入預算安全掃描一個／多個指定資料夾，去重後回傳逐檔解析與識別結果 | 否 |
+| `discoverAdditionalLanguageFiles(...)` / `addTrackedFiles(...)` | 預覽混合檔案／資料夾解析結果，再驗證並追加勾選的可識別檔案到既有方案 | 否，僅寫入插件方案資料 |
 | `exportSchemeSettings()` | 將所有方案轉成可攜式、有版本的 JSON 內容 | 否 |
 | `previewSchemeSettingsImport(...)` | 解析 JSON，將相對路徑對應到目前專案並回傳可用性／parser 結果 | 否 |
 | `importSchemeSettings(...)` | 重新驗證檔案與掃描設定後建立新方案 | 否，僅寫入插件方案資料 |
@@ -194,6 +196,8 @@ flowchart LR
 | `repairEntries(...)` | 精準修復指定空值 entry | 是；UI 改走預覽流程 |
 | `previewLocaleVersion(...)` | 從來源 locale 產生新語言檔案內容與逐檔 Diff | 否 |
 | `createLocaleVersion(...)` | 驗證預覽狀態、建立新語言檔並更新方案檔案清單 | 是 |
+| `previewNamespaceFiles(...)` / `createNamespaceFiles(...)` | 依列管 PHP／Properties 結構參考推導各語言目標，預覽後建立並加入方案追蹤 | 預覽否；建立是 |
+| `previewDeleteNamespaceFiles(...)` / `deleteNamespaceFiles(...)` | 預覽 PHP／Properties Namespace 語言家族、驗證 hash，再以交易移除檔案與追蹤資料 | 預覽否；刪除是 |
 | `previewChanges(...)` | 在記憶體產生 before/after 與原檔 SHA-256 | 否 |
 | `applyPreviewedChanges(...)` | 重建預覽、比對 hash，無衝突才原子寫入 | 是 |
 

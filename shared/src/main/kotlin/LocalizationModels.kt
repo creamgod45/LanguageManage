@@ -384,6 +384,27 @@ data class LocaleVersionRequestDto(
 )
 
 @Serializable
+data class MergeTranslationsRequestDto(
+    val sourceNamespace: String,
+    val sourceKey: String,
+    val targetNamespace: String,
+    val targetKey: String,
+    val syncUsageLocations: Boolean = true,
+    val targetUsageReference: String = "",
+)
+
+@Serializable
+data class NamespaceFilesRequestDto(
+    val referenceFilePath: String,
+    val namespace: String,
+)
+
+@Serializable
+data class NamespaceFilesDeleteRequestDto(
+    val referenceFilePath: String,
+)
+
+@Serializable
 data class LanguageFileCandidateDto(
     val filePath: String,
     val format: String,

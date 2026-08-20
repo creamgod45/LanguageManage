@@ -123,6 +123,25 @@ class UsageScanSupportTest {
     }
 
     @Test
+    fun `full Laravel references map slash groups and vendor aliases to internal namespaces`() {
+        temp.resolve("src/laravel.php").apply {
+            parent.createDirectories()
+            writeText("""__('admin/customer.item'); __('courier::admin/customer.item');""")
+        }
+        val translation = entry("admin.customer", "item")
+        val settings =
+            UsageScanSettingsDto(
+                regexPatterns = listOf("""__\(['\"](?<key>[^'\"]+)['\"]\)"""),
+                excludedDirectories = emptyList(),
+            )
+
+        val result = UsageScanSupport.scan(temp, listOf(translation), emptyList(), settings)
+
+        assertEquals(2, result.counts[translation.id])
+        assertEquals(2, result.locations.size)
+    }
+
+    @Test
     fun `normalizes settings and rejects unsafe values`() {
         val normalized =
             UsageScanSupport.normalize(

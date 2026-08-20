@@ -104,6 +104,18 @@ interface LocalizationManagerRpcApi : RemoteApi<Unit> {
         settings: UsageScanSettingsDto,
     ): FolderDiscoveryDto
 
+    suspend fun discoverAdditionalLanguageFiles(
+        projectId: ProjectId,
+        schemeId: String,
+        selectedPaths: List<String>,
+    ): FolderDiscoveryDto
+
+    suspend fun addTrackedFiles(
+        projectId: ProjectId,
+        schemeId: String,
+        filePaths: List<String>,
+    )
+
     suspend fun exportSchemeSettings(projectId: ProjectId): String
 
     suspend fun previewSchemeSettingsImport(
@@ -204,6 +216,20 @@ interface LocalizationManagerRpcApi : RemoteApi<Unit> {
         expectedBeforeHashes: Map<String, String>,
     )
 
+    suspend fun previewMergeTranslations(
+        projectId: ProjectId,
+        schemeId: String,
+        request: MergeTranslationsRequestDto,
+    ): ChangePreviewDto
+
+    suspend fun applyPreviewedMergeTranslations(
+        projectId: ProjectId,
+        schemeId: String,
+        request: MergeTranslationsRequestDto,
+        editedFiles: List<EditedFileContentDto>,
+        expectedBeforeHashes: Map<String, String>,
+    )
+
     suspend fun repair(
         projectId: ProjectId,
         schemeId: String,
@@ -226,6 +252,32 @@ interface LocalizationManagerRpcApi : RemoteApi<Unit> {
         schemeId: String,
         request: LocaleVersionRequestDto,
         expectedTargetHashes: Map<String, String>,
+    )
+
+    suspend fun previewNamespaceFiles(
+        projectId: ProjectId,
+        schemeId: String,
+        request: NamespaceFilesRequestDto,
+    ): ChangePreviewDto
+
+    suspend fun createNamespaceFiles(
+        projectId: ProjectId,
+        schemeId: String,
+        request: NamespaceFilesRequestDto,
+        expectedTargetHashes: Map<String, String>,
+    )
+
+    suspend fun previewDeleteNamespaceFiles(
+        projectId: ProjectId,
+        schemeId: String,
+        request: NamespaceFilesDeleteRequestDto,
+    ): ChangePreviewDto
+
+    suspend fun deleteNamespaceFiles(
+        projectId: ProjectId,
+        schemeId: String,
+        request: NamespaceFilesDeleteRequestDto,
+        expectedBeforeHashes: Map<String, String>,
     )
 
     suspend fun previewChanges(

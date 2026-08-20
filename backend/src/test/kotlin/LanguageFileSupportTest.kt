@@ -362,6 +362,104 @@ class LanguageFileSupportTest {
     }
 
     @Test
+    fun `creates a new nested PHP namespace for every locale in the selected file family`() {
+        val family = temp.resolve("lang/vendor/package")
+        val documents =
+            listOf("en", "zh_TW", "es").map { locale ->
+                val file = family.resolve("$locale/components/button.php")
+                file.parent.createDirectories()
+                file.writeText("<?php\n\nreturn ['save' => 'Save'];\n")
+                LanguageFileCodec.parse(file, "scheme")
+            }
+
+        val targets =
+            LanguageNamespaceFileSupport.buildTargets(
+                documents,
+                documents.first().path.toString(),
+                "components.filament",
+            )
+
+        assertEquals(3, targets.size)
+        assertEquals(
+            setOf(
+                family.resolve("en/components/filament.php").toAbsolutePath().normalize(),
+                family.resolve("zh_TW/components/filament.php").toAbsolutePath().normalize(),
+                family.resolve("es/components/filament.php").toAbsolutePath().normalize(),
+            ),
+            targets.map { it.path }.toSet(),
+        )
+        assertTrue(targets.all { "return [" in it.content })
+    }
+
+    @Test
+    fun `selects only the referenced PHP namespace across locales for deletion`() {
+        val family = temp.resolve("lang/vendor/package")
+        val documents =
+            listOf("en", "zh_TW").flatMap { locale ->
+                listOf("components/button.php", "components/modal.php").map { relative ->
+                    val file = family.resolve("$locale/$relative")
+                    file.parent.createDirectories()
+                    file.writeText("<?php return ['title' => 'Title'];")
+                    LanguageFileCodec.parse(file, "scheme")
+                }
+            }
+        val reference = documents.first { it.locale == "en" && it.namespace == "components.button" }
+
+        val selected = LanguageNamespaceFileSupport.findFamilyNamespaceDocuments(documents, reference.path.toString())
+
+        assertEquals(2, selected.size)
+        assertEquals(setOf("en", "zh_TW"), selected.map { it.locale }.toSet())
+        assertTrue(selected.all { it.namespace == "components.button" })
+    }
+
+    @Test
+    fun `discovers explicitly selected files together with folders`() {
+        val folderFile = temp.resolve("lang/en/auth.php")
+        folderFile.parent.createDirectories()
+        folderFile.writeText("<?php return ['failed' => 'Failed'];")
+        val directFile = temp.resolve("messages_zh_TW.properties")
+        directFile.writeText("save=儲存")
+
+        val discovery =
+            LanguageFolderDiscovery.discoverSelectedPaths(
+                listOf(temp.resolve("lang").toString(), directFile.toString()),
+            )
+
+        assertEquals(setOf(folderFile.toRealPath().toString(), directFile.toRealPath().toString()), discovery.files.map { it.filePath }.toSet())
+        assertTrue(discovery.files.all { it.recognized })
+    }
+
+    @Test
+    fun `discovers every explicitly selected locale folder instead of only the first`() {
+        val en = temp.resolve("lang/en")
+        val zhTw = temp.resolve("lang/zh_TW")
+        val enFile = en.resolve("auth.php")
+        val zhTwFile = zhTw.resolve("auth.php")
+        en.createDirectories()
+        zhTw.createDirectories()
+        enFile.writeText("<?php return ['failed' => 'Failed'];")
+        zhTwFile.writeText("<?php return ['failed' => '失敗'];")
+
+        val discovery = LanguageFolderDiscovery.discoverSelectedPaths(listOf(en.toString(), zhTw.toString()))
+
+        assertEquals(listOf(en.toRealPath().toString(), zhTw.toRealPath().toString()), discovery.folderPaths)
+        assertEquals(setOf(enFile.toRealPath().toString(), zhTwFile.toRealPath().toString()), discovery.files.map { it.filePath }.toSet())
+        assertEquals(setOf("en", "zh_TW"), discovery.files.map { it.locale }.toSet())
+    }
+
+    @Test
+    fun `rejects Windows device names in PHP namespace paths`() {
+        val file = temp.resolve("lang/en/messages.php")
+        file.parent.createDirectories()
+        file.writeText("<?php return ['hello' => 'Hello'];")
+        val document = LanguageFileCodec.parse(file, "scheme")
+
+        assertFailsWith<IllegalArgumentException> {
+            LanguageNamespaceFileSupport.buildTargets(listOf(document), file.toString(), "components.CON")
+        }
+    }
+
+    @Test
     fun `parses Laravel language files with strict types declaration before return`() {
         val localeDir = temp.resolve("zh_TW").createDirectories()
         val file =

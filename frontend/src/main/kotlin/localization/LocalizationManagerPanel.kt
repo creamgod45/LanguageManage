@@ -873,6 +873,110 @@ internal class LocalizationManagerPanel(
         }
     }
 
+    private fun addNamespaceFiles() {
+        val scheme = activeScheme() ?: return showError(message("error.no.active.scheme"))
+        val references = namespaceReferenceOptions(scheme)
+        if (references.isEmpty()) return showError(message("namespace.files.no.reference"))
+        val dialog = NamespaceFilesDialog(project, references)
+        if (!dialog.showAndGet()) return
+        val request = dialog.request()
+        runAction {
+            val preview = repository.previewNamespaceFiles(scheme.id, request)
+            val accepted =
+                withContext(Dispatchers.EDT) {
+                    val disposable = Disposer.newDisposable("Language Manager namespace files preview")
+                    try {
+                        ChangePreviewDialog(
+                            project,
+                            preview,
+                            message("summary.namespace.files", request.namespace, preview.files.size),
+                            disposable,
+                        ).showAndGet()
+                    } finally {
+                        Disposer.dispose(disposable)
+                    }
+                }
+            if (accepted) {
+                repository.createNamespaceFiles(
+                    scheme.id,
+                    request,
+                    preview.files.associate { it.filePath to it.beforeSha256 },
+                )
+            }
+        }
+    }
+
+    private fun deleteNamespaceFiles() {
+        val scheme = activeScheme() ?: return showError(message("error.no.active.scheme"))
+        val references = namespaceReferenceOptions(scheme)
+        if (references.isEmpty()) return showError(message("namespace.files.no.reference"))
+        val dialog = DeleteNamespaceFilesDialog(project, references)
+        if (!dialog.showAndGet()) return
+        val request = NamespaceFilesDeleteRequestDto(dialog.referencePath())
+        runAction {
+            val preview = repository.previewDeleteNamespaceFiles(scheme.id, request)
+            val accepted =
+                withContext(Dispatchers.EDT) {
+                    val disposable = Disposer.newDisposable("Language Manager delete namespace files preview")
+                    try {
+                        ChangePreviewDialog(
+                            project,
+                            preview,
+                            message("summary.namespace.files.delete", preview.files.size),
+                            disposable,
+                        ).showAndGet()
+                    } finally {
+                        Disposer.dispose(disposable)
+                    }
+                }
+            if (accepted) {
+                repository.deleteNamespaceFiles(
+                    scheme.id,
+                    request,
+                    preview.files.associate { it.filePath to it.beforeSha256 },
+                )
+            }
+        }
+    }
+
+    private fun namespaceReferenceOptions(scheme: LanguageSchemeDto): List<NamespaceReferenceOption> {
+        val namespaceByFile = current.entries.associate { it.filePath to it.namespace }
+        return scheme.files.mapNotNull { path ->
+            val extension =
+                runCatching { Path.of(path).fileName.toString().substringAfterLast('.', "").lowercase() }.getOrNull()
+                    ?: return@mapNotNull null
+            if (extension !in setOf("php", "properties")) return@mapNotNull null
+            NamespaceReferenceOption(path, namespaceByFile[path].orEmpty(), extension)
+        }
+    }
+
+    private fun addTrackedFiles() {
+        val scheme = activeScheme() ?: return showError(message("error.no.active.scheme"))
+        val pathDialog = AdditionalTrackedPathSelectionDialog(project)
+        if (!pathDialog.showAndGet()) return
+        val selectedPaths = pathDialog.selectedPaths()
+        runAction {
+            val discovery = repository.discoverAdditionalLanguageFiles(scheme.id, selectedPaths)
+            val existing = scheme.files.map { Path.of(it).toAbsolutePath().normalize().toString() }.toSet()
+            val candidates =
+                discovery.files.filterNot { candidate ->
+                    Path.of(candidate.filePath).toAbsolutePath().normalize().toString() in existing
+                }
+            val selection =
+                withContext(Dispatchers.EDT) {
+                    if (candidates.isEmpty()) {
+                        Messages.showInfoMessage(project, message("tracking.none.new"), message("tracking.dialog.title"))
+                        emptyList()
+                    } else {
+                        AdditionalTrackedFilesDialog(project, candidates, discovery.truncated).let { dialog ->
+                            if (dialog.showAndGet()) dialog.selectedFiles() else emptyList()
+                        }
+                    }
+                }
+            if (selection.isNotEmpty()) repository.addTrackedFiles(scheme.id, selection)
+        }
+    }
+
     private fun editEntry() {
         val row = selectedRows().singleOrNull() ?: return showError(message("error.select.translation.key"))
         val scheme = activeScheme() ?: return
@@ -933,6 +1037,46 @@ internal class LocalizationManagerPanel(
                     }
                 } ?: return@runAction
             repository.applyPreviewedRename(
+                schemeId,
+                request,
+                editedFiles,
+                preview.files.associate { it.filePath to it.beforeSha256 },
+            )
+        }
+    }
+
+    private fun mergeTranslations() {
+        val rows = selectedRows()
+        if (rows.size != 2) return showError(message("error.select.merge.rows"))
+        val dialog = MergeTranslationsDialog(project, rows[0], rows[1])
+        if (!dialog.showAndGet()) return
+        val request = dialog.request()
+        runAction {
+            val schemeId = activeId()
+            val preview = repository.previewMergeTranslations(schemeId, request)
+            if (preview.files.isEmpty()) return@runAction
+            val editedFiles =
+                withContext(Dispatchers.EDT) {
+                    val disposable = Disposer.newDisposable("Language Manager editable translation merge preview")
+                    try {
+                        val previewDialog =
+                            ChangePreviewDialog(
+                                project,
+                                preview,
+                                message(
+                                    "summary.merge.translations",
+                                    translationIdentity(request.sourceNamespace, request.sourceKey),
+                                    translationIdentity(request.targetNamespace, request.targetKey),
+                                ),
+                                disposable,
+                                editableAfterEnabled = true,
+                            )
+                        if (previewDialog.showAndGet()) previewDialog.editedFiles() else null
+                    } finally {
+                        Disposer.dispose(disposable)
+                    }
+                } ?: return@runAction
+            repository.applyPreviewedMergeTranslations(
                 schemeId,
                 request,
                 editedFiles,
@@ -1353,9 +1497,12 @@ internal class LocalizationManagerPanel(
                 listOf(
                     message("action.add") to ::addEntry,
                     message("action.locale.version.add") to ::addLocaleVersion,
+                    message("action.namespace.files.add") to ::addNamespaceFiles,
+                    message("action.namespace.files.delete") to ::deleteNamespaceFiles,
                     message("action.edit") to ::editEntry,
                     message("action.delete.bulk") to ::deleteSelected,
                     message("action.rename") to ::renameKey,
+                    message("action.merge.translations") to ::mergeTranslations,
                     message("action.copy.key.to.locale") to ::copyKeysToLocaleValues,
                     message("action.ai.translate") to ::translateSelectedWithAi,
                     message("action.find.in.ide") to ::findSelectedKeyInProject,
@@ -1373,6 +1520,7 @@ internal class LocalizationManagerPanel(
             JPopupMenu().apply {
                 add(JMenuItem(message("action.scheme.by.files")).apply { addActionListener { createScheme() } })
                 add(JMenuItem(message("action.scheme.by.folder")).apply { addActionListener { createSchemeFromFolder() } })
+                add(JMenuItem(message("action.scheme.tracking.add")).apply { addActionListener { addTrackedFiles() } })
                 addSeparator()
                 add(JMenuItem(message("action.scheme.import.settings")).apply { addActionListener { importSchemeSettings() } })
                 add(JMenuItem(message("action.scheme.export.settings")).apply { addActionListener { exportSchemeSettings() } })
@@ -1519,6 +1667,199 @@ internal class LocalizationManagerPanel(
     override fun dispose() {
         schemeLoadIndicator?.cancel()
         scope.cancel()
+    }
+}
+
+private data class NamespaceReferenceOption(
+    val path: String,
+    val namespace: String,
+    val format: String,
+)
+
+private class NamespaceFilesDialog(
+    project: Project,
+    references: List<NamespaceReferenceOption>,
+) : DialogWrapper(project) {
+    private val reference = ComboBox(references.toTypedArray())
+    private val namespace = JBTextField()
+
+    init {
+        title = message("namespace.files.dialog.title")
+        setOKButtonText(message("namespace.files.preview"))
+        reference.renderer =
+            object : DefaultListCellRenderer() {
+                override fun getListCellRendererComponent(
+                    list: JList<*>?,
+                    value: Any?,
+                    index: Int,
+                    selected: Boolean,
+                    focus: Boolean,
+                ): Component {
+                    val component = super.getListCellRendererComponent(list, value, index, selected, focus)
+                    val option = value as? NamespaceReferenceOption
+                    text = option?.let { message("namespace.files.reference.item", it.namespace.ifBlank { message("field.namespace.root") }, it.format.uppercase(), it.path) }.orEmpty()
+                    return component
+                }
+            }
+        init()
+    }
+
+    fun request(): NamespaceFilesRequestDto =
+        NamespaceFilesRequestDto(
+            referenceFilePath = (reference.selectedItem as NamespaceReferenceOption).path,
+            namespace = namespace.text.trim(),
+        )
+
+    override fun createCenterPanel(): JComponent =
+        JPanel().apply {
+            layout = BoxLayout(this, BoxLayout.Y_AXIS)
+            preferredSize = Dimension(JBUI.scale(760), JBUI.scale(150))
+            add(JBLabel(message("namespace.files.reference")))
+            add(reference)
+            add(Box.createVerticalStrut(JBUI.scale(8)))
+            add(JBLabel(message("namespace.files.namespace")))
+            add(namespace)
+            add(Box.createVerticalStrut(JBUI.scale(5)))
+            add(JBLabel(message("namespace.files.help")))
+        }
+
+    override fun doValidate(): ValidationInfo? {
+        val value = namespace.text.trim()
+        val reserved = Regex("(?i)(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])")
+        val valid =
+            value.length in 1..128 &&
+                value.split('.').all { it.matches(Regex("[A-Za-z0-9_-]{1,64}")) && !it.matches(reserved) }
+        return if (valid) null else ValidationInfo(message("namespace.files.invalid"), namespace)
+    }
+
+    override fun getPreferredFocusedComponent(): JComponent = namespace
+}
+
+private class DeleteNamespaceFilesDialog(
+    project: Project,
+    references: List<NamespaceReferenceOption>,
+) : DialogWrapper(project) {
+    private val reference = ComboBox(references.toTypedArray())
+
+    init {
+        title = message("namespace.files.delete.dialog.title")
+        setOKButtonText(message("namespace.files.delete.preview"))
+        reference.renderer =
+            object : DefaultListCellRenderer() {
+                override fun getListCellRendererComponent(
+                    list: JList<*>?,
+                    value: Any?,
+                    index: Int,
+                    selected: Boolean,
+                    focus: Boolean,
+                ): Component {
+                    val component = super.getListCellRendererComponent(list, value, index, selected, focus)
+                    val option = value as? NamespaceReferenceOption
+                    text = option?.let { message("namespace.files.reference.item", it.namespace.ifBlank { message("field.namespace.root") }, it.format.uppercase(), it.path) }.orEmpty()
+                    return component
+                }
+            }
+        init()
+    }
+
+    fun referencePath(): String = (reference.selectedItem as NamespaceReferenceOption).path
+
+    override fun createCenterPanel(): JComponent =
+        JPanel().apply {
+            layout = BoxLayout(this, BoxLayout.Y_AXIS)
+            preferredSize = Dimension(JBUI.scale(760), JBUI.scale(115))
+            add(JBLabel(message("namespace.files.delete.reference")))
+            add(reference)
+            add(Box.createVerticalStrut(JBUI.scale(6)))
+            add(JBLabel(message("namespace.files.delete.help")))
+        }
+}
+
+private class AdditionalTrackedFilesDialog(
+    project: Project,
+    candidates: List<LanguageFileCandidateDto>,
+    private val truncated: Boolean,
+) : DialogWrapper(project) {
+    private val model = FolderCandidateTableModel(candidates)
+    private val table = JBTable(model)
+
+    init {
+        title = message("tracking.dialog.title")
+        setOKButtonText(message("tracking.dialog.add"))
+        init()
+        model.addTableModelListener { isOKActionEnabled = model.rows.any { it.selected && it.candidate.recognized } }
+        isOKActionEnabled = model.rows.any { it.selected && it.candidate.recognized }
+    }
+
+    fun selectedFiles(): List<String> =
+        model.rows.filter { it.selected && it.candidate.recognized }.map { it.candidate.filePath }
+
+    override fun createCenterPanel(): JComponent =
+        JPanel(BorderLayout(6, 6)).apply {
+            preferredSize = Dimension(JBUI.scale(1050), JBUI.scale(560))
+            add(
+                JBLabel(
+                    message("tracking.dialog.summary", model.rows.count { it.candidate.recognized }, model.rows.size) +
+                        if (truncated) message("folder.discovery.truncated") else "",
+                ),
+                BorderLayout.NORTH,
+            )
+            table.autoCreateRowSorter = true
+            table.autoResizeMode = JTable.AUTO_RESIZE_OFF
+            listOf(70, 430, 70, 100, 120, 80, 320).forEachIndexed { index, width ->
+                table.columnModel.getColumn(index).preferredWidth = width
+            }
+            add(JBScrollPane(table), BorderLayout.CENTER)
+        }
+}
+
+private class AdditionalTrackedPathSelectionDialog(
+    private val dialogProject: Project,
+) : DialogWrapper(dialogProject) {
+    private val pathModel = DefaultListModel<String>()
+    private val pathList = JBList(pathModel).apply { visibleRowCount = 12 }
+
+    init {
+        title = message("tracking.paths.dialog.title")
+        setOKButtonText(message("tracking.paths.inspect"))
+        init()
+        isOKActionEnabled = false
+    }
+
+    fun selectedPaths(): List<String> = (0 until pathModel.size()).map(pathModel::getElementAt)
+
+    override fun createCenterPanel(): JComponent =
+        JPanel(BorderLayout(0, JBUI.scale(6))).apply {
+            preferredSize = Dimension(JBUI.scale(760), JBUI.scale(420))
+            add(JBLabel(message("tracking.chooser.description")), BorderLayout.NORTH)
+            add(JBScrollPane(pathList), BorderLayout.CENTER)
+            add(
+                ResponsiveGridPanel(JBUI.scale(6), JBUI.scale(4)).apply {
+                    add(JButton(message("tracking.paths.add.files")).apply { addActionListener { choosePaths(files = true) } })
+                    add(JButton(message("tracking.paths.add.folders")).apply { addActionListener { choosePaths(files = false) } })
+                    add(
+                        JButton(message("tracking.paths.remove")).apply {
+                            addActionListener {
+                                pathList.selectedIndices.sortedDescending().forEach(pathModel::remove)
+                                isOKActionEnabled = pathModel.size() > 0
+                            }
+                        },
+                    )
+                },
+                BorderLayout.SOUTH,
+            )
+        }
+
+    private fun choosePaths(files: Boolean) {
+        val descriptor =
+            FileChooserDescriptor(files, !files, false, false, false, true)
+                .withTitle(message(if (files) "tracking.paths.files.title" else "tracking.paths.folders.title"))
+        val existing = selectedPaths().toMutableSet()
+        FileChooserFactory.getInstance().createFileChooser(descriptor, dialogProject, pathList).choose(dialogProject)
+            .map { it.path }
+            .filter(existing::add)
+            .forEach(pathModel::addElement)
+        isOKActionEnabled = pathModel.size() > 0
     }
 }
 
@@ -2154,6 +2495,97 @@ private class RenameKeyDialog(
 
     override fun getPreferredFocusedComponent(): JComponent = keyField
 }
+
+private class MergeTranslationsDialog(
+    project: Project,
+    first: JoinedTranslationRow,
+    second: JoinedTranslationRow,
+) : DialogWrapper(project, true) {
+    private var source = first
+    private var target = second
+    private val sourceValue = JBLabel()
+    private val targetValue = JBLabel()
+    private val targetReferenceField = JBTextField()
+    private val syncCheckBox = JBCheckBox(message("dialog.merge.sync.usages"), true)
+
+    init {
+        title = message("dialog.merge.title")
+        updateRows()
+        init()
+    }
+
+    fun request() =
+        MergeTranslationsRequestDto(
+            sourceNamespace = source.namespace,
+            sourceKey = source.key,
+            targetNamespace = target.namespace,
+            targetKey = target.key,
+            syncUsageLocations = syncCheckBox.isSelected,
+            targetUsageReference = targetReferenceField.text.trim(),
+        )
+
+    override fun doValidate(): ValidationInfo? =
+        if (syncCheckBox.isSelected && targetReferenceField.text.trim().isEmpty()) {
+            ValidationInfo(message("error.merge.target.reference.required"), targetReferenceField)
+        } else {
+            null
+        }
+
+    override fun createCenterPanel(): JComponent =
+        JPanel().apply {
+            layout = BoxLayout(this, BoxLayout.Y_AXIS)
+            border = JBUI.Borders.empty(8)
+            add(JBLabel(message("dialog.merge.source")).apply { alignmentX = Component.LEFT_ALIGNMENT })
+            add(sourceValue.apply { alignmentX = Component.LEFT_ALIGNMENT })
+            add(Box.createVerticalStrut(8))
+            add(
+                JButton(message("dialog.merge.swap")).apply {
+                    alignmentX = Component.LEFT_ALIGNMENT
+                    addActionListener {
+                        val previous = source
+                        source = target
+                        target = previous
+                        updateRows()
+                    }
+                },
+            )
+            add(Box.createVerticalStrut(8))
+            add(JBLabel(message("dialog.merge.target")).apply { alignmentX = Component.LEFT_ALIGNMENT })
+            add(targetValue.apply { alignmentX = Component.LEFT_ALIGNMENT })
+            add(Box.createVerticalStrut(12))
+            add(syncCheckBox.apply { alignmentX = Component.LEFT_ALIGNMENT })
+            add(Box.createVerticalStrut(6))
+            add(JBLabel(message("dialog.merge.target.reference")).apply { alignmentX = Component.LEFT_ALIGNMENT })
+            add(
+                targetReferenceField.apply {
+                    alignmentX = Component.LEFT_ALIGNMENT
+                    maximumSize = Dimension(Int.MAX_VALUE, preferredSize.height)
+                },
+            )
+            add(Box.createVerticalStrut(4))
+            add(JBLabel(message("dialog.merge.target.reference.help")).apply { alignmentX = Component.LEFT_ALIGNMENT })
+            add(Box.createVerticalStrut(10))
+            add(JBLabel(message("dialog.merge.value.policy")).apply { alignmentX = Component.LEFT_ALIGNMENT })
+        }
+
+    override fun getPreferredFocusedComponent(): JComponent = targetReferenceField
+
+    private fun updateRows() {
+        sourceValue.text = translationIdentity(source.namespace, source.key)
+        targetValue.text = translationIdentity(target.namespace, target.key)
+        targetReferenceField.text = laravelTranslationReference(target.namespace, target.key)
+    }
+}
+
+private fun translationIdentity(
+    namespace: String,
+    key: String,
+): String = if (namespace.isBlank()) key else "$namespace.$key"
+
+internal fun laravelTranslationReference(
+    namespace: String,
+    key: String,
+): String = if (namespace.isBlank()) key else "${namespace.replace('.', '/')}.$key"
 
 internal class ChangePreviewDialog(
     private val project: Project,

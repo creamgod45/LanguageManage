@@ -173,6 +173,18 @@ internal object IdeFileReloadSupport {
         }
         return IdeFileReloadResult(requested.size, files.size, documents.size, reloadedDocuments)
     }
+
+    fun refreshDeletedFiles(paths: Collection<Path>) {
+        val parents =
+            paths.asSequence()
+                .mapNotNull(Path::getParent)
+                .map(Path::toAbsolutePath)
+                .map(Path::normalize)
+                .distinct()
+                .mapNotNull { VirtualFileManager.getInstance().refreshAndFindFileByNioPath(it) }
+                .toList()
+        if (parents.isNotEmpty()) VfsUtil.markDirtyAndRefresh(false, true, false, *parents.toTypedArray())
+    }
 }
 
 internal object LanguageFolderDiscovery {
@@ -238,6 +250,49 @@ internal object LanguageFolderDiscovery {
             files = candidates.values.sortedBy { it.filePath.lowercase() },
             truncated = truncated,
             folderPaths = roots.map(Path::toString),
+        )
+    }
+
+    fun discoverSelectedPaths(
+        rawPaths: List<String>,
+        settings: UsageScanSettingsDto = UsageScanSettingsDto(),
+    ): FolderDiscoveryDto {
+        require(rawPaths.isNotEmpty()) { backendMessage("folder.selection.required") }
+        val paths = rawPaths.map(SafeLanguageFileAccess::validateExistingPath).distinct()
+        val directories = paths.filter(Files::isDirectory)
+        val discovered =
+            if (directories.isEmpty()) {
+                FolderDiscoveryDto(paths.first().parent?.toString().orEmpty())
+            } else {
+                discover(directories.map(Path::toString), settings)
+            }
+        val candidates = discovered.files.associateByTo(linkedMapOf()) { it.filePath }
+        val budget = LanguageLoadBudget(settings)
+        var truncated = discovered.truncated
+        paths.filter(Files::isRegularFile).forEach { file ->
+            if (candidates.size >= MAX_FILES) {
+                truncated = true
+                return@forEach
+            }
+            val extension = file.extension.lowercase()
+            val candidate =
+                if (extension in extensions) {
+                    inspect(file, extension, settings, budget)
+                } else {
+                    LanguageFileCandidateDto(
+                        filePath = file.toString(),
+                        format = extension.uppercase(),
+                        recognized = false,
+                        errorMessage = backendMessage("format.unsupported"),
+                    )
+                }
+            candidates.putIfAbsent(candidate.filePath, candidate)
+        }
+        return FolderDiscoveryDto(
+            folderPath = paths.first().toString(),
+            files = candidates.values.sortedBy { it.filePath.lowercase() },
+            truncated = truncated,
+            folderPaths = paths.map(Path::toString),
         )
     }
 
@@ -365,6 +420,152 @@ internal object LanguageLocaleVersionSupport {
         val namespace = propertiesIdentity(path).first
         return "${namespace}_$targetLocale.properties"
     }
+}
+
+internal object LanguageNamespaceFileSupport {
+    private val segmentPattern = Regex("[A-Za-z0-9_-]{1,64}")
+    private val windowsDevices =
+        buildSet {
+            addAll(listOf("CON", "PRN", "AUX", "NUL"))
+            (1..9).forEach { index ->
+                add("COM$index")
+                add("LPT$index")
+            }
+        }
+
+    fun buildTargets(
+        documents: List<ParsedLanguageFile>,
+        referenceFilePath: String,
+        namespace: String,
+    ): List<LocaleVersionTarget> {
+        val segments = namespace.split('.')
+        require(
+            namespace.length <= 128 &&
+                segments.isNotEmpty() &&
+                segments.all { it.matches(segmentPattern) && it.uppercase() !in windowsDevices },
+        ) {
+            backendMessage("namespace.invalid")
+        }
+        val referencePath = SafeLanguageFileAccess.validate(referenceFilePath)
+        val reference = findReference(documents, referencePath)
+        val targets =
+            when (reference.path.extension.lowercase()) {
+                "php" -> buildPhpTargets(documents, reference, segments)
+                "properties" -> buildPropertiesTargets(documents, reference, namespace)
+                else -> error(backendMessage("namespace.format.unsupported"))
+            }
+        require(targets.isNotEmpty()) { backendMessage("namespace.locale.missing") }
+        require(targets.map { it.path }.distinct().size == targets.size) { backendMessage("locale.version.path.conflict") }
+        targets.forEach { require(!Files.exists(it.path)) { backendMessage("namespace.target.exists", it.path) } }
+        return targets.sortedBy { it.path.toString().lowercase() }
+    }
+
+    fun findFamilyNamespaceDocuments(
+        documents: List<ParsedLanguageFile>,
+        referenceFilePath: String,
+    ): List<ParsedLanguageFile> {
+        val referencePath = SafeLanguageFileAccess.validate(referenceFilePath)
+        val reference = findReference(documents, referencePath)
+        val family =
+            when (reference.path.extension.lowercase()) {
+                "php" -> {
+                    val identity = phpIdentity(reference.path)
+                    val familyRoot = identity.localeDirectory.parent ?: error(backendMessage("locale.version.path.invalid"))
+                    documents.filter { document ->
+                        document.path.extension.equals("php", true) &&
+                            phpIdentity(document.path).let { candidate ->
+                                candidate.localeDirectory.parent == familyRoot && candidate.namespace == identity.namespace
+                            }
+                    }
+                }
+
+                "properties" ->
+                    documents.filter { document ->
+                        document.path.extension.equals("properties", true) &&
+                            document.path.parent == reference.path.parent &&
+                            document.namespace == reference.namespace
+                    }
+
+                else -> error(backendMessage("namespace.format.unsupported"))
+            }
+        require(family.isNotEmpty()) { backendMessage("namespace.locale.missing") }
+        return family.sortedBy { it.path.toString().lowercase() }
+    }
+
+    private fun buildPhpTargets(
+        documents: List<ParsedLanguageFile>,
+        reference: ParsedLanguageFile,
+        segments: List<String>,
+    ): List<LocaleVersionTarget> {
+        val familyRoot = phpIdentity(reference.path).localeDirectory.parent
+            ?: error(backendMessage("locale.version.path.invalid"))
+        val localeDirectories =
+            documents.asSequence()
+                .filter { it.path.extension.equals("php", true) }
+                .map { phpIdentity(it.path) }
+                .filter { it.localeDirectory.parent == familyRoot }
+                .map { it.localeDirectory }
+                .distinct()
+                .toList()
+        return localeDirectories.map { localeDirectory ->
+            val relative =
+                segments.dropLast(1).fold(localeDirectory) { path, segment -> path.resolve(segment) }
+                    .resolve("${segments.last()}.php")
+            emptyTarget(safeTargetUnder(localeDirectory, relative), localeDirectory.fileName.toString(), segments.joinToString("."))
+        }
+    }
+
+    private fun buildPropertiesTargets(
+        documents: List<ParsedLanguageFile>,
+        reference: ParsedLanguageFile,
+        namespace: String,
+    ): List<LocaleVersionTarget> {
+        val parent = reference.path.parent ?: error(backendMessage("locale.version.path.invalid"))
+        val family = documents.filter { it.path.extension.equals("properties", true) && it.path.parent == parent }
+        return family.map { it.locale }.distinct().map { locale ->
+            val usesUnsuffixedEnglish =
+                locale == "en" && family.any { it.locale == locale && it.path.nameWithoutExtension == it.namespace }
+            val fileName = if (usesUnsuffixedEnglish) "$namespace.properties" else "${namespace}_$locale.properties"
+            emptyTarget(parent.resolve(fileName), locale, namespace)
+        }
+    }
+
+    private fun emptyTarget(
+        rawPath: Path,
+        locale: String,
+        namespace: String,
+    ): LocaleVersionTarget {
+        val path = rawPath.toAbsolutePath().normalize()
+        val document = ParsedLanguageFile(path, locale, namespace, linkedMapOf())
+        return LocaleVersionTarget(path, LanguageFileCodec.render(document))
+    }
+
+    private fun safeTargetUnder(
+        root: Path,
+        target: Path,
+    ): Path {
+        val normalizedRoot = root.toAbsolutePath().normalize()
+        val normalizedTarget = target.toAbsolutePath().normalize()
+        require(normalizedTarget.startsWith(normalizedRoot) && normalizedTarget != normalizedRoot) {
+            backendMessage("locale.version.path.invalid")
+        }
+        val existingAncestor =
+            generateSequence(normalizedTarget.parent) { it.parent }
+                .firstOrNull(Files::exists)
+                ?: error(backendMessage("locale.version.path.invalid"))
+        require(existingAncestor.toRealPath().startsWith(normalizedRoot.toRealPath())) {
+            backendMessage("locale.version.path.invalid")
+        }
+        return normalizedTarget
+    }
+
+    private fun findReference(
+        documents: List<ParsedLanguageFile>,
+        referencePath: Path,
+    ): ParsedLanguageFile =
+        documents.firstOrNull { document ->
+            runCatching { document.path.toRealPath() }.getOrNull() == referencePath
+        } ?: error(backendMessage("namespace.reference.not.tracked"))
 }
 
 internal object LanguageFileCodec {

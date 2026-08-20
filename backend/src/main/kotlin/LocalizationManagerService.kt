@@ -52,6 +52,11 @@ class LocalizationManagerService(
         val activeSchemeId: String? = null,
     )
 
+    private data class MovedNamespaceFile(
+        val original: Path,
+        val temporary: Path,
+    )
+
     @Serializable
     private data class CacheStore(
         val formatVersion: Int = 0,
@@ -474,6 +479,49 @@ class LocalizationManagerService(
         folderPaths: List<String>,
         rawSettings: UsageScanSettingsDto,
     ): FolderDiscoveryDto = LanguageFolderDiscovery.discover(folderPaths, UsageScanSupport.normalize(rawSettings))
+
+    fun discoverAdditionalLanguageFiles(
+        schemeId: String,
+        selectedPaths: List<String>,
+    ): FolderDiscoveryDto {
+        val scheme = requireScheme(schemeId)
+        return LanguageFolderDiscovery.discoverSelectedPaths(selectedPaths, scheme.usageScanSettings)
+    }
+
+    suspend fun addTrackedFiles(
+        schemeId: String,
+        filePaths: List<String>,
+    ) = mutex.withLock {
+        require(filePaths.isNotEmpty() && filePaths.size <= 500) { backendMessage("tracking.selection.invalid") }
+        val scheme = requireScheme(schemeId)
+        val normalized = filePaths.map { SafeLanguageFileAccess.validate(it).toString() }.distinct()
+        val discovery = LanguageFolderDiscovery.discoverSelectedPaths(normalized, scheme.usageScanSettings)
+        val candidates = discovery.files.associateBy { Path.of(it.filePath).toAbsolutePath().normalize().toString() }
+        normalized.forEach { path ->
+            val candidate = candidates[Path.of(path).toAbsolutePath().normalize().toString()]
+            require(candidate?.recognized == true) {
+                candidate?.errorMessage ?: backendMessage("tracking.file.unrecognized", Path.of(path).fileName)
+            }
+        }
+        val existing = scheme.files.map { Path.of(it).toAbsolutePath().normalize().toString() }.toSet()
+        val additions = normalized.filterNot { Path.of(it).toAbsolutePath().normalize().toString() in existing }
+        require(additions.isNotEmpty()) { backendMessage("tracking.no.new.files") }
+        val updated =
+            scheme.copy(
+                files = scheme.files + additions,
+                updatedAtEpochMs = System.currentTimeMillis(),
+            )
+        // Validate aggregate scheme budgets before changing persisted metadata.
+        parseDocuments(updated)
+        mutableState.value =
+            mutableState.value.copy(
+                schemes = mutableState.value.schemes.map { if (it.id == schemeId) updated else it },
+                errorMessage = null,
+            )
+        Files.deleteIfExists(cacheFile(schemeId))
+        persistSchemes()
+        if (mutableState.value.activeSchemeId == schemeId) loadScheme(updated, true)
+    }
 
     suspend fun exportSchemeSettings(): String =
         mutex.withLock {
@@ -939,6 +987,119 @@ class LocalizationManagerService(
         return ChangePreviewDto(languageChanges + sourceChanges)
     }
 
+    suspend fun previewMergeTranslations(
+        schemeId: String,
+        request: MergeTranslationsRequestDto,
+    ): ChangePreviewDto =
+        mutex.withLock {
+            val context = currentCoroutineContext()
+            buildMergeTranslationsPreview(requireScheme(schemeId), request) { context.ensureActive() }
+        }
+
+    suspend fun applyPreviewedMergeTranslations(
+        schemeId: String,
+        request: MergeTranslationsRequestDto,
+        editedFiles: List<EditedFileContentDto>,
+        expectedBeforeHashes: Map<String, String>,
+    ) = mutex.withLock {
+        val scheme = requireScheme(schemeId)
+        val context = currentCoroutineContext()
+        val preview = buildMergeTranslationsPreview(scheme, request) { context.ensureActive() }
+        require(preview.files.associate { it.filePath to it.beforeSha256 } == expectedBeforeHashes) {
+            backendMessage("preview.changed")
+        }
+        require(editedFiles.size == editedFiles.map { it.filePath }.distinct().size) {
+            backendMessage("preview.files.mismatch")
+        }
+        val editedByPath = editedFiles.associate { it.filePath to it.content }
+        require(editedByPath.keys == preview.files.mapTo(linkedSetOf()) { it.filePath }) {
+            backendMessage("preview.files.mismatch")
+        }
+        editedByPath.values.forEach { content ->
+            require(content.toByteArray(StandardCharsets.UTF_8).size <= MAX_EDITED_PREVIEW_BYTES) {
+                backendMessage("preview.content.too.large", MAX_EDITED_PREVIEW_BYTES / 1024)
+            }
+            require(content.none { it == '\u0000' || (it.code < 32 && it !in "\n\r\t") }) {
+                backendMessage("input.control")
+            }
+        }
+        val written = mutableListOf<FileChangePreviewDto>()
+        try {
+            preview.files.forEach { change ->
+                SafeLanguageFileAccess.atomicWrite(Path.of(change.filePath), editedByPath.getValue(change.filePath))
+                written += change
+            }
+        } catch (error: Exception) {
+            written.asReversed().forEach { change ->
+                runCatching { SafeLanguageFileAccess.atomicWrite(Path.of(change.filePath), change.beforeContent) }
+                    .exceptionOrNull()
+                    ?.let(error::addSuppressed)
+            }
+            throw error
+        }
+        reloadUserFiles(written.map { Path.of(it.filePath) })
+        loadScheme(scheme, true)
+    }
+
+    private fun buildMergeTranslationsPreview(
+        scheme: LanguageSchemeDto,
+        request: MergeTranslationsRequestDto,
+        cancellationCheck: () -> Unit,
+    ): ChangePreviewDto {
+        val sourceKey = validateKey(request.sourceKey)
+        val targetKey = validateKey(request.targetKey)
+        listOf(request.sourceNamespace, request.targetNamespace).forEach { namespace ->
+            require(namespace.isEmpty() || namespace.matches(Regex("[A-Za-z0-9_.-]{1,128}"))) {
+                backendMessage("namespace.invalid")
+            }
+        }
+        require(request.sourceNamespace != request.targetNamespace || sourceKey != targetKey) {
+            backendMessage("merge.same.translation")
+        }
+        val sourceEntries =
+            mutableState.value.entries.filter { it.namespace == request.sourceNamespace && it.key == sourceKey }
+        require(sourceEntries.isNotEmpty()) { backendMessage("entry.key.not.found", sourceKey) }
+        require(mutableState.value.entries.any { it.namespace == request.targetNamespace && it.key == targetKey }) {
+            backendMessage("merge.target.not.found")
+        }
+        val targetReference =
+            sanitizeText(request.targetUsageReference, 512).also { reference ->
+                if (request.syncUsageLocations) require(reference.isNotBlank()) { backendMessage("merge.target.reference.required") }
+            }
+        val documents = parseDocuments(scheme, cancellationCheck)
+        require(documents.none { document -> document.issues.any { it.severity == IssueSeverity.ERROR } }) {
+            backendMessage("edit.fix.parse.first")
+        }
+        val beforeByPath = documents.associate { it.path to SafeLanguageFileAccess.read(it.path) }
+        val languageChanges =
+            TranslationMergeSupport
+                .apply(documents, request.sourceNamespace, sourceKey, request.targetNamespace, targetKey)
+                .mapNotNull { document ->
+                    cancellationCheck()
+                    val before = beforeByPath.getValue(document.path)
+                    val after = LanguageFileCodec.render(document)
+                    if (before == after) null else FileChangePreviewDto(document.path.toString(), before, after, contentSha256(before))
+                }
+        require(languageChanges.isNotEmpty()) { backendMessage("entry.key.not.found", sourceKey) }
+        val sourceChanges =
+            if (request.syncUsageLocations) {
+                val root = usageScanRoot(scheme) ?: error(backendMessage("usage.exclusion.root.unavailable"))
+                UsageSourceRenameSupport.buildMergePreview(
+                    root = root,
+                    locations = activeUsageLocations,
+                    allowedEntryIds = sourceEntries.mapTo(hashSetOf()) { it.id },
+                    sourceNamespace = request.sourceNamespace,
+                    sourceKey = sourceKey,
+                    targetUsageReference = targetReference,
+                    targetKey = targetKey,
+                    cancellationCheck = cancellationCheck,
+                )
+            } else {
+                emptyList()
+            }
+        return ChangePreviewDto(languageChanges + sourceChanges)
+    }
+
     suspend fun repair(schemeId: String) =
         mutex.withLock {
             val scheme = requireScheme(schemeId)
@@ -1026,6 +1187,122 @@ class LocalizationManagerService(
             createdFiles.asReversed().forEach { path -> runCatching { Files.deleteIfExists(path) } }
             mutableState.value = previousState
             runCatching { persistSchemes() }
+            throw error
+        }
+    }
+
+    suspend fun previewNamespaceFiles(
+        schemeId: String,
+        request: NamespaceFilesRequestDto,
+    ): ChangePreviewDto = mutex.withLock {
+        buildNamespaceFilesPreview(requireScheme(schemeId), request)
+    }
+
+    suspend fun createNamespaceFiles(
+        schemeId: String,
+        request: NamespaceFilesRequestDto,
+        expectedTargetHashes: Map<String, String>,
+    ) = mutex.withLock {
+        val scheme = requireScheme(schemeId)
+        val preview = buildNamespaceFilesPreview(scheme, request)
+        require(preview.files.associate { it.filePath to it.beforeSha256 } == expectedTargetHashes) {
+            backendMessage("preview.changed")
+        }
+        preview.files.forEach { require(!Files.exists(Path.of(it.filePath))) { backendMessage("namespace.target.exists", it.filePath) } }
+        val previousState = mutableState.value
+        val createdFiles = mutableListOf<Path>()
+        try {
+            preview.files.forEach { change ->
+                val path = Path.of(change.filePath).toAbsolutePath().normalize()
+                path.parent.createDirectories()
+                Files.createFile(path)
+                createdFiles.add(path)
+                SafeLanguageFileAccess.atomicWrite(path, change.afterContent)
+            }
+            val updated =
+                scheme.copy(
+                    files = (scheme.files + createdFiles.map(Path::toString)).distinct(),
+                    updatedAtEpochMs = System.currentTimeMillis(),
+                )
+            mutableState.value =
+                previousState.copy(
+                    schemes = previousState.schemes.map { if (it.id == schemeId) updated else it },
+                    activeSchemeId = schemeId,
+                    errorMessage = null,
+                )
+            persistSchemes()
+            reloadUserFiles(createdFiles)
+            loadScheme(updated, true)
+        } catch (error: Exception) {
+            createdFiles.asReversed().forEach { path -> runCatching { Files.deleteIfExists(path) } }
+            mutableState.value = previousState
+            runCatching { persistSchemes() }
+            throw error
+        }
+    }
+
+    suspend fun previewDeleteNamespaceFiles(
+        schemeId: String,
+        request: NamespaceFilesDeleteRequestDto,
+    ): ChangePreviewDto = mutex.withLock {
+        buildDeleteNamespaceFilesPreview(requireScheme(schemeId), request)
+    }
+
+    suspend fun deleteNamespaceFiles(
+        schemeId: String,
+        request: NamespaceFilesDeleteRequestDto,
+        expectedBeforeHashes: Map<String, String>,
+    ) = mutex.withLock {
+        val scheme = requireScheme(schemeId)
+        val preview = buildDeleteNamespaceFilesPreview(scheme, request)
+        require(preview.files.associate { it.filePath to it.beforeSha256 } == expectedBeforeHashes) {
+            backendMessage("preview.changed")
+        }
+        val paths =
+            preview.files.map { change ->
+                SafeLanguageFileAccess.validate(change.filePath).also { path ->
+                    require(contentSha256(SafeLanguageFileAccess.read(path)) == change.beforeSha256) {
+                        backendMessage("preview.changed.file", path.fileName)
+                    }
+                }
+            }
+        val previousState = mutableState.value
+        val moved = mutableListOf<MovedNamespaceFile>()
+        try {
+            paths.forEach { path -> moved.add(moveNamespaceFileToTemporary(path)) }
+            val removed = paths.map { it.toAbsolutePath().normalize().toString() }.toSet()
+            val updated =
+                scheme.copy(
+                    files = scheme.files.filterNot { Path.of(it).toAbsolutePath().normalize().toString() in removed },
+                    updatedAtEpochMs = System.currentTimeMillis(),
+                )
+            require(updated.files.isNotEmpty()) { backendMessage("namespace.delete.last.files") }
+            mutableState.value =
+                previousState.copy(
+                    schemes = previousState.schemes.map { if (it.id == schemeId) updated else it },
+                    activeSchemeId = schemeId,
+                    errorMessage = null,
+                )
+            Files.deleteIfExists(cacheFile(schemeId))
+            persistSchemes()
+            IdeFileReloadSupport.refreshDeletedFiles(paths)
+            loadScheme(updated, true)
+            moved.forEach { item ->
+                runCatching { Files.deleteIfExists(item.temporary) }
+                    .onFailure { error -> LOG.warn("Failed to remove a committed namespace deletion backup", error) }
+            }
+        } catch (error: Exception) {
+            moved.asReversed().forEach { item ->
+                runCatching {
+                    require(!Files.exists(item.original)) { backendMessage("preview.changed.file", item.original.fileName) }
+                    Files.move(item.temporary, item.original, java.nio.file.StandardCopyOption.ATOMIC_MOVE)
+                }.recoverCatching {
+                    Files.move(item.temporary, item.original)
+                }
+            }
+            mutableState.value = previousState
+            runCatching { persistSchemes() }
+            reloadUserFiles(moved.map { it.original })
             throw error
         }
     }
@@ -1126,6 +1403,55 @@ class LocalizationManagerService(
                 )
             },
         )
+    }
+
+    private fun buildNamespaceFilesPreview(
+        scheme: LanguageSchemeDto,
+        request: NamespaceFilesRequestDto,
+    ): ChangePreviewDto {
+        require(request.referenceFilePath in scheme.files) { backendMessage("namespace.reference.not.tracked") }
+        val targets = LanguageNamespaceFileSupport.buildTargets(parseDocuments(scheme), request.referenceFilePath, request.namespace)
+        val emptyHash = contentSha256("")
+        return ChangePreviewDto(
+            targets.map { target ->
+                FileChangePreviewDto(
+                    filePath = target.path.toString(),
+                    beforeContent = "",
+                    afterContent = target.content,
+                    beforeSha256 = emptyHash,
+                )
+            },
+        )
+    }
+
+    private fun buildDeleteNamespaceFilesPreview(
+        scheme: LanguageSchemeDto,
+        request: NamespaceFilesDeleteRequestDto,
+    ): ChangePreviewDto {
+        require(request.referenceFilePath in scheme.files) { backendMessage("namespace.reference.not.tracked") }
+        val documents = LanguageNamespaceFileSupport.findFamilyNamespaceDocuments(parseDocuments(scheme), request.referenceFilePath)
+        return ChangePreviewDto(
+            documents.map { document ->
+                val before = SafeLanguageFileAccess.read(document.path)
+                FileChangePreviewDto(
+                    filePath = document.path.toString(),
+                    beforeContent = before,
+                    afterContent = "",
+                    beforeSha256 = contentSha256(before),
+                )
+            },
+        )
+    }
+
+    private fun moveNamespaceFileToTemporary(path: Path): MovedNamespaceFile {
+        val temporary = Files.createTempFile(path.parent, ".language-manager-delete-", ".tmp")
+        Files.deleteIfExists(temporary)
+        try {
+            Files.move(path, temporary, java.nio.file.StandardCopyOption.ATOMIC_MOVE)
+        } catch (_: java.nio.file.AtomicMoveNotSupportedException) {
+            Files.move(path, temporary)
+        }
+        return MovedNamespaceFile(path, temporary)
     }
 
     private fun contentSha256(content: String): String =

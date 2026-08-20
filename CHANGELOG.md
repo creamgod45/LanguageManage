@@ -1,5 +1,27 @@
 # Language Manager Changelog
 
+## 1.7.0
+
+### English
+
+- Add **Operations → Add Namespace Files** for PHP and Java Properties schemes. Choose one tracked file as the structure reference, enter a dot-separated namespace, and preview the empty file that will be created for every locale in the same directory family. Apply uses SHA-256 preview verification, refuses existing targets, writes atomically, reloads the IDE files, and tracks every new file in the active scheme.
+- Add **Operations → Delete Namespace Files**. Select one tracked PHP/Properties file as the namespace-family reference, review every locale file as a deletion Diff, then remove the unchanged files from disk and scheme tracking as one rollback-capable transaction. A scheme's final tracked file set cannot be deleted through this action.
+- Add **Add Tracked Files** to the scheme dropdown. A path-selection dialog accumulates any number of file and folder choices before inspection, so separately selected locale roots such as `en` and `zh_TW` are all scanned and merged. Existing schemes can review parser format, locale, namespace, entry count, and errors, then add selected recognized files without recreating the scheme or changing its ID and settings.
+- Make the Analysis header action/filter group responsive. Controls now wrap onto additional rows as the Tool Window narrows instead of being clipped beyond the visible area.
+- Add an independent **PHP / Blade variable** analysis display exclusion for values such as `$name`, `${name}`, `{{ $name }}`, `{{ $id }}-hint`, expressions containing property/index access, and `{!! $html !!}`. It composes with the other naming filters and applies equally to the table and filtered CSV export.
+- Add **Operations → Merge Translations** for consolidating two similar `namespace + key` rows. The target keeps existing locale values and receives only missing/blank values from the source; the source row is then removed. Recorded source usages can be redirected through an editable multi-file Diff, with Laravel-aware defaults such as `admin/customer.key` and an editable vendor/custom namespace reference.
+
+---
+
+### 繁體中文
+
+- 新增「**操作 → 新增 Namespace 檔案**」，支援 PHP 與 Java Properties 方案。選擇一個列管檔案作為結構參考並輸入點分隔 Namespace 後，會預覽同一目錄家族中每個語言將建立的空白檔案。套用時會驗證 SHA-256、拒絕覆寫既有目標、原子寫入、重新載入 IDE 檔案，並將所有新檔加入目前方案追蹤。
+- 新增「**操作 → 刪除 Namespace 檔案**」。選擇一個列管 PHP／Properties 檔作為 Namespace 家族參考，先以 Diff 檢查各語言的完整刪除內容，再將未變更檔案從硬碟及方案追蹤清單以可回復交易一起移除；方案最後一組追蹤檔不能由此操作刪除。
+- 在方案下拉選單新增「**增加追蹤檔案**」。路徑選擇視窗可在檢查前持續累積任意數量的檔案與資料夾，因此分別選取 `en`、`zh_TW` 等語言根目錄時會完整掃描並合併。既有方案可檢視 parser 的格式、語言、Namespace、筆數及錯誤，再勾選可識別檔案加入追蹤；不必刪除重建方案，也不會改變方案 ID 與設定。
+- 分析頁上方的操作／篩選按鈕群組改為自適應換行。Tool Window 縮窄時控制項會排列到下一列，不再超出可視區而消失。
+- 分析顯示排除新增獨立「**PHP／Blade 變數**」條件，可排除 `$name`、`${name}`、`{{ $name }}`、`{{ $id }}-hint`、包含屬性／索引存取的運算式及 `{!! $html !!}`；可與其他命名格式聯集使用，並同步套用於表格與篩選後 CSV 匯出。
+- 新增「**操作 → 合併翻譯**」，可將兩筆相近的 `namespace + key` 統一至同一來源。既有目標語系值優先保留，只有缺少／空白值由來源補上，之後移除來源列；已記錄的程式碼使用位置可透過可編輯多檔 Diff 導向目標，並預設理解 Laravel `admin/customer.key` 路徑格式，也允許調整 vendor／自訂 namespace 引用。
+
 ## 1.6.0
 
 ### English

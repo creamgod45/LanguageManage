@@ -38,6 +38,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import java.awt.BorderLayout
+import java.awt.Component
 import java.awt.FlowLayout
 import java.awt.GridLayout
 import java.awt.event.MouseAdapter
@@ -123,7 +124,8 @@ internal class HardcodedAnalysisPanel(
         JPanel().apply {
             layout = javax.swing.BoxLayout(this, javax.swing.BoxLayout.Y_AXIS)
             add(
-                JPanel(FlowLayout(FlowLayout.LEFT, 8, 3)).apply {
+                ResponsiveGridPanel(JBUI.scale(8), JBUI.scale(4)).apply {
+                    alignmentX = Component.LEFT_ALIGNMENT
                     add(JBLabel(message("analysis.type")))
                     add(JBLabel(message("analysis.type.hardcoded")))
                     add(JBLabel(message("label.scheme")))
