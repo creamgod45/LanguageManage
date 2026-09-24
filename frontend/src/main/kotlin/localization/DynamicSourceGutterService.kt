@@ -3,11 +3,15 @@ package cg.creamgod45.localization.ui
 import cg.creamgod45.LanguageManagerBundle.message
 import cg.creamgod45.LanguageManagerIcons
 import cg.creamgod45.localization.DynamicMarkerSyntax
+import cg.creamgod45.localization.LanguageSchemeDto
 import cg.creamgod45.localization.LocalizationStateDto
+import com.intellij.codeInsight.hints.presentation.PresentationFactory
+import com.intellij.codeInsight.hints.presentation.PresentationRenderer
+import com.intellij.codeInsight.intention.preview.IntentionPreviewUtils
 import com.intellij.openapi.Disposable
-import com.intellij.openapi.application.EDT
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
+import com.intellij.openapi.application.EDT
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.editor.EditorFactory
@@ -27,8 +31,6 @@ import com.intellij.openapi.project.DumbAwareAction
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.startup.ProjectActivity
 import com.intellij.openapi.wm.ToolWindowManager
-import com.intellij.codeInsight.hints.presentation.PresentationFactory
-import com.intellij.codeInsight.hints.presentation.PresentationRenderer
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.collectLatest
@@ -50,6 +52,7 @@ internal class DynamicSourceGutterService(
     private val project: Project,
     coroutineScope: CoroutineScope,
 ) : Disposable {
+    @Volatile
     private var state = LocalizationStateDto()
     private val installed = IdentityHashMap<Editor, List<RangeHighlighter>>()
     private val installedInlays = IdentityHashMap<Editor, List<Inlay<*>>>()
@@ -59,16 +62,29 @@ internal class DynamicSourceGutterService(
         project.messageBus.connect(this).subscribe(
             FileEditorManagerListener.FILE_EDITOR_MANAGER,
             object : FileEditorManagerListener {
-                override fun fileOpened(source: FileEditorManager, file: com.intellij.openapi.vfs.VirtualFile) = refreshAll()
+                override fun fileOpened(
+                    source: FileEditorManager,
+                    file: com.intellij.openapi.vfs.VirtualFile,
+                ) = refreshAll()
+
                 override fun selectionChanged(event: FileEditorManagerEvent) = refreshAll()
-                override fun fileClosed(source: FileEditorManager, file: com.intellij.openapi.vfs.VirtualFile) = clearClosedEditors()
+
+                override fun fileClosed(
+                    source: FileEditorManager,
+                    file: com.intellij.openapi.vfs.VirtualFile,
+                ) = clearClosedEditors()
             },
         )
         EditorFactory.getInstance().eventMulticaster.addDocumentListener(
             object : DocumentListener {
                 override fun documentChanged(event: DocumentEvent) {
+                    if (!shouldObserveDynamicSourceDocument(activeScheme() != null, IntentionPreviewUtils.isIntentionPreviewActive())) {
+                        return
+                    }
+                    if (FileDocumentManager.getInstance().getFile(event.document) == null) return
+                    if (editors().none { it.document === event.document }) return
                     com.intellij.openapi.application.ApplicationManager.getApplication().invokeLater {
-                        if (!project.isDisposed) documentRefreshTimer.restart()
+                        if (!project.isDisposed && activeScheme() != null) documentRefreshTimer.restart()
                     }
                 }
             },
@@ -77,7 +93,14 @@ internal class DynamicSourceGutterService(
         coroutineScope.launch {
             LocalizationFrontendRepository(project).state.collectLatest { latest ->
                 state = latest
-                withContext(Dispatchers.EDT) { refreshAll() }
+                withContext(Dispatchers.EDT) {
+                    if (activeScheme() == null) {
+                        documentRefreshTimer.stop()
+                        clearAll()
+                    } else {
+                        refreshAll()
+                    }
+                }
             }
         }
     }
@@ -85,7 +108,11 @@ internal class DynamicSourceGutterService(
     private fun refreshAll() = editors().forEach(::refresh)
 
     private fun editors(): List<Editor> =
-        FileEditorManager.getInstance(project).allEditors.filterIsInstance<TextEditor>().map { it.editor }
+        FileEditorManager
+            .getInstance(project)
+            .allEditors
+            .filterIsInstance<TextEditor>()
+            .map { it.editor }
 
     private fun clearClosedEditors() {
         val open = editors().toSet()
@@ -96,8 +123,8 @@ internal class DynamicSourceGutterService(
     }
 
     private fun refresh(editor: Editor) {
-        installed.remove(editor)?.forEach(editor.markupModel::removeHighlighter)
-        installedInlays.remove(editor)?.forEach(Inlay<*>::dispose)
+        clear(editor)
+        val scheme = activeScheme() ?: return
         val file = FileDocumentManager.getInstance().getFile(editor.document) ?: return
         val highlighters = mutableListOf<RangeHighlighter>()
         val inlays = mutableListOf<Inlay<*>>()
@@ -105,8 +132,7 @@ internal class DynamicSourceGutterService(
             val line = editor.document.getLineNumber(marker.startOffset)
             highlighters += addGutter(editor, line, true, null)
         }
-        val scheme = state.schemes.firstOrNull { it.id == state.activeSchemeId }
-        scheme?.dynamicSourceRules.orEmpty()
+        scheme.dynamicSourceRules
             .filter { samePath(it.filePath, file.path) }
             .forEach { rule ->
                 val validOffset = dynamicSourceOffset(editor.document.charsSequence, rule.line, rule.column)
@@ -116,6 +142,18 @@ internal class DynamicSourceGutterService(
             }
         installed[editor] = highlighters
         installedInlays[editor] = inlays
+    }
+
+    private fun activeScheme(): LanguageSchemeDto? = state.schemes.firstOrNull { it.id == state.activeSchemeId }
+
+    private fun clear(editor: Editor) {
+        installed.remove(editor)?.forEach(editor.markupModel::removeHighlighter)
+        installedInlays.remove(editor)?.forEach(Inlay<*>::dispose)
+    }
+
+    private fun clearAll() {
+        installed.keys.toList().forEach(::clear)
+        installedInlays.keys.toList().forEach(::clear)
     }
 
     private fun addRuleInlay(
@@ -197,12 +235,14 @@ internal class DynamicSourceGutterService(
 
     override fun dispose() {
         documentRefreshTimer.stop()
-        installed.forEach { (editor, highlighters) -> highlighters.forEach(editor.markupModel::removeHighlighter) }
-        installed.clear()
-        installedInlays.forEach { (_, inlays) -> inlays.forEach(Inlay<*>::dispose) }
-        installedInlays.clear()
+        clearAll()
     }
 }
+
+internal fun shouldObserveDynamicSourceDocument(
+    hasActiveScheme: Boolean,
+    intentionPreviewActive: Boolean,
+): Boolean = hasActiveScheme && !intentionPreviewActive
 
 private class DynamicSourceGutterRenderer(
     private val invasive: Boolean,
@@ -214,9 +254,13 @@ private class DynamicSourceGutterRenderer(
 
     override fun getTooltipText(): String =
         message(
-            if (!invasive && !validPosition) "dynamic.gutter.rule.stale.tooltip"
-            else if (invasive) "dynamic.gutter.marker.tooltip"
-            else "dynamic.gutter.rule.tooltip",
+            if (!invasive && !validPosition) {
+                "dynamic.gutter.rule.stale.tooltip"
+            } else if (invasive) {
+                "dynamic.gutter.marker.tooltip"
+            } else {
+                "dynamic.gutter.rule.tooltip"
+            },
         )
 
     override fun getClickAction(): AnAction =

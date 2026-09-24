@@ -1,5 +1,19 @@
 # Language Manager Changelog
 
+## 1.7.1
+
+### English
+
+- Stop dynamic-source document refresh work when no localization scheme is active, clear stale gutter icons and inlays when the active scheme is removed, and ignore IntelliJ intention/completion preview documents before scheduling UI work. This prevents `Side effect not allowed: INVOKE_LATER` errors while preserving updates for physical files opened in the current project.
+- Keep the Kotlin JVM and serialization Gradle plugins aligned on 2.3.20 so the Fleet RPC compiler plugin loads with a compatible Kotlin compiler API during tests and packaging.
+
+---
+
+### 繁體中文
+
+- 沒有作用中語言方案時停止 Dynamic Source 文件更新，移除作用中方案時清除舊的裝訂區圖示與 Inlay，並在排程 UI 工作前排除 IntelliJ intention／completion 預覽文件。此修正可避免 `Side effect not allowed: INVOKE_LATER` 例外，同時保留目前專案已開啟實體檔案的更新。
+- 將 Kotlin JVM 與 serialization Gradle plugin 統一為 2.3.20，確保測試與打包時 Fleet RPC compiler plugin 會使用相容的 Kotlin compiler API。
+
 ## 1.7.0
 
 ### English
