@@ -37,6 +37,7 @@ import com.intellij.openapi.ui.ValidationInfo
 import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.ui.ColoredListCellRenderer
+import com.intellij.ui.PopupHandler
 import com.intellij.ui.SimpleTextAttributes
 import com.intellij.ui.components.*
 import com.intellij.ui.table.JBTable
@@ -268,6 +269,7 @@ internal class LocalizationManagerPanel(
             entryTable.selectionModel.selectionMode = ListSelectionModel.MULTIPLE_INTERVAL_SELECTION
             installClipboardActions(entryTable, allowPaste = true)
             installInlineTranslationEditor()
+            installTranslationContextMenu()
             val translationPanel =
                 JPanel(BorderLayout()).apply {
                     add(JBScrollPane(entryTable), BorderLayout.CENTER)
@@ -1563,6 +1565,25 @@ internal class LocalizationManagerPanel(
         return InlineTableEditing.tooltipHtml(fullText, hint, InlineTableEditing.tooltipMaxWidth(entryTable), metrics::stringWidth)
     }
 
+    /**
+     * Right-clicking a cell targets its row: the cell is selected first (unless it is already part of the selection, so
+     * bulk actions keep working) and the same actions as Actions ▾ open at the pointer (issue #22).
+     */
+    private fun installTranslationContextMenu() {
+        entryTable.addMouseListener(
+            object : PopupHandler() {
+                override fun invokePopup(
+                    comp: Component,
+                    x: Int,
+                    y: Int,
+                ) {
+                    TableContextMenuTarget.select(entryTable, Point(x, y))
+                    translationActionMenu().show(comp, x, y)
+                }
+            },
+        )
+    }
+
     private fun installInlineTranslationEditor() {
         entryModel.onTranslationEdited = ::saveInlineTranslation
         InlineTableEditing.install(
@@ -1623,24 +1644,29 @@ internal class LocalizationManagerPanel(
         action: () -> Unit,
     ) = JButton(text).apply { addActionListener { action() } }
 
+    private fun translationActionItems(): List<Pair<String, () -> Unit>> =
+        listOf(
+            message("action.add") to ::addEntry,
+            message("action.locale.version.add") to ::addLocaleVersion,
+            message("action.namespace.files.add") to ::addNamespaceFiles,
+            message("action.namespace.files.delete") to ::deleteNamespaceFiles,
+            message("action.edit") to ::editEntry,
+            message("action.delete.bulk") to ::deleteSelected,
+            message("action.rename") to ::renameKey,
+            message("action.merge.translations") to ::mergeTranslations,
+            message("action.copy.key.to.locale") to ::copyKeysToLocaleValues,
+            message("action.ai.translate") to ::translateSelectedWithAi,
+            message("action.find.in.ide") to ::findSelectedKeyInProject,
+            message("action.find.in.ide.usage.regex") to ::findSelectedKeyWithUsageRegex,
+        )
+
+    private fun translationActionMenu(): JPopupMenu =
+        JPopupMenu().apply {
+            translationActionItems().forEach { (label, action) -> add(JMenuItem(label).apply { addActionListener { action() } }) }
+        }
+
     private fun actionDropdown(): JButton {
-        val menu =
-            JPopupMenu().apply {
-                listOf(
-                    message("action.add") to ::addEntry,
-                    message("action.locale.version.add") to ::addLocaleVersion,
-                    message("action.namespace.files.add") to ::addNamespaceFiles,
-                    message("action.namespace.files.delete") to ::deleteNamespaceFiles,
-                    message("action.edit") to ::editEntry,
-                    message("action.delete.bulk") to ::deleteSelected,
-                    message("action.rename") to ::renameKey,
-                    message("action.merge.translations") to ::mergeTranslations,
-                    message("action.copy.key.to.locale") to ::copyKeysToLocaleValues,
-                    message("action.ai.translate") to ::translateSelectedWithAi,
-                    message("action.find.in.ide") to ::findSelectedKeyInProject,
-                    message("action.find.in.ide.usage.regex") to ::findSelectedKeyWithUsageRegex,
-                ).forEach { (label, action) -> add(JMenuItem(label).apply { addActionListener { action() } }) }
-            }
+        val menu = translationActionMenu()
         return JButton(message("action.dropdown")).apply {
             toolTipText = message("action.dropdown.tooltip")
             addActionListener { menu.show(this, 0, height) }

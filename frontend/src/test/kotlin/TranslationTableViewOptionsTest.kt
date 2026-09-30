@@ -1,11 +1,12 @@
 package cg.creamgod45.localization.ui
 
 import com.intellij.testFramework.fixtures.BasePlatformTestCase
+import java.awt.Point
 import javax.swing.JTable
 import javax.swing.ListSelectionModel
 import javax.swing.table.DefaultTableModel
 
-/** Issue #21: show or hide language columns. */
+/** Issue #21 (show or hide language columns) and issue #22 (row context menu targeting). */
 class TranslationTableViewOptionsTest : BasePlatformTestCase() {
     private fun table(): JTable {
         val model = DefaultTableModel(arrayOf(arrayOf<Any>("ns", "key", "A", "B", "C", 1)), arrayOf("Namespace", "Key", "en", "ja", "zh_TW", "Usage"))
@@ -100,5 +101,44 @@ class TranslationTableViewOptionsTest : BasePlatformTestCase() {
         assertTrue(cleared)
     }
 
+    private fun JTable.centerOf(
+        row: Int,
+        column: Int,
+    ) = getCellRect(row, column, true).let { Point(it.centerX.toInt(), it.centerY.toInt()) }
 
+    fun testContextMenuSelectsThePointedCellSoRowActionsTargetThatRow() {
+        val model = DefaultTableModel(arrayOf(arrayOf<Any>("ns", "a", "A"), arrayOf<Any>("ns", "b", "B"), arrayOf<Any>("ns", "c", "C")), arrayOf("Namespace", "Key", "en"))
+        val table =
+            RowHighlightTable(model).apply {
+                cellSelectionEnabled = true
+                selectionModel.selectionMode = ListSelectionModel.MULTIPLE_INTERVAL_SELECTION
+                setSize(600, rowHeight * 4)
+                doLayout()
+            }
+        table.changeSelection(0, 1, false, false)
+
+        val target = TableContextMenuTarget.select(table, table.centerOf(2, 2))
+
+        assertEquals(2 to 2, target)
+        assertEquals(listOf(2), table.selectedRows.toList())
+        assertEquals(listOf(2), table.selectedColumns.toList())
+    }
+
+    fun testContextMenuInsideAMultiRowSelectionKeepsItForBulkActions() {
+        val model = DefaultTableModel(arrayOf(arrayOf<Any>("ns", "a", "A"), arrayOf<Any>("ns", "b", "B"), arrayOf<Any>("ns", "c", "C")), arrayOf("Namespace", "Key", "en"))
+        val table =
+            RowHighlightTable(model).apply {
+                cellSelectionEnabled = true
+                selectionModel.selectionMode = ListSelectionModel.MULTIPLE_INTERVAL_SELECTION
+                setSize(600, rowHeight * 4)
+                doLayout()
+            }
+        table.changeSelection(0, 1, false, false)
+        table.changeSelection(1, 1, false, true)
+
+        TableContextMenuTarget.select(table, table.centerOf(1, 1))
+
+        assertEquals(listOf(0, 1), table.selectedRows.toList())
+        assertNull("Outside the rows nothing is targeted", TableContextMenuTarget.select(table, Point(5, table.rowHeight * 3 + 5)))
+    }
 }
