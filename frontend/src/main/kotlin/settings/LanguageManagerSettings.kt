@@ -70,6 +70,9 @@ internal class LanguageManagerSettings : PersistentStateComponent<LanguageManage
         var defaultMaxEntriesPerScheme: Int = DEFAULT_MAX_ENTRIES_PER_SCHEME
         var ignoreDuplicateValueIssues: Boolean = false
         var ignoreUnusedKeyIssues: Boolean = false
+
+        // Missing in settings saved before 1.8.0, so existing users keep the default (enabled).
+        var quickInlineEditEnabled: Boolean = true
         var aiProvider: String = AiProviderType.OPENAI_COMPATIBLE.name
         var aiEndpoint: String = "https://api.openai.com/v1/chat/completions"
         var aiModel: String = ""
@@ -146,6 +149,12 @@ internal class LanguageManagerSettings : PersistentStateComponent<LanguageManage
             settingsState.ignoreUnusedKeyIssues = value
         }
 
+    var quickInlineEditEnabled: Boolean
+        get() = settingsState.quickInlineEditEnabled
+        set(value) {
+            settingsState.quickInlineEditEnabled = value
+        }
+
     var aiProvider: AiProviderType
         get() = runCatching { AiProviderType.valueOf(settingsState.aiProvider) }.getOrDefault(AiProviderType.OPENAI_COMPATIBLE)
         set(value) {
@@ -197,6 +206,10 @@ internal class LanguageManagerSettings : PersistentStateComponent<LanguageManage
         fun currentLanguage(): DisplayLanguage =
             ApplicationManager.getApplication()?.getService(LanguageManagerSettings::class.java)?.displayLanguage
                 ?: DisplayLanguage.AUTO
+
+        /** Read on every double-click, so toggling the setting applies to open tool windows immediately. */
+        fun quickInlineEditEnabled(): Boolean =
+            ApplicationManager.getApplication()?.getService(LanguageManagerSettings::class.java)?.quickInlineEditEnabled ?: true
 
         fun getInstance(): LanguageManagerSettings = ApplicationManager.getApplication().getService(LanguageManagerSettings::class.java)
     }

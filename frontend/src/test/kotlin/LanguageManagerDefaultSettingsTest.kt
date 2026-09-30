@@ -27,6 +27,36 @@ class LanguageManagerDefaultSettingsTest {
     }
 
     @Test
+    fun `quick in-place editing is enabled by default and can be turned off`() {
+        assertEquals(true, LanguageManagerSettings.SettingsState().quickInlineEditEnabled)
+
+        val settings = LanguageManagerSettings()
+        settings.quickInlineEditEnabled = false
+        val restored = LanguageManagerSettings().apply { loadState(settings.state) }
+
+        assertEquals(false, restored.quickInlineEditEnabled)
+    }
+
+    @Test
+    fun `settings saved before quick editing existed keep it enabled`() {
+        // A LanguageManager.xml written by 1.7.x has no quickInlineEditEnabled option.
+        val legacyXml =
+            """
+            <State>
+              <option name="ignoreUnusedKeyIssues" value="true" />
+            </State>
+            """.trimIndent()
+        val legacy =
+            com.intellij.util.xmlb.XmlSerializer.deserialize(
+                com.intellij.openapi.util.JDOMUtil.load(legacyXml),
+                LanguageManagerSettings.SettingsState::class.java,
+            )
+
+        assertEquals(true, legacy.ignoreUnusedKeyIssues)
+        assertEquals(true, LanguageManagerSettings().apply { loadState(legacy) }.quickInlineEditEnabled)
+    }
+
+    @Test
     fun `new settings state contains requested plugin defaults`() {
         val state = LanguageManagerSettings.SettingsState()
 
