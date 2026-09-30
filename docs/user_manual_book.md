@@ -182,6 +182,14 @@ Open **Actions ▾** to access the following commands.
 
 Creation stops without overwriting if the target locale or file already exists, a source cannot be parsed, or multiple sources map to the same target.
 
+### Quick in-place edit
+
+Double-click a language value cell, or select it and press **F2**, to edit that value directly in the table. The editor wraps long text and grows the row (up to eight lines) while editing. Press **Enter** or move focus away to save, **Shift+Enter** to insert a line break, or **Esc** to cancel. Typing without starting an edit never changes a value. Only that cell's locale file is written; an unchanged value is skipped, and a missing locale value is created in that locale's file for the same namespace. Long and multi-line values are edited in place. Only cells showing several same-locale values joined by ` | ` are not edited in place; double-clicking them shows a status hint to use **Actions ▾ → Edit Selected**, and no dialog opens. To turn quick editing off, clear **Translation table → Quick in-place editing** in **Settings → Tools → LanguageManager**; double-clicking a translation cell then does nothing. While quick editing is on, the IDE expanded-cell preview is disabled for this table so long values can still be double-clicked; hover a truncated value to see its full text in a tooltip that wraps to the window width. If the table refreshes while you are typing, the draft is kept on the same `namespace + key` and locale.
+
+### Key whitespace
+
+Keys are saved exactly as typed in every key field (Add Translation, Rename Key, and Create Translation from Editor Selection). Leading or trailing spaces are kept because they may be intentional, which means `" app.name"` and `app.name` are different keys. While a key starts or ends with spaces, including full-width U+3000 spaces, a warning appears below the key field; remove the spaces if they were not intended. A key made only of spaces is rejected.
+
 ### Edit selected
 
 1. Select any cell in the translation table.
@@ -352,7 +360,7 @@ Click **Handle** in the final column. Depending on issue type, the action previe
 
 Select a scheme in the Tool Window and click **Scheme Settings**. The popup uses the already-loaded active scheme and lets you rename it while showing its managed files and isolated scan settings. Renaming preserves the scheme ID, managed files, cache ownership, and isolation. It does not dynamically load schemes from IDE Settings.
 
-**Settings → Tools → LanguageManager** manages plugin display language, issue visibility, and defaults for newly created schemes. Existing schemes are not loaded there. The Tool Window's JetBrains **More Options** menu also contains a shortcut to this settings page.
+**Settings → Tools → LanguageManager** manages plugin display language, issue visibility, quick in-place editing of the translation table (enabled by default), and defaults for newly created schemes. Existing schemes are not loaded there. The Tool Window's JetBrains **More Options** menu also contains a shortcut to this settings page.
 
 Hiding duplicate-value or possibly-unused suggestions removes that type from the issue table, status count, and **Handle All Repairable** action without affecting other diagnostics.
 
