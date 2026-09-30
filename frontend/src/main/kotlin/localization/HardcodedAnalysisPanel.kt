@@ -46,10 +46,8 @@ import java.awt.event.MouseAdapter
 import java.awt.event.MouseEvent
 import java.nio.file.Path
 import javax.swing.JButton
-import javax.swing.JCheckBoxMenuItem
 import javax.swing.JPanel
 import javax.swing.JProgressBar
-import javax.swing.JPopupMenu
 import javax.swing.SwingUtilities
 import javax.swing.event.DocumentEvent
 import javax.swing.event.DocumentListener
@@ -321,28 +319,34 @@ internal class HardcodedAnalysisPanel(
         )
     }
 
+    /** Same keep-open checkbox popup as Visible Columns, so several naming formats can be toggled in one go. */
     private fun showPatternFilterMenu() {
-        val menu = JPopupMenu()
-        AnalysisValuePatternFilter.entries.forEach { filter ->
-            menu.add(
-                JCheckBoxMenuItem(message("analysis.exclude.pattern.${filter.name.lowercase()}"), filter in excludedPatterns).apply {
-                    addActionListener {
-                        if (isSelected) excludedPatterns += filter else excludedPatterns -= filter
-                        patternFilterButton.text = patternFilterButtonText()
-                        currentPage = 0
-                        renderPage()
-                    }
+        KeepOpenTogglePopup.show(
+            patternFilterButton,
+            message("analysis.exclude.patterns.popup.title"),
+            AnalysisValuePatternFilter.entries.map { filter ->
+                KeepOpenTogglePopup.Toggle(
+                    message("analysis.exclude.pattern.${filter.name.lowercase()}"),
+                    isSelected = { filter in excludedPatterns },
+                    setSelected = { selected ->
+                        if (selected) excludedPatterns += filter else excludedPatterns -= filter
+                        patternFiltersChanged()
+                    },
+                )
+            },
+            listOf(
+                KeepOpenTogglePopup.Command(message("analysis.exclude.pattern.clear")) {
+                    excludedPatterns.clear()
+                    patternFiltersChanged()
                 },
-            )
-        }
-        menu.addSeparator()
-        menu.add(message("analysis.exclude.pattern.clear")).addActionListener {
-            excludedPatterns.clear()
-            patternFilterButton.text = patternFilterButtonText()
-            currentPage = 0
-            renderPage()
-        }
-        menu.show(patternFilterButton, 0, patternFilterButton.height)
+            ),
+        )
+    }
+
+    private fun patternFiltersChanged() {
+        patternFilterButton.text = patternFilterButtonText()
+        currentPage = 0
+        renderPage()
     }
 
     private fun patternFilterButtonText(): String = message("analysis.exclude.patterns", excludedPatterns.size)
