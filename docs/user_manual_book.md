@@ -45,7 +45,7 @@ After installation, the LanguageManager icon appears in the IDE Tool Window side
 
 The Tool Window has two top-level contents: **Language Schemes** for translation management and **Analysis** for high-cost project inspection. Analysis is lazy and never starts while Language Schemes remains selected. Manually switch to **Analysis** to scan the active scheme, or use **Analyze Again** to refresh it; **Stop** cancels the JetBrains background task.
 
-The untranslated-hardcoded-text analyzer scans the active scheme base path, honors its file/folder exclusions, skips managed language files, and does not impose a filename-extension filter. Source ranges already recognized by the scheme usage Regex are excluded. Results keep every location as a separate `Value / File path / Line / Col` row; use search or confidence filters, or independently check plain English word, camelCase, PascalCase/UpperCamelCase, snake_case, MACRO_CASE, kebab-case, dot.case, and PHP/Blade variable values such as `$name`, `${name}`, `{{ $name }}`, or `{!! $html !!}`. Blade expressions with property, function, index, prefix, or suffix content are also covered. Selected formats form a union and update the table without rescanning. Page through at most 100 rows at once and double-click a row to navigate. **Export Results** applies the current search text, confidence, and naming-format exclusions and writes all matching pages as UTF-8 CSV; its button shows the export count. Summary counters distinguish scanned, cached, skipped, matched, candidate, unique, and high/medium/low-confidence totals. Results are heuristic review candidates, not automatic errors or automatic file changes.
+The untranslated-hardcoded-text analyzer scans the active scheme base path, honors its file/folder exclusions, skips managed language files, and does not impose a filename-extension filter. Source ranges already recognized by the scheme usage Regex are excluded. Results keep every location as a separate `Value / File path / Line / Col` row; use search or confidence filters, or independently check plain English word, camelCase, PascalCase/UpperCamelCase, snake_case, MACRO_CASE, kebab-case, dot.case, and PHP/Blade variable values such as `$name`, `${name}`, `{{ $name }}`, or `{!! $html !!}`. Blade expressions with property, function, index, prefix, or suffix content are also covered. Selected formats form a union and update the table without rescanning; the format menu stays open while you toggle, so several formats can be changed at once. Page through at most 100 rows at once and double-click a row to navigate. **Export Results** applies the current search text, confidence, and naming-format exclusions and writes all matching pages as UTF-8 CSV; its button shows the export count. Summary counters distinguish scanned, cached, skipped, matched, candidate, unique, and high/medium/low-confidence totals. Results are heuristic review candidates, not automatic errors or automatic file changes.
 
 ## 3. Creating Your First Scheme
 
@@ -181,6 +181,12 @@ Open **Actions ▾** to access the following commands.
 7. Review every new file in the Diff and apply before files are created, the note is saved, and the files are added to the scheme.
 
 Creation stops without overwriting if the target locale or file already exists, a source cannot be parsed, or multiple sources map to the same target.
+
+### Visible columns and context menu
+
+Use **Visible Columns (n/m) ▾** in the toolbar to switch individual language columns on or off. The popup stays open while you toggle, so several languages can be changed at once; **Show All Languages** restores every column. Hidden columns are remembered per project and per scheme and only affect the table view, never the language files.
+
+Right-click any cell to open the same actions as **Actions ▾**. The cell under the pointer is selected first, so row actions such as Edit Selected or Rename Key act on that row. Right-clicking inside an existing multi-row selection keeps the selection for bulk actions.
 
 ### Quick in-place edit
 
