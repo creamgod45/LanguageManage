@@ -37,6 +37,7 @@ import com.intellij.openapi.ui.ValidationInfo
 import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.ui.ColoredListCellRenderer
+import com.intellij.ui.PopupHandler
 import com.intellij.ui.SimpleTextAttributes
 import com.intellij.ui.components.*
 import com.intellij.ui.table.JBTable
@@ -51,6 +52,7 @@ import java.awt.Dimension
 import java.awt.FlowLayout
 import java.awt.GridLayout
 import java.awt.LayoutManager2
+import java.awt.Point
 import java.awt.Toolkit
 import java.awt.datatransfer.DataFlavor
 import java.awt.datatransfer.StringSelection
@@ -76,11 +78,21 @@ internal class LocalizationManagerPanel(
     private val searchMode = ComboBox(SearchMode.entries.toTypedArray())
     private val localeBox = ComboBox<String>()
     private val rowFilterBox = ComboBox(TranslationRowFilter.entries.toTypedArray())
+    private val hiddenLocaleColumns = HiddenLocaleColumns(project)
+    private val columnVisibilityButton =
+        JButton().apply {
+            toolTipText = message("action.columns.dropdown.tooltip")
+            addActionListener { showColumnVisibilityPopup() }
+        }
     private val entryModel = EntryTableModel()
     private val entryTable =
-        RowHighlightTable(entryModel) { modelColumn ->
+        RowHighlightTable(
+            entryModel,
+            tooltipForCell = { viewRow, viewColumn -> translationCellTooltip(viewRow, viewColumn) },
+        ) { modelColumn ->
             message("tooltip.usage.locations").takeIf { modelColumn == entryModel.columnCount - 1 }
         }
+    private val columnVisibility = TableColumnVisibility(entryTable)
     private val issueModel = IssueTableModel()
     private val issueTable = JBTable(issueModel)
     private val usageLocationModel = UsageLocationTableModel()
@@ -240,6 +252,7 @@ internal class LocalizationManagerPanel(
                         Dimension(190, rowFilterBox.preferredSize.height)
                     add(rowFilterBox)
                     add(actionDropdown())
+                    add(columnVisibilityButton)
                 }
             add(schemeRow)
             add(Box.createVerticalStrut(JBUI.scale(4)))
@@ -255,6 +268,8 @@ internal class LocalizationManagerPanel(
             entryTable.columnSelectionAllowed = true
             entryTable.selectionModel.selectionMode = ListSelectionModel.MULTIPLE_INTERVAL_SELECTION
             installClipboardActions(entryTable, allowPaste = true)
+            installInlineTranslationEditor()
+            installTranslationContextMenu()
             val translationPanel =
                 JPanel(BorderLayout()).apply {
                     add(JBScrollPane(entryTable), BorderLayout.CENTER)
@@ -532,13 +547,23 @@ internal class LocalizationManagerPanel(
         currentPage = page.page
         updatingEntryTable = true
         try {
-            entryModel.setData(page.rows, locales)
+            preservingInlineEdit {
+                if (entryModel.setData(page.rows, locales)) {
+                    // Recreated columns: widths are set once here so later refreshes keep the user's resizing.
+                    columnVisibility.reset()
+                    applyDefaultColumnWidths()
+                }
+                applyLocaleColumnVisibility()
+            }
         } finally {
             updatingEntryTable = false
         }
         pageLabel.text = message("pagination.page", currentPage + 1, page.pageCount, page.totalRows)
         previousPageButton.isEnabled = currentPage > 0
         nextPageButton.isEnabled = currentPage + 1 < page.pageCount
+    }
+
+    private fun applyDefaultColumnWidths() {
         for (index in 0 until entryTable.columnModel.columnCount) {
             entryTable.columnModel.getColumn(index).preferredWidth =
                 when (index) {
@@ -548,6 +573,46 @@ internal class LocalizationManagerPanel(
                     else -> 260
                 }
         }
+    }
+
+    /** Hides the language columns the user turned off for the active scheme (issue #21). View state only. */
+    private fun applyLocaleColumnVisibility() {
+        val hidden = current.activeSchemeId?.let(hiddenLocaleColumns::hidden).orEmpty()
+        columnVisibility.apply(hidden.mapNotNull { locale -> entryModel.columnOf(locale).takeIf { it >= 0 } }.toSet())
+        columnVisibilityButton.text = columnVisibilityButtonText()
+    }
+
+    private fun columnVisibilityButtonText(): String {
+        val locales = entryModel.locales()
+        val hidden = current.activeSchemeId?.let(hiddenLocaleColumns::hidden).orEmpty()
+        return message("action.columns.dropdown", locales.count { it !in hidden }, locales.size)
+    }
+
+    private fun showColumnVisibilityPopup() {
+        val schemeId = current.activeSchemeId ?: return showError(message("error.no.active.scheme"))
+        val locales = entryModel.locales()
+        if (locales.isEmpty()) return showError(message("columns.none"))
+        // Several languages can be toggled in one go without the popup closing.
+        KeepOpenTogglePopup.show(
+            columnVisibilityButton,
+            message("columns.popup.title"),
+            locales.map { locale ->
+                KeepOpenTogglePopup.Toggle(
+                    locale,
+                    isSelected = { locale !in hiddenLocaleColumns.hidden(schemeId) },
+                    setSelected = { visible ->
+                        hiddenLocaleColumns.setHidden(schemeId, locale, hidden = !visible)
+                        applyLocaleColumnVisibility()
+                    },
+                )
+            },
+            listOf(
+                KeepOpenTogglePopup.Command(message("columns.show.all")) {
+                    hiddenLocaleColumns.showAll(schemeId)
+                    applyLocaleColumnVisibility()
+                },
+            ),
+        )
     }
 
     private fun loadUsageLocationPage() {
@@ -986,9 +1051,19 @@ internal class LocalizationManagerPanel(
     private fun showEntryDialog(
         row: JoinedTranslationRow?,
         scheme: LanguageSchemeDto,
+        draft: TranslationEntryDraft? = null,
     ) {
-        val dialog = MultiLanguageEntryDialog(project, scheme, current.entries, row)
-        if (dialog.showAndGet()) runAction { repository.saveAll(scheme.id, dialog.mutations()) }
+        val dialog = MultiLanguageEntryDialog(project, scheme, current.entries, row, draft)
+        if (!dialog.showAndGet()) return
+        val mutations = dialog.mutations()
+        val submitted = dialog.draft()
+        // A backend rejection (for example a key added concurrently) reopens the dialog with the typed values.
+        runAction(
+            onFailure = {
+                val latestScheme = current.schemes.firstOrNull { it.id == scheme.id }
+                if (latestScheme != null && current.activeSchemeId == scheme.id) showEntryDialog(row, latestScheme, submitted)
+            },
+        ) { repository.saveAll(scheme.id, mutations) }
     }
 
     private fun deleteSelected() {
@@ -1471,12 +1546,90 @@ internal class LocalizationManagerPanel(
         val value = clipboard.getData(DataFlavor.stringFlavor) as? String ?: return showError(message("error.clipboard.no.text"))
         val existing = row.translations.firstOrNull { it.locale == locale }
         val targetFile =
-            existing?.filePath
-                ?: current.entries.firstOrNull { it.locale == locale && it.namespace == row.namespace }?.filePath
-                ?: current.entries.firstOrNull { it.locale == locale }?.filePath
+            InlineTranslationEdit.targetFile(row, locale, current.entries)
                 ?: return showError(message("error.locale.file.not.found", locale))
         val mutation = EntryMutationDto(existing?.id, targetFile, locale, row.namespace, row.key, value)
         runAction { repository.save(activeId(), mutation) }
+    }
+
+    /** While quick editing is on, the full text of truncated value cells is shown here instead of the expanded-cell preview. */
+    private fun translationCellTooltip(
+        viewRow: Int,
+        viewColumn: Int,
+    ): String? {
+        if (entryModel.localeAt(entryTable.convertColumnIndexToModel(viewColumn)) == null) return null
+        val quickEdit = LanguageManagerSettings.quickInlineEditEnabled()
+        val fullText = InlineTableEditing.truncatedCellText(entryTable, viewRow, viewColumn)?.takeIf { quickEdit }
+        val hint = message("tooltip.inline.edit").takeIf { quickEdit }
+        val metrics = entryTable.getFontMetrics(UIManager.getFont("ToolTip.font") ?: entryTable.font)
+        return InlineTableEditing.tooltipHtml(fullText, hint, InlineTableEditing.tooltipMaxWidth(entryTable), metrics::stringWidth)
+    }
+
+    /**
+     * Right-clicking a cell targets its row: the cell is selected first (unless it is already part of the selection, so
+     * bulk actions keep working) and the same actions as Actions ▾ open at the pointer (issue #22).
+     */
+    private fun installTranslationContextMenu() {
+        entryTable.addMouseListener(
+            object : PopupHandler() {
+                override fun invokePopup(
+                    comp: Component,
+                    x: Int,
+                    y: Int,
+                ) {
+                    TableContextMenuTarget.select(entryTable, Point(x, y))
+                    translationActionMenu().show(comp, x, y)
+                }
+            },
+        )
+    }
+
+    private fun installInlineTranslationEditor() {
+        entryModel.onTranslationEdited = ::saveInlineTranslation
+        InlineTableEditing.install(
+            entryTable,
+            isInlineCell = { _, viewColumn ->
+                LanguageManagerSettings.quickInlineEditEnabled() &&
+                    entryModel.localeAt(entryTable.convertColumnIndexToModel(viewColumn)) != null
+            },
+            onNotEditable = { _, _ -> status.text = message("status.inline.edit.unavailable") },
+            quickEditEnabled = LanguageManagerSettings.quickInlineEditEnabled(),
+        )
+    }
+
+    private fun saveInlineTranslation(
+        row: JoinedTranslationRow,
+        locale: String,
+        value: String,
+    ) {
+        when (val result = InlineTranslationEdit.resolve(row, locale, value, current.entries)) {
+            InlineTranslationEditResult.NoChange -> Unit
+            is InlineTranslationEditResult.MissingLocaleFile -> showError(message("error.locale.file.not.found", result.locale))
+            is InlineTranslationEditResult.Save -> {
+                val schemeId = current.activeSchemeId ?: return showError(message("error.no.active.scheme"))
+                status.text = message("status.inline.edit.saving", row.key, locale)
+                runAction { repository.save(schemeId, result.mutation) }
+            }
+        }
+    }
+
+    /** Keeps an in-progress inline edit alive across table refreshes pushed by the backend. */
+    private fun <T> preservingInlineEdit(refresh: () -> T): T {
+        if (!entryTable.isEditing) return refresh()
+        val modelRow = entryTable.convertRowIndexToModel(entryTable.editingRow)
+        val row = entryModel.items.getOrNull(modelRow)
+        val locale = entryModel.localeAt(entryTable.convertColumnIndexToModel(entryTable.editingColumn))
+        val draft = InlineTableEditing.editorText(entryTable)
+        entryTable.cellEditor?.cancelCellEditing()
+        val result = refresh()
+        if (row == null || locale == null || draft == null) return result
+        val newModelRow = entryModel.items.indexOfFirst { it.namespace == row.namespace && it.key == row.key }
+        val newModelColumn = entryModel.columnOf(locale)
+        if (newModelRow < 0 || newModelColumn < 0 || !entryModel.isCellEditable(newModelRow, newModelColumn)) return result
+        val viewRow = entryTable.convertRowIndexToView(newModelRow)
+        val viewColumn = entryTable.convertColumnIndexToView(newModelColumn)
+        if (viewRow >= 0 && viewColumn >= 0 && entryTable.editCellAt(viewRow, viewColumn)) InlineTableEditing.setEditorText(entryTable, draft)
+        return result
     }
 
     private fun selectedRows(): List<JoinedTranslationRow> =
@@ -1491,24 +1644,29 @@ internal class LocalizationManagerPanel(
         action: () -> Unit,
     ) = JButton(text).apply { addActionListener { action() } }
 
+    private fun translationActionItems(): List<Pair<String, () -> Unit>> =
+        listOf(
+            message("action.add") to ::addEntry,
+            message("action.locale.version.add") to ::addLocaleVersion,
+            message("action.namespace.files.add") to ::addNamespaceFiles,
+            message("action.namespace.files.delete") to ::deleteNamespaceFiles,
+            message("action.edit") to ::editEntry,
+            message("action.delete.bulk") to ::deleteSelected,
+            message("action.rename") to ::renameKey,
+            message("action.merge.translations") to ::mergeTranslations,
+            message("action.copy.key.to.locale") to ::copyKeysToLocaleValues,
+            message("action.ai.translate") to ::translateSelectedWithAi,
+            message("action.find.in.ide") to ::findSelectedKeyInProject,
+            message("action.find.in.ide.usage.regex") to ::findSelectedKeyWithUsageRegex,
+        )
+
+    private fun translationActionMenu(): JPopupMenu =
+        JPopupMenu().apply {
+            translationActionItems().forEach { (label, action) -> add(JMenuItem(label).apply { addActionListener { action() } }) }
+        }
+
     private fun actionDropdown(): JButton {
-        val menu =
-            JPopupMenu().apply {
-                listOf(
-                    message("action.add") to ::addEntry,
-                    message("action.locale.version.add") to ::addLocaleVersion,
-                    message("action.namespace.files.add") to ::addNamespaceFiles,
-                    message("action.namespace.files.delete") to ::deleteNamespaceFiles,
-                    message("action.edit") to ::editEntry,
-                    message("action.delete.bulk") to ::deleteSelected,
-                    message("action.rename") to ::renameKey,
-                    message("action.merge.translations") to ::mergeTranslations,
-                    message("action.copy.key.to.locale") to ::copyKeysToLocaleValues,
-                    message("action.ai.translate") to ::translateSelectedWithAi,
-                    message("action.find.in.ide") to ::findSelectedKeyInProject,
-                    message("action.find.in.ide.usage.regex") to ::findSelectedKeyWithUsageRegex,
-                ).forEach { (label, action) -> add(JMenuItem(label).apply { addActionListener { action() } }) }
-            }
+        val menu = translationActionMenu()
         return JButton(message("action.dropdown")).apply {
             toolTipText = message("action.dropdown.tooltip")
             addActionListener { menu.show(this, 0, height) }
@@ -1545,15 +1703,20 @@ internal class LocalizationManagerPanel(
         Messages.showErrorDialog(project, text.take(500), message("dialog.confirm.title"))
     }
 
-    private fun runAction(action: suspend () -> Unit) {
+    private fun runAction(
+        onFailure: (() -> Unit)? = null,
+        action: suspend () -> Unit,
+    ) {
         val operationId = ++nextOperationId
         runningOperations += operationId
         refreshStatus()
         scope.launch {
+            var failed = false
             try {
                 action()
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
+                failed = true
                 withContext(Dispatchers.EDT) {
                     showError(e.message ?: message("error.action.failed"))
                     status.text =
@@ -1565,6 +1728,8 @@ internal class LocalizationManagerPanel(
                     refreshStatus()
                 }
             }
+            // Runs after the operation is released so a modal retry dialog does not keep it marked as running.
+            if (failed && onFailure != null) withContext(Dispatchers.EDT) { onFailure() }
         }
     }
 
@@ -2130,8 +2295,10 @@ private class FolderCandidateTableModel(
 /** Keeps cell selection semantics while letting the active Look & Feel paint selected rows. */
 internal class RowHighlightTable(
     model: javax.swing.table.TableModel,
+    private val tooltipForCell: ((viewRow: Int, viewColumn: Int) -> String?)? = null,
     private val tooltipForModelColumn: (Int) -> String? = { null },
 ) : JBTable(model) {
+
     override fun isCellSelected(
         row: Int,
         column: Int,
@@ -2139,7 +2306,22 @@ internal class RowHighlightTable(
 
     override fun getToolTipText(event: MouseEvent): String? {
         val viewColumn = columnAtPoint(event.point)
-        return if (viewColumn >= 0) tooltipForModelColumn(convertColumnIndexToModel(viewColumn)) else null
+        if (viewColumn < 0) return null
+        val viewRow = rowAtPoint(event.point)
+        return tooltipForCell?.takeIf { viewRow >= 0 }?.invoke(viewRow, viewColumn)
+            ?: tooltipForModelColumn(convertColumnIndexToModel(viewColumn))
+    }
+
+    /**
+     * Cell tooltips open below the hovered row instead of at the cursor: a tooltip window under the cursor would receive
+     * the second press of a double-click and prevent in-place editing.
+     */
+    override fun getToolTipLocation(event: MouseEvent): Point? {
+        val viewRow = rowAtPoint(event.point)
+        val viewColumn = columnAtPoint(event.point)
+        if (tooltipForCell == null || viewRow < 0 || viewColumn < 0) return super.getToolTipLocation(event)
+        val cell = getCellRect(viewRow, viewColumn, true)
+        return Point(event.x, cell.y + cell.height + JBUI.scale(2))
     }
 }
 
@@ -2240,19 +2422,46 @@ private class EntryTableModel : AbstractTableModel() {
         private set
     private var locales: List<String> = emptyList()
 
+    /** Returns true when the language columns changed, which makes the table recreate every column. */
     fun setData(
         rows: List<JoinedTranslationRow>,
         locales: List<String>,
-    ) {
+    ): Boolean {
         val structureChanged = this.locales != locales
         items = rows
         this.locales = locales
         if (structureChanged) fireTableStructureChanged() else fireTableDataChanged()
+        return structureChanged
     }
+
+    var onTranslationEdited: (row: JoinedTranslationRow, locale: String, value: String) -> Unit = { _, _, _ -> }
 
     fun localeAt(column: Int): String? = locales.getOrNull(column - 2)
 
+    fun columnOf(locale: String): Int = locales.indexOf(locale).let { index -> if (index < 0) -1 else index + 2 }
+
     fun locales(): List<String> = locales.toList()
+
+    override fun isCellEditable(
+        rowIndex: Int,
+        columnIndex: Int,
+    ): Boolean {
+        if (!LanguageManagerSettings.quickInlineEditEnabled()) return false
+        val row = items.getOrNull(rowIndex) ?: return false
+        val locale = localeAt(columnIndex) ?: return false
+        return InlineTranslationEdit.isEditable(row, locale)
+    }
+
+    override fun setValueAt(
+        aValue: Any?,
+        rowIndex: Int,
+        columnIndex: Int,
+    ) {
+        if (!isCellEditable(rowIndex, columnIndex)) return
+        val row = items[rowIndex]
+        val locale = localeAt(columnIndex) ?: return
+        onTranslationEdited(row, locale, aValue?.toString().orEmpty())
+    }
 
     override fun getRowCount() = items.size
 
@@ -2463,7 +2672,7 @@ private class RenameKeyDialog(
     private val syncCheckBox = JBCheckBox(message("dialog.rename.sync.usages"))
 
     val newKey: String
-        get() = keyField.text.trim()
+        get() = keyField.text
     val syncUsageLocations: Boolean
         get() = syncCheckBox.isSelected
 
@@ -2473,7 +2682,7 @@ private class RenameKeyDialog(
     }
 
     override fun doValidate(): ValidationInfo? =
-        if (newKey.isEmpty()) ValidationInfo(message("error.rename.key.required"), keyField) else null
+        if (newKey.isBlank()) ValidationInfo(message("error.rename.key.required"), keyField) else null
 
     override fun createCenterPanel(): JComponent =
         JPanel().apply {
@@ -2487,6 +2696,7 @@ private class RenameKeyDialog(
                     maximumSize = Dimension(Int.MAX_VALUE, preferredSize.height)
                 },
             )
+            add(KeyWhitespaceHint(keyField).apply { alignmentX = Component.LEFT_ALIGNMENT })
             add(Box.createVerticalStrut(10))
             add(syncCheckBox.apply { alignmentX = Component.LEFT_ALIGNMENT })
             add(Box.createVerticalStrut(4))

@@ -7,6 +7,7 @@ import java.nio.file.Path
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 class TranslationEditorSupportTest {
     @Test
@@ -58,5 +59,37 @@ class TranslationEditorSupportTest {
 
         assertEquals(listOf("en", "ja"), targets.map { it.locale })
         assertEquals(setOf("LanguageManagerBundle"), targets.map { it.namespace }.toSet())
+    }
+
+    @Test
+    fun `adding an existing properties key is detected before the dialog closes`() {
+        val root = Path.of("workspace", "i18n").toAbsolutePath()
+        val en = root.resolve("Messages.properties").toString()
+        val de = root.resolve("Messages_de.properties").toString()
+        val otherBundle = root.resolve("Other.properties").toString()
+        val targets = listOf(TranslationEditorTarget(en, "en", "Messages"), TranslationEditorTarget(de, "de", "Messages"))
+        val entries =
+            listOf(
+                LanguageEntryDto("1", "scheme", de, "de", "Messages", "button.save", "Speichern"),
+                LanguageEntryDto("2", "scheme", otherBundle, "en", "Other", "button.cancel", "Cancel"),
+            )
+
+        assertEquals(listOf("1"), TranslationEditorSupport.existingKeyConflicts("button.save", targets, entries).map { it.id })
+        assertEquals(emptyList(), TranslationEditorSupport.existingKeyConflicts("button.cancel", targets, entries))
+        assertEquals(emptyList(), TranslationEditorSupport.existingKeyConflicts("Button.save", targets, entries))
+    }
+
+    @Test
+    fun `duplicate key message resolves in every frontend bundle`() {
+        listOf(null, "zh_TW", "zh_CN", "ja", "ko", "es", "th").forEach { locale ->
+            val bundle =
+                java.util.ResourceBundle.getBundle(
+                    "messages.LanguageManagerFrontendBundle",
+                    locale?.split('_')?.let { java.util.Locale.of(it[0], it.getOrElse(1) { "" }) } ?: java.util.Locale.ROOT,
+                    java.util.ResourceBundle.Control.getNoFallbackControl(java.util.ResourceBundle.Control.FORMAT_DEFAULT),
+                )
+            val text = java.text.MessageFormat.format(bundle.getString("error.translation.key.exists"), "button.save", "Messages_de.properties")
+            assertTrue("button.save" in text && "Messages_de.properties" in text, "locale=$locale: $text")
+        }
     }
 }

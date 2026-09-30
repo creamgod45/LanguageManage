@@ -806,7 +806,8 @@ internal object LanguageFileCodec {
                     ' ' -> if (key || index == 0) append("\\ ") else append(char)
                     '=', ':' -> if (key) append('\\').append(char) else append(char)
                     '#', '!' -> if (key && index == 0) append('\\').append(char) else append(char)
-                    else -> append(char)
+                    // The parser splits keys and skips leading value whitespace with Char.isWhitespace (e.g. U+3000).
+                    else -> if (char.isWhitespace() && (key || index == 0)) append("\\u%04x".format(char.code)) else append(char)
                 }
             }
         }
@@ -1132,11 +1133,7 @@ internal object LanguageFileCodec {
             value.first() in charArrayOf('\'', '"')
         ) {
             if (value.first() == '"') {
-                value
-                    .substring(1, value.lastIndex)
-                    .replace("\\n", "\n")
-                    .replace("\\\"", "\"")
-                    .replace("\\\\", "\\")
+                decodeYamlDoubleQuoted(value.substring(1, value.lastIndex))
             } else {
                 value.substring(1, value.lastIndex).replace("''", "'")
             }
@@ -1146,7 +1143,30 @@ internal object LanguageFileCodec {
 
     private fun yamlKey(value: String) = if (value.matches(Regex("[A-Za-z0-9_.-]+"))) value else yamlValue(value)
 
-    private fun yamlValue(value: String) = "\"${value.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n")}\""
+    // Tabs and carriage returns are escaped too: a raw tab would be rejected as indentation when read back.
+    private fun yamlValue(value: String) =
+        "\"${value.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t")}\""
+
+    // Single pass, so an escaped backslash followed by `n` (for example `C:\\new`) is not decoded as a newline.
+    private fun decodeYamlDoubleQuoted(content: String): String =
+        buildString {
+            var index = 0
+            while (index < content.length) {
+                val char = content[index++]
+                if (char != '\\' || index >= content.length) {
+                    append(char)
+                    continue
+                }
+                when (val escaped = content[index++]) {
+                    'n' -> append('\n')
+                    'r' -> append('\r')
+                    't' -> append('\t')
+                    '"' -> append('"')
+                    '\\' -> append('\\')
+                    else -> append('\\').append(escaped)
+                }
+            }
+        }
 
     private fun phpEscape(value: String) =
         value

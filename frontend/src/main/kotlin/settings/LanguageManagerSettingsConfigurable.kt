@@ -50,6 +50,7 @@ class LanguageManagerSettingsConfigurable(
     private var maxEntriesPerSchemeSpinner: JSpinner? = null
     private var ignoreDuplicateValueIssuesBox: JBCheckBox? = null
     private var ignoreUnusedKeyIssuesBox: JBCheckBox? = null
+    private var quickInlineEditBox: JBCheckBox? = null
     private var aiProviderBox: ComboBox<AiProviderType>? = null
     private var aiEndpointField: JBTextField? = null
     private var aiModelField: JBTextField? = null
@@ -77,6 +78,7 @@ class LanguageManagerSettingsConfigurable(
         maxEntriesPerSchemeSpinner = JSpinner(SpinnerNumberModel(1, 1, HARD_MAX_ENTRIES_PER_SCHEME, 5_000))
         ignoreDuplicateValueIssuesBox = JBCheckBox(message("settings.issues.ignore.duplicate.values"))
         ignoreUnusedKeyIssuesBox = JBCheckBox(message("settings.issues.ignore.unused.keys"))
+        quickInlineEditBox = JBCheckBox(message("settings.table.quick.edit"))
         aiProviderBox =
             ComboBox(AiProviderType.entries.toTypedArray()).apply {
                 renderer = localizedRenderer { value -> (value as? AiProviderType)?.let { message(it.messageKey()) } }
@@ -95,6 +97,10 @@ class LanguageManagerSettingsConfigurable(
                 .addComponent(javax.swing.JLabel(message("settings.issues.title")))
                 .addComponent(ignoreDuplicateValueIssuesBox!!)
                 .addComponent(ignoreUnusedKeyIssuesBox!!)
+                .addSeparator()
+                .addComponent(javax.swing.JLabel(message("settings.table.title")))
+                .addComponent(quickInlineEditBox!!)
+                .addTooltip(message("settings.table.quick.edit.help"))
                 .addSeparator()
                 .addComponent(javax.swing.JLabel(message("settings.ai.title")))
                 .addLabeledComponent(message("settings.ai.provider"), aiProviderBox!!)
@@ -154,6 +160,7 @@ class LanguageManagerSettingsConfigurable(
             (maxEntriesPerSchemeSpinner?.value as? Int) != settings.defaultMaxEntriesPerScheme ||
             ignoreDuplicateValueIssuesBox?.isSelected != settings.ignoreDuplicateValueIssues ||
             ignoreUnusedKeyIssuesBox?.isSelected != settings.ignoreUnusedKeyIssues ||
+            quickInlineEditBox?.isSelected != settings.quickInlineEditEnabled ||
             aiProviderBox?.selectedItem != settings.aiProvider ||
             aiEndpointField?.text?.trim() != settings.aiEndpoint ||
             aiModelField?.text?.trim() != settings.aiModel ||
@@ -178,6 +185,8 @@ class LanguageManagerSettingsConfigurable(
         val issueVisibilityChanged =
             ignoreDuplicateValueIssuesBox?.isSelected != settings.ignoreDuplicateValueIssues ||
                 ignoreUnusedKeyIssuesBox?.isSelected != settings.ignoreUnusedKeyIssues
+        // Rebuilds open translation tables so the expanded-cell preview follows the quick-edit setting.
+        val quickInlineEditChanged = quickInlineEditBox?.isSelected != settings.quickInlineEditEnabled
         settings.displayLanguage = selectedLanguage
         settings.defaultBasePathMode = basePathModeBox?.selectedItem as? DefaultBasePathMode
             ?: DefaultBasePathMode.PROJECT_DIRECTORY
@@ -190,12 +199,13 @@ class LanguageManagerSettingsConfigurable(
         settings.defaultMaxEntriesPerScheme = maxEntriesPerSchemeSpinner?.value as? Int ?: settings.defaultMaxEntriesPerScheme
         settings.ignoreDuplicateValueIssues = ignoreDuplicateValueIssuesBox?.isSelected ?: false
         settings.ignoreUnusedKeyIssues = ignoreUnusedKeyIssuesBox?.isSelected ?: false
+        settings.quickInlineEditEnabled = quickInlineEditBox?.isSelected ?: true
         settings.aiProvider = aiProviderBox?.selectedItem as? AiProviderType ?: AiProviderType.OPENAI_COMPATIBLE
         settings.aiEndpoint = aiEndpointField?.text.orEmpty()
         settings.aiModel = aiModelField?.text.orEmpty()
         settings.aiTemperature = aiTemperatureField?.text.orEmpty()
         AiProviderCredentialStore.setToken(aiTokenField?.password?.concatToString().orEmpty())
-        if (languageChanged || issueVisibilityChanged) LanguageManagerToolWindowFactory.refreshOpenToolWindows()
+        if (languageChanged || issueVisibilityChanged || quickInlineEditChanged) LanguageManagerToolWindowFactory.refreshOpenToolWindows()
     }
 
     override fun reset() {
@@ -211,6 +221,7 @@ class LanguageManagerSettingsConfigurable(
         maxEntriesPerSchemeSpinner?.value = settings.defaultMaxEntriesPerScheme
         ignoreDuplicateValueIssuesBox?.isSelected = settings.ignoreDuplicateValueIssues
         ignoreUnusedKeyIssuesBox?.isSelected = settings.ignoreUnusedKeyIssues
+        quickInlineEditBox?.isSelected = settings.quickInlineEditEnabled
         aiProviderBox?.selectedItem = settings.aiProvider
         aiEndpointField?.text = settings.aiEndpoint
         aiModelField?.text = settings.aiModel
@@ -231,6 +242,7 @@ class LanguageManagerSettingsConfigurable(
         maxEntriesPerSchemeSpinner = null
         ignoreDuplicateValueIssuesBox = null
         ignoreUnusedKeyIssuesBox = null
+        quickInlineEditBox = null
         aiProviderBox = null
         aiEndpointField = null
         aiModelField = null

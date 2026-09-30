@@ -21,6 +21,7 @@ import com.intellij.openapi.progress.ProgressIndicator
 import com.intellij.openapi.progress.ProcessCanceledException
 import com.intellij.openapi.progress.Task
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.ui.ComboBox
 import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.ui.Messages
 import com.intellij.ui.components.JBLabel
@@ -45,11 +46,8 @@ import java.awt.event.MouseAdapter
 import java.awt.event.MouseEvent
 import java.nio.file.Path
 import javax.swing.JButton
-import javax.swing.JCheckBoxMenuItem
-import javax.swing.JComboBox
 import javax.swing.JPanel
 import javax.swing.JProgressBar
-import javax.swing.JPopupMenu
 import javax.swing.SwingUtilities
 import javax.swing.event.DocumentEvent
 import javax.swing.event.DocumentListener
@@ -66,7 +64,7 @@ internal class HardcodedAnalysisPanel(
     private val repository = LocalizationFrontendRepository(project)
     private val schemeLabel = JBLabel()
     private val search = JBTextField()
-    private val confidence = JComboBox(ConfidenceFilter.entries.toTypedArray())
+    private val confidence = ComboBox(ConfidenceFilter.entries.toTypedArray())
     private val excludedPatterns = linkedSetOf<AnalysisValuePatternFilter>()
     private val patternFilterButton = JButton(patternFilterButtonText())
     private val refresh = JButton(message("analysis.action.refresh"))
@@ -321,28 +319,34 @@ internal class HardcodedAnalysisPanel(
         )
     }
 
+    /** Same keep-open checkbox popup as Visible Columns, so several naming formats can be toggled in one go. */
     private fun showPatternFilterMenu() {
-        val menu = JPopupMenu()
-        AnalysisValuePatternFilter.entries.forEach { filter ->
-            menu.add(
-                JCheckBoxMenuItem(message("analysis.exclude.pattern.${filter.name.lowercase()}"), filter in excludedPatterns).apply {
-                    addActionListener {
-                        if (isSelected) excludedPatterns += filter else excludedPatterns -= filter
-                        patternFilterButton.text = patternFilterButtonText()
-                        currentPage = 0
-                        renderPage()
-                    }
+        KeepOpenTogglePopup.show(
+            patternFilterButton,
+            message("analysis.exclude.patterns.popup.title"),
+            AnalysisValuePatternFilter.entries.map { filter ->
+                KeepOpenTogglePopup.Toggle(
+                    message("analysis.exclude.pattern.${filter.name.lowercase()}"),
+                    isSelected = { filter in excludedPatterns },
+                    setSelected = { selected ->
+                        if (selected) excludedPatterns += filter else excludedPatterns -= filter
+                        patternFiltersChanged()
+                    },
+                )
+            },
+            listOf(
+                KeepOpenTogglePopup.Command(message("analysis.exclude.pattern.clear")) {
+                    excludedPatterns.clear()
+                    patternFiltersChanged()
                 },
-            )
-        }
-        menu.addSeparator()
-        menu.add(message("analysis.exclude.pattern.clear")).addActionListener {
-            excludedPatterns.clear()
-            patternFilterButton.text = patternFilterButtonText()
-            currentPage = 0
-            renderPage()
-        }
-        menu.show(patternFilterButton, 0, patternFilterButton.height)
+            ),
+        )
+    }
+
+    private fun patternFiltersChanged() {
+        patternFilterButton.text = patternFilterButtonText()
+        currentPage = 0
+        renderPage()
     }
 
     private fun patternFilterButtonText(): String = message("analysis.exclude.patterns", excludedPatterns.size)

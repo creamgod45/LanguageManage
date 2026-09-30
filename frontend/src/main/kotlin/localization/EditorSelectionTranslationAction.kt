@@ -220,6 +220,7 @@ private class SelectionTranslationDialog(
         }
         add(message("field.namespace"), namespaceBox)
         add(message("field.key"), keyField)
+        fields.add(KeyWhitespaceHint(keyField), GridBagConstraints().apply { gridx = 1; gridy = row++; weightx = 1.0; fill = GridBagConstraints.HORIZONTAL })
         add(message("dialog.selection.source.text"), JBScrollPane(selectedTextArea).apply { preferredSize = Dimension(JBUI.scale(600), JBUI.scale(72)) })
 
         val effectiveScanRoot = scheme.usageScanSettings.basePath.ifBlank { project.basePath.orEmpty() }
@@ -256,7 +257,7 @@ private class SelectionTranslationDialog(
     }
 
     override fun doValidate(): ValidationInfo? = when {
-        keyField.text.trim().isEmpty() -> ValidationInfo(message("error.translation.key.required"), keyField)
+        keyField.text.isBlank() -> ValidationInfo(message("error.translation.key.required"), keyField)
         selectedTextArea.text.isEmpty() -> ValidationInfo(message("dialog.selection.source.required"), selectedTextArea)
         localeEditors.isEmpty() -> ValidationInfo(message("error.translation.targets.none"), namespaceBox)
         scanCheck.isSelected && runCatching { validatedRules() }.isFailure -> ValidationInfo(message("dialog.selection.rule.invalid"), rulesPanel)
@@ -264,7 +265,7 @@ private class SelectionTranslationDialog(
     }
 
     private fun mutations(): List<EntryMutationDto> = localeEditors.map { (target, editor) ->
-        EntryMutationDto(filePath = target.filePath, locale = target.locale, namespace = target.namespace, key = keyField.text.trim(), value = editor.text)
+        EntryMutationDto(filePath = target.filePath, locale = target.locale, namespace = target.namespace, key = keyField.text, value = editor.text)
     }
 
     private fun rebuildLocaleEditors() {
@@ -313,7 +314,7 @@ private class SelectionTranslationDialog(
         items.forEach { require(it.template.length in 1..512 && it.template.windowed(5).count { part -> part == "%key%" } == 1); require(it.fileSuffix.matches(Regex("\\.[A-Za-z0-9._-]{1,63}"))) }
     }
 
-    private fun qualifiedKey(): String = listOf(namespaceBox.selectedItem?.toString().orEmpty(), keyField.text.trim()).filter(String::isNotBlank).joinToString(".")
+    private fun qualifiedKey(): String = listOf(namespaceBox.selectedItem?.toString().orEmpty(), keyField.text).filter(String::isNotBlank).joinToString(".")
 
     private fun scanCandidates() {
         val validRules = runCatching { validatedRules() }.getOrElse { return Messages.showErrorDialog(project, message("dialog.selection.rule.invalid"), title) }
