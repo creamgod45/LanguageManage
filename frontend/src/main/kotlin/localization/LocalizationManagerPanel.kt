@@ -77,6 +77,12 @@ internal class LocalizationManagerPanel(
     private val searchMode = ComboBox(SearchMode.entries.toTypedArray())
     private val localeBox = ComboBox<String>()
     private val rowFilterBox = ComboBox(TranslationRowFilter.entries.toTypedArray())
+    private val hiddenLocaleColumns = HiddenLocaleColumns(project)
+    private val columnVisibilityButton =
+        JButton().apply {
+            toolTipText = message("action.columns.dropdown.tooltip")
+            addActionListener { showColumnVisibilityPopup() }
+        }
     private val entryModel = EntryTableModel()
     private val entryTable =
         RowHighlightTable(
@@ -85,6 +91,7 @@ internal class LocalizationManagerPanel(
         ) { modelColumn ->
             message("tooltip.usage.locations").takeIf { modelColumn == entryModel.columnCount - 1 }
         }
+    private val columnVisibility = TableColumnVisibility(entryTable)
     private val issueModel = IssueTableModel()
     private val issueTable = JBTable(issueModel)
     private val usageLocationModel = UsageLocationTableModel()
@@ -244,6 +251,7 @@ internal class LocalizationManagerPanel(
                         Dimension(190, rowFilterBox.preferredSize.height)
                     add(rowFilterBox)
                     add(actionDropdown())
+                    add(columnVisibilityButton)
                 }
             add(schemeRow)
             add(Box.createVerticalStrut(JBUI.scale(4)))
@@ -537,13 +545,23 @@ internal class LocalizationManagerPanel(
         currentPage = page.page
         updatingEntryTable = true
         try {
-            preservingInlineEdit { entryModel.setData(page.rows, locales) }
+            preservingInlineEdit {
+                if (entryModel.setData(page.rows, locales)) {
+                    // Recreated columns: widths are set once here so later refreshes keep the user's resizing.
+                    columnVisibility.reset()
+                    applyDefaultColumnWidths()
+                }
+                applyLocaleColumnVisibility()
+            }
         } finally {
             updatingEntryTable = false
         }
         pageLabel.text = message("pagination.page", currentPage + 1, page.pageCount, page.totalRows)
         previousPageButton.isEnabled = currentPage > 0
         nextPageButton.isEnabled = currentPage + 1 < page.pageCount
+    }
+
+    private fun applyDefaultColumnWidths() {
         for (index in 0 until entryTable.columnModel.columnCount) {
             entryTable.columnModel.getColumn(index).preferredWidth =
                 when (index) {
@@ -553,6 +571,46 @@ internal class LocalizationManagerPanel(
                     else -> 260
                 }
         }
+    }
+
+    /** Hides the language columns the user turned off for the active scheme (issue #21). View state only. */
+    private fun applyLocaleColumnVisibility() {
+        val hidden = current.activeSchemeId?.let(hiddenLocaleColumns::hidden).orEmpty()
+        columnVisibility.apply(hidden.mapNotNull { locale -> entryModel.columnOf(locale).takeIf { it >= 0 } }.toSet())
+        columnVisibilityButton.text = columnVisibilityButtonText()
+    }
+
+    private fun columnVisibilityButtonText(): String {
+        val locales = entryModel.locales()
+        val hidden = current.activeSchemeId?.let(hiddenLocaleColumns::hidden).orEmpty()
+        return message("action.columns.dropdown", locales.count { it !in hidden }, locales.size)
+    }
+
+    private fun showColumnVisibilityPopup() {
+        val schemeId = current.activeSchemeId ?: return showError(message("error.no.active.scheme"))
+        val locales = entryModel.locales()
+        if (locales.isEmpty()) return showError(message("columns.none"))
+        // Several languages can be toggled in one go without the popup closing.
+        KeepOpenTogglePopup.show(
+            columnVisibilityButton,
+            message("columns.popup.title"),
+            locales.map { locale ->
+                KeepOpenTogglePopup.Toggle(
+                    locale,
+                    isSelected = { locale !in hiddenLocaleColumns.hidden(schemeId) },
+                    setSelected = { visible ->
+                        hiddenLocaleColumns.setHidden(schemeId, locale, hidden = !visible)
+                        applyLocaleColumnVisibility()
+                    },
+                )
+            },
+            listOf(
+                KeepOpenTogglePopup.Command(message("columns.show.all")) {
+                    hiddenLocaleColumns.showAll(schemeId)
+                    applyLocaleColumnVisibility()
+                },
+            ),
+        )
     }
 
     private fun loadUsageLocationPage() {
@@ -2338,14 +2396,16 @@ private class EntryTableModel : AbstractTableModel() {
         private set
     private var locales: List<String> = emptyList()
 
+    /** Returns true when the language columns changed, which makes the table recreate every column. */
     fun setData(
         rows: List<JoinedTranslationRow>,
         locales: List<String>,
-    ) {
+    ): Boolean {
         val structureChanged = this.locales != locales
         items = rows
         this.locales = locales
         if (structureChanged) fireTableStructureChanged() else fireTableDataChanged()
+        return structureChanged
     }
 
     var onTranslationEdited: (row: JoinedTranslationRow, locale: String, value: String) -> Unit = { _, _, _ -> }
