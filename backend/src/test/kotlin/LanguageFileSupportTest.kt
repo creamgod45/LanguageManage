@@ -529,6 +529,47 @@ class LanguageFileSupportTest {
     }
 
     @Test
+    fun `round trips keys with intentional leading and trailing whitespace in all formats`() {
+        // Keys are kept exactly as typed (the UI only warns), so every writer must preserve surrounding whitespace.
+        val keys = listOf(" app.name", "app.title ", "  both  ", "　ideographic　", "\tTabbed", "inner　space")
+        val cases =
+            mapOf(
+                "en.json" to "{\"old\":\"value\"}",
+                "en.yml" to "old: value\n",
+                "messages.php" to "<?php return ['old' => 'value'];",
+                "Keys.properties" to "old=value\n",
+            )
+        cases.forEach { (name, initial) ->
+            val parent = if (name.endsWith("php")) temp.resolve("whitespace-en").createDirectories() else temp
+            val path = parent.resolve(name).apply { writeText(initial) }
+            val document = LanguageFileCodec.parse(path, "scheme")
+            keys.forEachIndexed { index, key ->
+                document.values[key] = "value $index"
+                document.keyPaths[key] = listOf(key)
+            }
+            LanguageFileCodec.write(document)
+            val reread = LanguageFileCodec.parse(path, "scheme")
+            assertTrue(reread.issues.isEmpty(), "$name: ${reread.issues}")
+            keys.forEachIndexed { index, key -> assertEquals("value $index", reread.values[key], "$name key=[$key] keys=${reread.values.keys}") }
+            assertEquals("value", reread.values["old"], name)
+        }
+    }
+
+    @Test
+    fun `round trips escape-like values in yaml and leading ideographic space in properties`() {
+        val values = mapOf("path" to "C:\\new\\table", "tab" to "a\tb", "cr" to "a\rb", "wide" to "\u3000indented")
+        listOf("escapes.yml" to "old: value\n", "Escapes.properties" to "old=value\n").forEach { (name, initial) ->
+            val path = temp.resolve(name).apply { writeText(initial) }
+            val document = LanguageFileCodec.parse(path, "scheme")
+            values.forEach { (key, value) -> document.values[key] = value }
+            LanguageFileCodec.write(document)
+            val reread = LanguageFileCodec.parse(path, "scheme")
+            assertTrue(reread.issues.isEmpty(), "$name: ${reread.issues}")
+            values.forEach { (key, value) -> assertEquals(value, reread.values[key], "$name $key") }
+        }
+    }
+
+    @Test
     fun `parses Java properties syntax and locale suffix`() {
         val file =
             temp.resolve("LanguageManagerBundle_zh_TW.properties").apply {
