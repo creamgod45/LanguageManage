@@ -2480,7 +2480,7 @@ private class RenameKeyDialog(
     private val syncCheckBox = JBCheckBox(message("dialog.rename.sync.usages"))
 
     val newKey: String
-        get() = keyField.text.trim()
+        get() = keyField.text
     val syncUsageLocations: Boolean
         get() = syncCheckBox.isSelected
 
@@ -2490,7 +2490,7 @@ private class RenameKeyDialog(
     }
 
     override fun doValidate(): ValidationInfo? =
-        if (newKey.isEmpty()) ValidationInfo(message("error.rename.key.required"), keyField) else null
+        if (newKey.isBlank()) ValidationInfo(message("error.rename.key.required"), keyField) else null
 
     override fun createCenterPanel(): JComponent =
         JPanel().apply {
@@ -2504,6 +2504,7 @@ private class RenameKeyDialog(
                     maximumSize = Dimension(Int.MAX_VALUE, preferredSize.height)
                 },
             )
+            add(KeyWhitespaceHint(keyField).apply { alignmentX = Component.LEFT_ALIGNMENT })
             add(Box.createVerticalStrut(10))
             add(syncCheckBox.apply { alignmentX = Component.LEFT_ALIGNMENT })
             add(Box.createVerticalStrut(4))

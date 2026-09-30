@@ -15,13 +15,16 @@ class TranslationInputValidationTest {
     }
 
     @Test
-    fun `outer whitespace is normalized but punctuation is preserved`() {
-        assertEquals("Status: offline?", TranslationInputValidation.key("  Status: offline?  "))
+    fun `outer whitespace is kept as typed because it may be intentional`() {
+        assertEquals("  Status: offline?  ", TranslationInputValidation.key("  Status: offline?  "))
+        assertEquals(" app.name", TranslationInputValidation.key(" app.name"))
+        assertEquals("　app.name　", TranslationInputValidation.key("　app.name　"))
     }
 
     @Test
     fun `blank control and overlong keys are rejected`() {
         assertFailsWith<IllegalArgumentException> { TranslationInputValidation.key("   ") }
+        assertFailsWith<IllegalArgumentException> { TranslationInputValidation.key("　　") }
         assertFailsWith<IllegalArgumentException> { TranslationInputValidation.key("unsafe\nkey") }
         assertFailsWith<IllegalArgumentException> { TranslationInputValidation.key("k".repeat(257)) }
     }

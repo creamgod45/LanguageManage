@@ -9,7 +9,9 @@ internal object TranslationInputValidation {
     fun key(raw: String): String {
         require(raw.length <= MAX_KEY_LENGTH) { backendMessage("input.too.long") }
         require(raw.none(::isUnsafeControlCharacter)) { backendMessage("input.control") }
-        return raw.trim().also { require(it.isNotEmpty()) { backendMessage("key.invalid") } }
+        // Surrounding whitespace is kept as typed; the frontend warns about it instead of silently removing it.
+        require(raw.isNotBlank()) { backendMessage("key.invalid") }
+        return raw
     }
 
     private fun isUnsafeControlCharacter(char: Char): Boolean = char == '\u0000' || char.code < 32 || char.code in 127..159

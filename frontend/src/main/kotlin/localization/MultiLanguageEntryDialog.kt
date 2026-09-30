@@ -118,6 +118,7 @@ internal class MultiLanguageEntryDialog(
             isEnabled = row == null && namespaces.size > 1
         }
     private val keyField = JBTextField(row?.key.orEmpty()).apply { isEditable = row == null }
+    private val keyWhitespaceHint = KeyWhitespaceHint(keyField)
     private val editorPanel = JPanel(GridBagLayout())
     private val editors = linkedMapOf<TranslationEditorTarget, JBTextArea>()
     private val draftValues = mutableMapOf<String, String>()
@@ -136,7 +137,7 @@ internal class MultiLanguageEntryDialog(
 
     fun mutations(): List<EntryMutationDto> {
         saveDraftValues()
-        val key = keyField.text.trim()
+        val key = keyField.text
         return editors.mapNotNull { (target, editor) ->
             val existing =
                 row?.translations?.firstOrNull { it.filePath == target.filePath }
@@ -160,6 +161,7 @@ internal class MultiLanguageEntryDialog(
                 .addComponent(JBLabel(message("dialog.translation.all.help")))
                 .addLabeledComponent(message("field.namespace"), namespaceBox)
                 .addLabeledComponent(message("field.key"), keyField)
+                .addComponentToRightColumn(keyWhitespaceHint)
                 .panel
         val scrollPane =
             JBScrollPane(editorPanel).apply {
@@ -180,6 +182,9 @@ internal class MultiLanguageEntryDialog(
     internal fun keyFieldForTest(): JBTextField = keyField
 
     @TestOnly
+    internal fun keyWhitespaceHintForTest(): JBLabel = keyWhitespaceHint
+
+    @TestOnly
     internal fun valueEditorsForTest(): Map<String, JBTextArea> = editors.entries.associate { (target, editor) -> target.filePath to editor }
 
     fun draft(): TranslationEntryDraft {
@@ -188,9 +193,10 @@ internal class MultiLanguageEntryDialog(
     }
 
     override fun doValidate(): ValidationInfo? {
-        val key = keyField.text.trim()
+        // Surrounding whitespace is kept as typed; KeyWhitespaceHint warns about it.
+        val key = keyField.text
         return when {
-            key.isEmpty() -> ValidationInfo(message("error.translation.key.required"), keyField)
+            key.isBlank() -> ValidationInfo(message("error.translation.key.required"), keyField)
             editors.isEmpty() -> ValidationInfo(message("error.translation.targets.none"), namespaceBox)
             row == null -> duplicateKeyValidation(key)
             else -> null

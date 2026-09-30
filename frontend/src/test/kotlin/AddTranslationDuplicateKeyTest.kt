@@ -68,6 +68,45 @@ class AddTranslationDuplicateKeyTest : BasePlatformTestCase() {
         }
     }
 
+    fun testKeyWithSurroundingWhitespaceIsKeptAsTypedAndWarned() {
+        // Surrounding spaces may be intentional, so " button.save " is a different key and is saved as typed.
+        val dialog = MultiLanguageEntryDialog(project, scheme, existingEntries, null)
+        try {
+            val form = dialog.form()
+            val hint = dialog.keyWhitespaceHintForTest()
+            form.key.text = "button.save.changes"
+            assertFalse("No warning for a key without surrounding spaces", hint.isVisible)
+
+            form.key.text = "  button.save  "
+            assertTrue("Warning appears while typing surrounding spaces", hint.isVisible)
+            assertFalse(hint.text.startsWith("!"))
+            form.valueFor(englishFile).text = "Save changes"
+
+            dialog.clickOk()
+
+            assertTrue("A key that differs by surrounding spaces is not a duplicate", dialog.isOK)
+            assertEquals(setOf("  button.save  "), dialog.mutations().map { it.key }.toSet())
+        } finally {
+            dialog.disposeIfNeeded()
+        }
+    }
+
+    fun testFullWidthSpaceAroundKeyIsWarnedAndBlankKeyIsRejected() {
+        val dialog = MultiLanguageEntryDialog(project, scheme, existingEntries, null)
+        try {
+            val form = dialog.form()
+            form.key.text = "　button.save"
+            assertTrue("IME full-width space is warned", dialog.keyWhitespaceHintForTest().isVisible)
+
+            form.key.text = "   "
+            assertFalse("Blank key is reported by validation, not by the whitespace hint", dialog.keyWhitespaceHintForTest().isVisible)
+            dialog.clickOk()
+            assertFalse("Blank key must not be saved", dialog.isOK)
+        } finally {
+            dialog.disposeIfNeeded()
+        }
+    }
+
     fun testReopenedDialogAfterBackendRejectionRestoresTypedInput() {
         // If the backend still rejects the save (e.g. the key was added concurrently), the panel reopens the dialog from this draft.
         val first = MultiLanguageEntryDialog(project, scheme, emptyList(), null)
