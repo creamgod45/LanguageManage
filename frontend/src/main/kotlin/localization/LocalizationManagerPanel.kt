@@ -986,9 +986,19 @@ internal class LocalizationManagerPanel(
     private fun showEntryDialog(
         row: JoinedTranslationRow?,
         scheme: LanguageSchemeDto,
+        draft: TranslationEntryDraft? = null,
     ) {
-        val dialog = MultiLanguageEntryDialog(project, scheme, current.entries, row)
-        if (dialog.showAndGet()) runAction { repository.saveAll(scheme.id, dialog.mutations()) }
+        val dialog = MultiLanguageEntryDialog(project, scheme, current.entries, row, draft)
+        if (!dialog.showAndGet()) return
+        val mutations = dialog.mutations()
+        val submitted = dialog.draft()
+        // A backend rejection (for example a key added concurrently) reopens the dialog with the typed values.
+        runAction(
+            onFailure = {
+                val latestScheme = current.schemes.firstOrNull { it.id == scheme.id }
+                if (latestScheme != null && current.activeSchemeId == scheme.id) showEntryDialog(row, latestScheme, submitted)
+            },
+        ) { repository.saveAll(scheme.id, mutations) }
     }
 
     private fun deleteSelected() {
@@ -1545,15 +1555,20 @@ internal class LocalizationManagerPanel(
         Messages.showErrorDialog(project, text.take(500), message("dialog.confirm.title"))
     }
 
-    private fun runAction(action: suspend () -> Unit) {
+    private fun runAction(
+        onFailure: (() -> Unit)? = null,
+        action: suspend () -> Unit,
+    ) {
         val operationId = ++nextOperationId
         runningOperations += operationId
         refreshStatus()
         scope.launch {
+            var failed = false
             try {
                 action()
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
+                failed = true
                 withContext(Dispatchers.EDT) {
                     showError(e.message ?: message("error.action.failed"))
                     status.text =
@@ -1565,6 +1580,8 @@ internal class LocalizationManagerPanel(
                     refreshStatus()
                 }
             }
+            // Runs after the operation is released so a modal retry dialog does not keep it marked as running.
+            if (failed && onFailure != null) withContext(Dispatchers.EDT) { onFailure() }
         }
     }
 

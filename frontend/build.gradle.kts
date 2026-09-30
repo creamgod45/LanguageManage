@@ -1,3 +1,4 @@
+import org.jetbrains.intellij.platform.gradle.TestFrameworkType
 import org.jetbrains.kotlin.gradle.dsl.JvmDefaultMode
 
 kotlin {
@@ -12,6 +13,8 @@ kotlin {
 dependencies {
     intellijPlatform {
         bundledModule("intellij.platform.frontend")
+        // Dialog-level regression tests (for example issue #18) need a headless IDE application.
+        testFramework(TestFrameworkType.Platform)
 
         compileOnly(libs.kotlin.serialization.core.jvm)
         compileOnly(libs.kotlin.serialization.json.jvm)

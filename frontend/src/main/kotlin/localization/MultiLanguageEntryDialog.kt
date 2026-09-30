@@ -16,6 +16,7 @@ import com.intellij.ui.components.JBTextArea
 import com.intellij.ui.components.JBTextField
 import com.intellij.util.ui.FormBuilder
 import com.intellij.util.ui.JBUI
+import org.jetbrains.annotations.TestOnly
 import java.awt.BorderLayout
 import java.awt.Dimension
 import java.awt.GridBagConstraints
@@ -34,8 +35,27 @@ internal data class TranslationEditorTarget(
     val namespace: String,
 )
 
+/** User input kept when the dialog must be reopened after a failed save. */
+internal data class TranslationEntryDraft(
+    val namespace: String,
+    val key: String,
+    val valuesByFilePath: Map<String, String>,
+)
+
 internal object TranslationEditorSupport {
     private val propertiesLocaleSuffix = Regex("^(.+)_([a-z]{2,3}(?:_[A-Z]{2})?)$")
+
+    /** Existing entries that would make adding [key] to [targets] fail with a duplicate-key error. */
+    fun existingKeyConflicts(
+        key: String,
+        targets: Collection<TranslationEditorTarget>,
+        entries: List<LanguageEntryDto>,
+    ): List<LanguageEntryDto> {
+        val targetFiles = targets.mapTo(hashSetOf()) { normalizedPath(it.filePath) }
+        return entries.filter { it.key == key && normalizedPath(it.filePath) in targetFiles }
+    }
+
+    private fun normalizedPath(filePath: String) = runCatching { Path.of(filePath).toAbsolutePath().normalize().toString() }.getOrDefault(filePath)
 
     fun targets(
         scheme: LanguageSchemeDto,
@@ -86,6 +106,7 @@ internal class MultiLanguageEntryDialog(
     scheme: LanguageSchemeDto,
     private val entries: List<LanguageEntryDto>,
     private val row: JoinedTranslationRow?,
+    draft: TranslationEntryDraft? = null,
 ) : DialogWrapper(project) {
     private val allTargets = TranslationEditorSupport.targets(scheme, entries)
     private val namespaces =
@@ -103,7 +124,11 @@ internal class MultiLanguageEntryDialog(
 
     init {
         title = message(if (row == null) "dialog.add.translation.title" else "dialog.edit.translation.title")
-        namespaceBox.selectedItem = row?.namespace ?: namespaces.first()
+        namespaceBox.selectedItem = row?.namespace ?: draft?.namespace?.takeIf { it in namespaces } ?: namespaces.first()
+        if (draft != null) {
+            if (row == null) keyField.text = draft.key
+            draftValues.putAll(draft.valuesByFilePath)
+        }
         namespaceBox.addActionListener { rebuildEditors() }
         rebuildEditors()
         init()
@@ -151,12 +176,38 @@ internal class MultiLanguageEntryDialog(
         }
     }
 
-    override fun doValidate(): ValidationInfo? =
-        when {
-            keyField.text.trim().isEmpty() -> ValidationInfo(message("error.translation.key.required"), keyField)
+    @TestOnly
+    internal fun keyFieldForTest(): JBTextField = keyField
+
+    @TestOnly
+    internal fun valueEditorsForTest(): Map<String, JBTextArea> = editors.entries.associate { (target, editor) -> target.filePath to editor }
+
+    fun draft(): TranslationEntryDraft {
+        saveDraftValues()
+        return TranslationEntryDraft(namespaceBox.selectedItem?.toString().orEmpty(), keyField.text, draftValues.toMap())
+    }
+
+    override fun doValidate(): ValidationInfo? {
+        val key = keyField.text.trim()
+        return when {
+            key.isEmpty() -> ValidationInfo(message("error.translation.key.required"), keyField)
             editors.isEmpty() -> ValidationInfo(message("error.translation.targets.none"), namespaceBox)
+            row == null -> duplicateKeyValidation(key)
             else -> null
         }
+    }
+
+    // Checked while the dialog is open so a duplicate key never discards the values already typed.
+    private fun duplicateKeyValidation(key: String): ValidationInfo? {
+        val conflicts = TranslationEditorSupport.existingKeyConflicts(key, editors.keys, entries)
+        if (conflicts.isEmpty()) return null
+        val files =
+            conflicts
+                .map { Path.of(it.filePath).fileName.toString() }
+                .distinct()
+                .joinToString(", ")
+        return ValidationInfo(message("error.translation.key.exists", key, files), keyField)
+    }
 
     private fun rebuildEditors() {
         saveDraftValues()
