@@ -21,6 +21,7 @@ import com.intellij.openapi.progress.ProgressIndicator
 import com.intellij.openapi.progress.ProcessCanceledException
 import com.intellij.openapi.progress.Task
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.ui.ComboBox
 import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.ui.Messages
 import com.intellij.ui.components.JBLabel
@@ -46,7 +47,6 @@ import java.awt.event.MouseEvent
 import java.nio.file.Path
 import javax.swing.JButton
 import javax.swing.JCheckBoxMenuItem
-import javax.swing.JComboBox
 import javax.swing.JPanel
 import javax.swing.JProgressBar
 import javax.swing.JPopupMenu
@@ -66,7 +66,7 @@ internal class HardcodedAnalysisPanel(
     private val repository = LocalizationFrontendRepository(project)
     private val schemeLabel = JBLabel()
     private val search = JBTextField()
-    private val confidence = JComboBox(ConfidenceFilter.entries.toTypedArray())
+    private val confidence = ComboBox(ConfidenceFilter.entries.toTypedArray())
     private val excludedPatterns = linkedSetOf<AnalysisValuePatternFilter>()
     private val patternFilterButton = JButton(patternFilterButtonText())
     private val refresh = JButton(message("analysis.action.refresh"))
