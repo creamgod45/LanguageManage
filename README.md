@@ -16,6 +16,7 @@ The UI and diagnostics are available in English, Traditional Chinese, Simplified
 - JOIN translations with the same `namespace + key` into one table row, with a separate column for each locale.
 - Fuzzy and exact search, locale filtering, missing-translation and zero-usage filters, and pagination limited to 100 rows per page. Reloads and mutation-driven state refreshes retain the current page; changing a search/filter returns to page 1.
 - Add or edit every locale value in one scrollable form, save locale mutations as one validated batch, bulk delete, rename keys, merge two translations, copy/paste cells, and launch IDE-native Find in Files. Rename and Merge can synchronize recorded source usages through an editable code Diff; Merge preserves existing target values, fills only missing locales, and supports Laravel nested references such as `admin/customer.key` or `package::admin/customer.key`.
+- Saving an edited value (quick in-place edit, Edit Selected, or paste) changes only that value inside the file. Comments, blank lines, quoting, indentation, key order, Unicode escapes, `declare(strict_types=1)`, and every other entry stay byte-for-byte identical, and saving an unchanged value never rewrites the file. Adding or removing keys still renders the whole file.
 - Batch-translate up to 100 selected rows through an OpenAI-compatible or Anthropic Claude endpoint. The modal defaults editable source text to `en` when available (otherwise the key), supports multiple target locales, and reviews each target in its own editable column before one combined file Diff. API tokens stay in JetBrains PasswordSafe, and optional Temperature is omitted by default. Only **Apply** writes files; **Give AI More Feedback** carries the edited source values, reviewed suggestions, and feedback into a new request round.
 - Copy selected keys into one target locale's values, and add framework-specific usage Regex recommendations for major PHP frameworks, Spring/Java/Kotlin, ResourceBundle, and IntelliJ Platform plugins. An opt-in Laravel key-only preset can ignore uncertain package/group prefixes such as `filament::components/button.` when exact namespace matching is not practical.
 - Create a complete new locale from an existing locale—for example, copy the key structure from `en/*.php` into `es/*.php`—using a freely editable code field and an explicit ISO/BCP 47 suggestion popup. The popup never rewrites text while typing. An optional locale note is saved with the scheme and supplied to AI as language, region, terminology, and tone context; every new file is reviewed in a Diff first.
@@ -144,6 +145,7 @@ The root project uses the IntelliJ Platform Gradle Plugin to assemble three cont
 | `HardcodedTextAnalysisSupport.kt` | Incremental per-file detection and statistics for likely untranslated quoted source text |
 | `UsageExclusionSupport.kt` | Converts selected local folders into safe, precise exclusions relative to the scheme scan root |
 | `LanguageLoadBudget.kt` | Applies pre-parse file-size and post-parse entry budgets across one isolated scheme |
+| `FormatPreservingWriter.kt` | Writes value-only edits into the original JSON/YAML/PHP/Properties text so comments, formatting, and untouched entries stay unchanged; verifies every patch and falls back to a full render |
 | `EntryMutationSupport.kt` | Applies validated multi-locale add/edit mutations to parsed documents before coordinated atomic writes |
 | `AiTranslationSupport.kt` | Validates endpoints, locale-note context, and batch limits; sends OpenAI-compatible/Anthropic requests and strictly validates returned IDs and values |
 | `SchemeSettingsTransferSupport.kt` | Versioned scheme JSON including locale notes, relative path conversion, import limits, and security validation |
@@ -163,6 +165,7 @@ The root project uses the IntelliJ Platform Gradle Plugin to assemble three cont
 | `frontend/src/test/kotlin/ToolWindowIconVariantsTest.kt` | Presence, dimensions, and theme colors of all four Tool Window icon variants |
 | `backend/src/test/kotlin/UsageScanSupportTest.kt` | Custom Regex, relative exclusions, counts, and rejection of unsafe settings |
 | `backend/src/test/kotlin/TranslationInputValidationTest.kt` | Sentence/Unicode keys and rejection of blank, control-character, and oversized keys |
+| `backend/src/test/kotlin/FormatPreservingWriterTest.kt` | One-value edits keep PHP/JSON/YAML/Properties comments, quoting, escapes, continuation lines, and CRLF unchanged; unchanged values do not rewrite; structural changes fall back |
 | `backend/src/test/kotlin/SchemeSettingsTransferSupportTest.kt` | Relative path round trips, missing files, parent traversal, and format version rejection |
 
 ## RPC API
@@ -241,7 +244,7 @@ Every service mutation is serialized with one coroutine `Mutex` per project. The
 1. The frontend creates an `EntryMutationDto` or entry ID list.
 2. The backend validates the scheme, path, locale, namespace, key length, and control characters. Keys may be natural-language sentences containing spaces, Unicode, and punctuation.
 3. The managed file is parsed again so stale UI state cannot overwrite newer content.
-4. The modified `ParsedLanguageFile` is rendered in its original format and written atomically.
+4. When only existing values changed, `FormatPreservingWriter` replaces just those value spans in the original text and re-parses the result to verify it; added or removed keys, structured values, or an unverifiable patch fall back to rendering the whole `ParsedLanguageFile`. A file whose content would not change is not written; otherwise it is written atomically.
 5. After the whole mutation succeeds, only the written user files are synchronously refreshed through JetBrains VFS; an already cached IDE document is reloaded from the final disk content.
 5. The scheme, analysis, and cache are rebuilt before the latest state is emitted to the UI.
 

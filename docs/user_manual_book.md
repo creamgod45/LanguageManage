@@ -169,6 +169,8 @@ Open **Actions ▾** to access the following commands.
 2. The scrollable form lists every locale file available for that namespace at once.
 3. Enter each language value. Every textarea keeps a three-line, 72 px editing height and is not compressed by the dialog buttons.
 4. Confirm once to validate and write all locale values as one batch, then reload the scheme once. Empty fields are created as empty values so missing-value analysis can report them.
+5. If the key already exists in the files of the selected namespace, **OK** keeps the dialog open and shows `Key "…" already exists in …` below the key field, so you can correct the key without typing the values again. If the save is still rejected later (for example another change added the same key meanwhile), the dialog reopens with the same namespace, key, and values. Related issue: [#18](https://github.com/creamgod45/LanguageManage/issues/18).
+6. Spaces at the start or end of the key are kept as typed; see [Key whitespace](#key-whitespace).
 
 ### Add locale version
 
@@ -184,11 +186,15 @@ Creation stops without overwriting if the target locale or file already exists, 
 
 ### Visible columns and context menu
 
+Related issues: [#21](https://github.com/creamgod45/LanguageManage/issues/21) (visible columns) and [#22](https://github.com/creamgod45/LanguageManage/issues/22) (context menu).
+
 Use **Visible Columns (n/m) ▾** in the toolbar to switch individual language columns on or off. The popup stays open while you toggle, so several languages can be changed at once; **Show All Languages** restores every column. Hidden columns are remembered per project and per scheme and only affect the table view, never the language files.
 
 Right-click any cell to open the same actions as **Actions ▾**. The cell under the pointer is selected first, so row actions such as Edit Selected or Rename Key act on that row. Right-clicking inside an existing multi-row selection keeps the selection for bulk actions.
 
 ### Quick in-place edit
+
+Related issue: [#17](https://github.com/creamgod45/LanguageManage/issues/17).
 
 Double-click a language value cell, or select it and press **F2**, to edit that value directly in the table. The editor wraps long text and grows the row (up to eight lines) while editing. Press **Enter** or move focus away to save, **Shift+Enter** to insert a line break, or **Esc** to cancel. Typing without starting an edit never changes a value. Only that cell's locale file is written; an unchanged value is skipped, and a missing locale value is created in that locale's file for the same namespace. Long and multi-line values are edited in place. Only cells showing several same-locale values joined by ` | ` are not edited in place; double-clicking them shows a status hint to use **Actions ▾ → Edit Selected**, and no dialog opens. To turn quick editing off, clear **Translation table → Quick in-place editing** in **Settings → Tools → LanguageManager**; double-clicking a translation cell then does nothing. While quick editing is on, the IDE expanded-cell preview is disabled for this table so long values can still be double-clicked; hover a truncated value to see its full text in a tooltip that wraps to the window width. If the table refreshes while you are typing, the draft is kept on the same `namespace + key` and locale.
 
@@ -330,6 +336,10 @@ Click **Handle** in the final column. Depending on issue type, the action previe
 - Never guesses or writes an unparseable file.
 
 ## 9. Format Notes
+
+### Saving keeps the original file text
+
+Saving a translation value through quick in-place editing, **Edit Selected**, or paste changes only that value inside the file. Comments, blank lines, quoting style, indentation, key order, Unicode escapes such as `\u4F60`, `declare(strict_types=1)`, and every other entry stay exactly as they were, and saving a value that did not change does not rewrite the file at all. The edited value itself is written in the plugin's standard form for the format (for example a single-quoted PHP string). Adding or removing keys, renaming, merging, and repair or normalization still write the whole file in the plugin's standard layout, so review their Diff.
 
 ### JSON
 
@@ -539,3 +549,15 @@ Before submitting, remove passwords, tokens, client names, and other sensitive c
 ## 14. Viewing Release Notes
 
 After a Marketplace update is uploaded, the current version section from [CHANGELOG.md](../CHANGELOG.md) is displayed in the plugin page’s **What’s New** section and in the IDE Plugin Manager. The build generates this metadata directly from the matching version instead of maintaining a separate summary.
+
+### Changes in 1.8.x and where they are described
+
+| Version | Change | Issue | Manual section |
+|---|---|---|---|
+| 1.8.0 | Quick in-place editing of translation cells (double-click or F2), with a setting to turn it off | [#17](https://github.com/creamgod45/LanguageManage/issues/17) | [Quick in-place edit](#quick-in-place-edit) |
+| 1.8.0 | Add Translation keeps typed values when the key already exists | [#18](https://github.com/creamgod45/LanguageManage/issues/18) | [Add translation](#add-translation) |
+| 1.8.0 | Visible Columns: show or hide language columns per scheme | [#21](https://github.com/creamgod45/LanguageManage/issues/21) | [Visible columns and context menu](#visible-columns-and-context-menu) |
+| 1.8.0 | Right-click context menu with the same actions as Actions ▾ | [#22](https://github.com/creamgod45/LanguageManage/issues/22) | [Visible columns and context menu](#visible-columns-and-context-menu) |
+| 1.8.0 | Keys keep leading and trailing spaces, with a warning | — | [Key whitespace](#key-whitespace) |
+| 1.8.1 | Rust i18n recommended usage Regex | — | [Usage Scan Settings](#10-usage-scan-settings) |
+| 1.8.1 | Saving a value keeps the original file text | — | [Saving keeps the original file text](#saving-keeps-the-original-file-text) |
