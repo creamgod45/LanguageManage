@@ -1,5 +1,17 @@
 # Language Manager Changelog
 
+## 1.8.1
+
+### English
+
+- Add **Rust → Rust i18n** to the recommended usage Regex formats. Capture literal keys from `t!` and `rust_i18n::t!`, including locale/interpolation arguments and raw strings.
+
+---
+
+### 繁體中文
+
+- 使用率掃描的推薦 Regex 格式新增 **Rust → Rust i18n**，可擷取 `t!` 與 `rust_i18n::t!` 的字串 key，支援 locale／插值參數及 raw string。
+
 ## 1.8.0
 
 ### English

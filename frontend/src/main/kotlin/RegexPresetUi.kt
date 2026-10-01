@@ -58,6 +58,14 @@ internal object RegexPresetUi {
             ),
             RegexPreset("Java / Kotlin", "ResourceBundle", listOf("""\bgetString\(\s*(?<quote>[\"'])(?<key>[^\r\n]{1,256}?)\k<quote>""")),
             RegexPreset(
+                message("settings.regex.preset.rust.group"),
+                message("settings.regex.preset.rust.i18n"),
+                listOf(
+                    """(?<![\w:])(?:rust_i18n::)?t\s*!\s*[({\[]\s*"(?<key>[^"\\\r\n]{1,256})"\s*(?=[,)}\]])""",
+                    """(?<![\w:])(?:rust_i18n::)?t\s*!\s*[({\[]\s*r(?<hash>#{0,255})"(?<key>[^\r\n]{1,256}?)"\k<hash>\s*(?=[,)}\]])""",
+                ),
+            ),
+            RegexPreset(
                 "JetBrains",
                 "IntelliJ Platform Plugin",
                 listOf("""(?:message|messagePointer|lazyMessage)\(\s*(?<quote>[\"'])(?<key>[^\r\n]{1,256}?)\k<quote>"""),

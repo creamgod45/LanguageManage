@@ -20,6 +20,8 @@ class LanguageManagerFrontendBundleTest {
         listOf("zh_TW", "zh_CN", "ja", "ko", "es", "th").forEach { locale ->
             val localized = load("LanguageManagerFrontendBundle_$locale.properties")
             assertEquals(english.keys, localized.keys, locale)
+            assertEquals("Rust", localized.getProperty("settings.regex.preset.rust.group"), locale)
+            assertEquals("Rust i18n", localized.getProperty("settings.regex.preset.rust.i18n"), locale)
             assertNotEquals(english.getProperty("tab.issues"), localized.getProperty("tab.issues"), locale)
             assertNotEquals(english.getProperty("action.dropdown"), localized.getProperty("action.dropdown"), locale)
         }
