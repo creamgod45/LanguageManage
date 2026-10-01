@@ -585,22 +585,42 @@ internal object LanguageFileCodec {
         cancellationCheck: () -> Unit,
     ): ParsedLanguageFile {
         cancellationCheck()
-        val (locale, namespace) =
-            when (path.extension.lowercase()) {
-                "php" -> {
-                    phpIdentity(path).let { it.locale to it.namespace }
-                }
+        return parseContent(path, schemeId, SafeLanguageFileAccess::read, maxEntries, cancellationCheck)
+    }
 
-                "properties" -> {
-                    propertiesIdentity(path).let { (bundle, bundleLocale) -> bundleLocale to bundle }
-                }
-
-                else -> {
-                    path.nameWithoutExtension to ""
-                }
+    private fun identity(path: Path): Pair<String, String> =
+        when (path.extension.lowercase()) {
+            "php" -> {
+                phpIdentity(path).let { it.locale to it.namespace }
             }
+
+            "properties" -> {
+                propertiesIdentity(path).let { (bundle, bundleLocale) -> bundleLocale to bundle }
+            }
+
+            else -> {
+                path.nameWithoutExtension to ""
+            }
+        }
+
+    /** Parses [text] as the content of [path] without reading the file (used to compare before and after a patch). */
+    fun parseText(
+        path: Path,
+        schemeId: String,
+        text: String,
+        maxEntries: Int = DEFAULT_MAX_ENTRIES_PER_FILE,
+    ): ParsedLanguageFile = parseContent(path, schemeId, { text }, maxEntries) {}
+
+    private fun parseContent(
+        path: Path,
+        schemeId: String,
+        read: (Path) -> String,
+        maxEntries: Int,
+        cancellationCheck: () -> Unit,
+    ): ParsedLanguageFile {
+        val (locale, namespace) = identity(path)
         return try {
-            val text = SafeLanguageFileAccess.read(path)
+            val text = read(path)
             val structuredKeys = linkedSetOf<String>()
             val keyPaths = linkedMapOf<String, List<String>>()
             val jsonArrayPaths = linkedSetOf<List<String>>()
@@ -639,6 +659,15 @@ internal object LanguageFileCodec {
     fun write(document: ParsedLanguageFile) {
         SafeLanguageFileAccess.atomicWrite(document.path, render(document))
     }
+
+    /**
+     * Renders [document] by editing only the changed values inside [original] when possible, keeping comments,
+     * formatting and untouched entries unchanged; falls back to [render] for structural changes.
+     */
+    fun renderPreservingFormat(
+        document: ParsedLanguageFile,
+        original: String?,
+    ): String = original?.let { FormatPreservingWriter.patch(it, document) } ?: render(document)
 
     fun render(document: ParsedLanguageFile): String =
         when (document.path.extension.lowercase()) {
@@ -698,7 +727,7 @@ internal object LanguageFileCodec {
         return result
     }
 
-    private fun splitProperty(line: String): Pair<String, String> {
+    internal fun splitProperty(line: String): Pair<String, String> {
         var escaped = false
         var separator = -1
         var whitespaceSeparator = false
@@ -791,7 +820,7 @@ internal object LanguageFileCodec {
             }
         }
 
-    private fun escapeProperty(
+    internal fun escapeProperty(
         value: String,
         key: Boolean,
     ): String =
@@ -1080,7 +1109,7 @@ internal object LanguageFileCodec {
         return out
     }
 
-    private fun findYamlColon(line: String): Int {
+    internal fun findYamlColon(line: String): Int {
         var quote: Char? = null
         line.forEachIndexed { i, c ->
             if (c == '\'' ||
@@ -1100,7 +1129,7 @@ internal object LanguageFileCodec {
         return -1
     }
 
-    private fun stripYamlComment(value: String): String {
+    internal fun stripYamlComment(value: String): String {
         var quote: Char? = null
         value.forEachIndexed { i, c ->
             if (c == '\'' ||
@@ -1128,7 +1157,7 @@ internal object LanguageFileCodec {
         return value
     }
 
-    private fun unquote(value: String): String =
+    internal fun unquote(value: String): String =
         if (value.length >= 2 && value.first() == value.last() &&
             value.first() in charArrayOf('\'', '"')
         ) {
@@ -1144,7 +1173,7 @@ internal object LanguageFileCodec {
     private fun yamlKey(value: String) = if (value.matches(Regex("[A-Za-z0-9_.-]+"))) value else yamlValue(value)
 
     // Tabs and carriage returns are escaped too: a raw tab would be rejected as indentation when read back.
-    private fun yamlValue(value: String) =
+    internal fun yamlValue(value: String) =
         "\"${value.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t")}\""
 
     // Single pass, so an escaped backslash followed by `n` (for example `C:\\new`) is not decoded as a newline.
@@ -1168,7 +1197,7 @@ internal object LanguageFileCodec {
             }
         }
 
-    private fun phpEscape(value: String) =
+    internal fun phpEscape(value: String) =
         value
             .replace("\\", "\\\\")
             .replace("'", "\\'")
@@ -1186,6 +1215,10 @@ internal class PhpArrayParser(
 
     private var index = 0
     private val out = linkedMapOf<String, String>()
+    private var lastValueEnd = 0
+
+    /** Source range of every scalar value expression (start inclusive, end exclusive), keyed like the parsed values. */
+    val valueSpans = linkedMapOf<String, IntRange>()
 
     fun parse(): LinkedHashMap<String, String> {
         cancellationCheck()
@@ -1244,10 +1277,12 @@ internal class PhpArrayParser(
             if (peek("[") || peekWord("array")) {
                 parseMap(full, depth + 1)
             } else {
+                val valueStart = index
                 val value = parseScalar()
                 require(full !in out) { backendMessage("php.duplicate.key", full) }
                 require(out.size < maxEntries) { backendMessage("parser.entry.limit", maxEntries) }
                 out[full] = value
+                valueSpans[full] = valueStart until lastValueEnd
             }
             skipTrivia()
             if (index < source.length &&
@@ -1270,6 +1305,7 @@ internal class PhpArrayParser(
         } else {
             val start = index
             while (index < source.length && source[index] !in charArrayOf(',', ']', ')')) index++
+            lastValueEnd = start + source.substring(start, index).trimEnd().length
             source.substring(start, index).trim().also {
                 require(it.matches(Regex("-?[0-9.]+|true|false", RegexOption.IGNORE_CASE))) { backendMessage("php.scalar.only") }
             }
@@ -1278,12 +1314,14 @@ internal class PhpArrayParser(
     private fun parseStringExpression(): String =
         buildString {
             append(parseStringAtom())
+            lastValueEnd = index
             skipTrivia()
             while (peek(".")) {
                 index++
                 skipTrivia()
                 require(isStringStart()) { backendMessage("php.scalar.only") }
                 append(parseStringAtom())
+                lastValueEnd = index
                 skipTrivia()
             }
         }

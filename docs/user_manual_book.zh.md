@@ -169,6 +169,8 @@ LanguageManagerBundle_zh_TW.properties  -> locale: zh_TW, namespace: LanguageMan
 2. 可捲動表單會一次列出該 namespace 所有可用語言檔。
 3. 直接填寫各語言 value；每個 textarea 固定保留三行、72 px 編輯高度，不會被 Dialog 按鈕壓縮。
 4. 只需確認一次，插件會以單一批量操作驗證並寫入全部語言，最後只重新載入方案一次。未填欄位會建立為空值，讓缺失 value 分析可以列出。
+5. 若 key 已存在於所選 Namespace 的檔案，按「確定」時對話框不會關閉，並在 key 欄位下方顯示「Key「…」已存在於 …」，可直接修正 key 而不必重新輸入翻譯。若之後儲存仍被拒絕（例如期間有其他變更新增了同一個 key），對話框會以相同的 Namespace、key 與各語言值重新開啟。相關 issue：[#18](https://github.com/creamgod45/LanguageManage/issues/18)。
+6. key 開頭或結尾的空白會依輸入原樣保留，請參考[Key 前後空白](#key-前後空白)。
 
 ### 新增語言版本
 
@@ -184,11 +186,15 @@ LanguageManagerBundle_zh_TW.properties  -> locale: zh_TW, namespace: LanguageMan
 
 ### 顯示欄位與右鍵選單
 
+相關 issue：[#21](https://github.com/creamgod45/LanguageManage/issues/21)（顯示欄位）、[#22](https://github.com/creamgod45/LanguageManage/issues/22)（右鍵選單）。
+
 使用工具列的「**顯示欄位（n/m）▾**」逐一開關語系欄位。切換時選單會保持開啟，可一次調整多個語系；「全部顯示」可還原所有欄位。隱藏設定依專案與方案分別記憶，只影響表格顯示，不會修改語言檔。
 
 在任一儲存格按右鍵即可開啟與「**操作 ▾**」相同的選單。會先選取游標所指的儲存格，因此「編輯所選」、「Key 改名」等 row action 會作用在該列；若在既有的多列選取範圍內按右鍵，則保留選取以進行批量操作。
 
 ### 快速直接編輯
+
+相關 issue：[#17](https://github.com/creamgod45/LanguageManage/issues/17)。
 
 雙擊語言值儲存格，或選取後按 **F2**，即可直接在表格內編輯該值。編輯器會自動換行並在編輯時加高該列（最多八行）。按 **Enter** 或移開焦點即儲存，按 **Shift+Enter** 換行，按 **Esc** 取消；未進入編輯狀態時直接打字不會修改任何值。只會寫入該儲存格所屬語言檔；值未變更時不寫入，缺少的語言值會建立在該語言相同 Namespace 的檔案中。過長與多行值都能直接編輯；只有以 ` | ` 合併多筆同語言值的儲存格不會直接編輯，雙擊時只在狀態列提示改用「操作 ▾ → 編輯所選」，不會開啟視窗。若要關閉快速編輯，請在 **Settings → Tools → LanguageManager** 的「翻譯表」取消勾選「快速直接編輯」，之後雙擊翻譯儲存格不會有任何動作。快速編輯開啟時，此表會關閉 IDE 原生的儲存格展開預覽，讓過長的值也能雙擊編輯；滑鼠停在被截斷的值上會以 tooltip 顯示完整文字，並依視窗寬度自動換行。若輸入期間表格重新整理，草稿會保留在相同 `namespace + key` 與語言。
 
@@ -330,6 +336,10 @@ Backend 只接受快取位置仍包含精確 key、點分隔 namespace 引用或
 - 無法解析的檔案不會被猜測修復或寫回。
 
 ## 9. 格式注意事項
+
+### 儲存時保留原檔內容
+
+透過快速直接編輯、「**編輯所選**」或貼上儲存翻譯值時，只會替換檔案中被修改的那個值。註解、空行、引號樣式、縮排、key 順序、`\u4F60` 這類 Unicode 跳脫、`declare(strict_types=1)` 以及其他所有項目都維持原樣；值沒有變更時完全不會重寫檔案。被修改的值本身會以插件對該格式的標準寫法輸出（例如 PHP 單引號字串）。新增或刪除 key、Key 改名、合併翻譯，以及修復／正規化仍會以插件的標準格式輸出整個檔案，請先檢查 Diff。
 
 ### JSON
 
@@ -539,3 +549,15 @@ Regex 命中、程式碼備註標記及已儲存的非侵入式規則會合併�
 ## 14. 查看版本更新說明
 
 上傳 Marketplace 更新後，插件頁面的 **What’s New** 與 IDE 插件管理器會顯示 [CHANGELOG.md](../CHANGELOG.md) 中與目前版本相同的區段。建置會直接產生這份 metadata，不再另外維護容易不同步的摘要。
+
+### 1.8.x 變更與對應章節
+
+| 版本 | 變更 | Issue | 手冊章節 |
+|---|---|---|---|
+| 1.8.0 | 翻譯表快速直接編輯（雙擊或 F2），可在設定關閉 | [#17](https://github.com/creamgod45/LanguageManage/issues/17) | [快速直接編輯](#快速直接編輯) |
+| 1.8.0 | 新增翻譯在 key 已存在時保留已輸入的值 | [#18](https://github.com/creamgod45/LanguageManage/issues/18) | [新增翻譯](#新增翻譯) |
+| 1.8.0 | 顯示欄位：依方案隱藏或顯示語系欄位 | [#21](https://github.com/creamgod45/LanguageManage/issues/21) | [顯示欄位與右鍵選單](#顯示欄位與右鍵選單) |
+| 1.8.0 | 右鍵內容選單，功能與「操作 ▾」相同 | [#22](https://github.com/creamgod45/LanguageManage/issues/22) | [顯示欄位與右鍵選單](#顯示欄位與右鍵選單) |
+| 1.8.0 | key 保留前後空白並顯示警告 | — | [Key 前後空白](#key-前後空白) |
+| 1.8.1 | Rust i18n 推薦使用率 Regex | — | [使用率掃描設定](#10-使用率掃描設定) |
+| 1.8.1 | 儲存值時保留原檔內容 | — | [儲存時保留原檔內容](#儲存時保留原檔內容) |
