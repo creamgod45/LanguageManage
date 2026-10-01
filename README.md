@@ -120,7 +120,7 @@ The root project uses the IntelliJ Platform Gradle Plugin to assemble three cont
 | `localization/HardcodedAnalysisPanel.kt` | Lazy top-level analysis workspace with progress, statistics, filtering, pagination, cancellation, and source navigation |
 | `localization/MultiLanguageEntryDialog.kt` | Scrollable add/edit form that lists every locale textarea for one namespace and builds batch mutations |
 | `localization/AiTranslationDialogs.kt` | Source/target locale selection, editable AI review, and feedback dialogs for iterative translation rounds |
-| `RegexPresetUi.kt` | Framework-aware Regex recommendation menu shared by default and active-scheme settings |
+| `RegexPresetUi.kt` | Framework-aware Regex recommendation menu shared by default and active-scheme settings (including Rust i18n `t!` macros) |
 | `localization/LocalizationFrontendRepository.kt` | Converts UI operations to RPC calls and receives backend state through a durable flow |
 | `localization/IssueVisibility.kt` | Applies duplicate-value and possibly-unused visibility preferences to the table, counts, and bulk actions |
 | `localization/SchemeSettingsTransferDialog.kt` | Safe scheme JSON IO, atomic export, and per-file import preview |

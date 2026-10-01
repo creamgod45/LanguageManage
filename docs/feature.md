@@ -135,3 +135,7 @@ PHP **只 parse 不執行**：只接受選填的 `declare(strict_types=1);` + �
 - 新功能加入與風險相稱的測試（parser、安全、RPC DTO、搜尋、字典不可只靠手動驗證）。
 - 交付前至少跑 `test` 與 `buildPlugin`，確認 ZIP 含三個 module 與所有語言 bundle。
 - 功能更新同步 `CHANGELOG.md`；架構/API/操作改變同步 README 與 `docs/`。
+
+### Rust i18n 使用率 Regex
+
+推薦格式選單提供「Rust → Rust i18n」，擷取 `t!("key")`、`rust_i18n::t!("key", locale = "zh-CN")` 與 raw string 的第一個字串 key；動態運算式不擷取。此選項只新增掃描 Regex，不改變語言檔解析格式。
