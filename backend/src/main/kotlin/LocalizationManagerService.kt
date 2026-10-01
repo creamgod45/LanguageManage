@@ -583,7 +583,11 @@ class LocalizationManagerService(
         val written = mutableListOf<Path>()
         try {
             changedDocuments.forEach { document ->
-                SafeLanguageFileAccess.atomicWrite(document.path, LanguageFileCodec.render(document))
+                val original = originalContents.getValue(document.path)
+                // Only the edited values change; an unchanged file is not rewritten at all.
+                val rendered = LanguageFileCodec.renderPreservingFormat(document, original)
+                if (rendered == original) return@forEach
+                SafeLanguageFileAccess.atomicWrite(document.path, rendered)
                 written.add(document.path)
             }
         } catch (error: Exception) {
@@ -800,7 +804,7 @@ class LocalizationManagerService(
         return ChangePreviewDto(
             changed.mapNotNull { document ->
                 val before = SafeLanguageFileAccess.read(document.path)
-                val after = LanguageFileCodec.render(document)
+                val after = LanguageFileCodec.renderPreservingFormat(document, before)
                 if (before == after) null else FileChangePreviewDto(document.path.toString(), before, after, contentSha256(before))
             },
         )

@@ -5,12 +5,14 @@
 ### English
 
 - Add **Rust → Rust i18n** to the recommended usage Regex formats. Capture literal keys from `t!` and `rust_i18n::t!`, including locale/interpolation arguments and raw strings.
+- Keep the original file text when saving translation values. Quick in-place edits, Edit Selected, and pasting now replace only the edited value inside the file, so comments, blank lines, quoting, indentation, key order, Unicode escapes, `declare(strict_types=1)`, and every untouched entry stay byte-for-byte identical; saving an unchanged value no longer rewrites the file. Adding or removing keys still renders the whole file, and every in-place patch is re-parsed and verified before it is written.
 
 ---
 
 ### 繁體中文
 
 - 使用率掃描的推薦 Regex 格式新增 **Rust → Rust i18n**，可擷取 `t!` 與 `rust_i18n::t!` 的字串 key，支援 locale／插值參數及 raw string。
+- 儲存翻譯值時保留原檔內容。快速直接編輯、「編輯所選」與貼上現在只會替換檔案中被修改的那個值，註解、空行、引號、縮排、key 順序、Unicode 跳脫、`declare(strict_types=1)` 與其他未修改的項目都維持原樣；值未變更時不再重寫檔案。新增或刪除 key 仍會重新輸出整個檔案，且每次局部替換在寫入前都會重新 parse 驗證。
 
 ## 1.8.0
 
