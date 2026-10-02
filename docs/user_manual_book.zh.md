@@ -138,6 +138,12 @@ LanguageManagerBundle_zh_TW.properties  -> locale: zh_TW, namespace: LanguageMan
 | --- | --- | --- | --- |
 | messages | auth.failed | Invalid credentials | 登入資料錯誤 |
 
+### 在編輯器頁籤中開啟
+
+相關 issue：[#29](https://github.com/creamgod45/LanguageManage/issues/29)。
+
+從工具視窗選項（⋮）選單選擇「**在編輯器頁籤中開啟**」，即可將目前的檢視（語言方案或分析）移到完整大小的編輯器頁籤，寬表格有更多空間，也能放進編輯器分割視窗排版。工具視窗會隱藏；再次選擇時會切換到已開啟的頁籤，不會重複開啟。編輯器頁籤與工具視窗顯示同一份方案狀態，關閉頁籤不會修改任何檔案。
+
 ### 搜尋
 
 - **模糊搜尋**：key、value、namespace、locale 或檔案路徑包含輸入文字即可命中。
@@ -186,9 +192,11 @@ LanguageManagerBundle_zh_TW.properties  -> locale: zh_TW, namespace: LanguageMan
 
 ### 顯示欄位與右鍵選單
 
-相關 issue：[#21](https://github.com/creamgod45/LanguageManage/issues/21)（顯示欄位）、[#22](https://github.com/creamgod45/LanguageManage/issues/22)（右鍵選單）。
+相關 issue：[#21](https://github.com/creamgod45/LanguageManage/issues/21)（顯示欄位）、[#22](https://github.com/creamgod45/LanguageManage/issues/22)（右鍵選單）、[#27](https://github.com/creamgod45/LanguageManage/issues/27)（Namespace 過濾）。
 
 使用工具列的「**顯示欄位（n/m）▾**」逐一開關語系欄位。切換時選單會保持開啟，可一次調整多個語系；「全部顯示」可還原所有欄位。隱藏設定依專案與方案分別記憶，只影響表格顯示，不會修改語言檔。
+
+目前方案包含多個 Namespace 時（例如 Laravel 的 `auth.php`、`validation.php` 等多個檔案），翻譯狀態過濾旁會出現「**Namespace（n/m）▾**」過濾。它使用相同的不關閉選單：勾選或取消勾選即可顯示或隱藏該 Namespace 的列，「全部顯示」可還原。根目錄 Namespace 會顯示為「**（根目錄）**」。此過濾可與搜尋、語言及翻譯狀態過濾同時使用，切換方案或定位問題時會重設，不會修改語言檔；只有單一 Namespace 時不顯示。
 
 在任一儲存格按右鍵即可開啟與「**操作 ▾**」相同的選單。會先選取游標所指的儲存格，因此「編輯所選」、「Key 改名」等 row action 會作用在該列；若在既有的多列選取範圍內按右鍵，則保留選取以進行批量操作。
 
@@ -559,5 +567,7 @@ Regex 命中、程式碼備註標記及已儲存的非侵入式規則會合併�
 | 1.8.0 | 顯示欄位：依方案隱藏或顯示語系欄位 | [#21](https://github.com/creamgod45/LanguageManage/issues/21) | [顯示欄位與右鍵選單](#顯示欄位與右鍵選單) |
 | 1.8.0 | 右鍵內容選單，功能與「操作 ▾」相同 | [#22](https://github.com/creamgod45/LanguageManage/issues/22) | [顯示欄位與右鍵選單](#顯示欄位與右鍵選單) |
 | 1.8.0 | key 保留前後空白並顯示警告 | — | [Key 前後空白](#key-前後空白) |
-| 1.8.1 | Rust i18n 推薦使用率 Regex | — | [使用率掃描設定](#10-使用率掃描設定) |
-| 1.8.1 | 儲存值時保留原檔內容 | — | [儲存時保留原檔內容](#儲存時保留原檔內容) |
+| 1.8.1 | Rust i18n 推薦使用率 Regex | [#28](https://github.com/creamgod45/LanguageManage/issues/28) | [使用率掃描設定](#10-使用率掃描設定) |
+| 1.8.1 | 儲存值時保留原檔內容 | [#26](https://github.com/creamgod45/LanguageManage/issues/26) | [儲存時保留原檔內容](#儲存時保留原檔內容) |
+| 1.8.1 | 多個 Namespace 時提供 Namespace 過濾 | [#27](https://github.com/creamgod45/LanguageManage/issues/27) | [顯示欄位與右鍵選單](#顯示欄位與右鍵選單) |
+| 1.8.1 | 將工具視窗檢視開成編輯器頁籤 | [#29](https://github.com/creamgod45/LanguageManage/issues/29) | [在編輯器頁籤中開啟](#在編輯器頁籤中開啟) |

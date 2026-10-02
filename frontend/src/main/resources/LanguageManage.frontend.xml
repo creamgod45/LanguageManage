@@ -16,6 +16,7 @@
                 anchor="right"
                 factoryClass="cg.creamgod45.toolWindow.LanguageManagerToolWindowFactory"
                 icon="cg.creamgod45.LanguageManagerIcons.ToolWindow"/>
+        <fileEditorProvider implementation="cg.creamgod45.toolWindow.LanguageManagerFileEditorProvider"/>
         <notificationGroup id="LanguageManager" displayType="BALLOON"/>
         <postStartupActivity implementation="cg.creamgod45.localization.ui.DynamicSourceGutterStartupActivity"/>
     </extensions>

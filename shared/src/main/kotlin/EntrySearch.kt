@@ -109,6 +109,18 @@ object EntrySearch {
         }
     }
 
+    /** Distinct namespaces of a scheme, sorted; the namespace filter is only offered when there are at least two. */
+    fun namespaces(entries: List<LanguageEntryDto>): List<String> = entries.map { it.namespace }.distinct().sorted()
+
+    /**
+     * Drops entries whose namespace the user turned off. The filter stores excluded namespaces, so a namespace that
+     * appears later (for example after adding a file) is shown by default.
+     */
+    fun excludeNamespaces(
+        entries: List<LanguageEntryDto>,
+        excluded: Set<String>,
+    ): List<LanguageEntryDto> = if (excluded.isEmpty()) entries else entries.filter { it.namespace !in excluded }
+
     fun join(entries: List<LanguageEntryDto>): List<JoinedTranslationRow> =
         entries
             .groupBy { it.namespace to it.key }

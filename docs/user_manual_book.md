@@ -138,6 +138,12 @@ Example:
 | --- | --- | --- | --- |
 | messages | auth.failed | Invalid credentials | 登入資料錯誤 |
 
+### Open in an editor tab
+
+Related issue: [#29](https://github.com/creamgod45/LanguageManage/issues/29).
+
+Choose **Open in Editor Tab** from the tool window options (⋮) menu to move the current view (Language Schemes or Analysis) into a full-size editor tab, which leaves more room for wide tables and can be placed in an editor split. The tool window is hidden; choosing the option again focuses the existing tab instead of opening a second one. The editor tab shows the same scheme state as the tool window, and closing it changes nothing on disk.
+
 ### Search
 
 - **Fuzzy Search**: matches text contained in a key, value, namespace, locale, or path.
@@ -186,9 +192,11 @@ Creation stops without overwriting if the target locale or file already exists, 
 
 ### Visible columns and context menu
 
-Related issues: [#21](https://github.com/creamgod45/LanguageManage/issues/21) (visible columns) and [#22](https://github.com/creamgod45/LanguageManage/issues/22) (context menu).
+Related issues: [#21](https://github.com/creamgod45/LanguageManage/issues/21) (visible columns), [#22](https://github.com/creamgod45/LanguageManage/issues/22) (context menu), and [#27](https://github.com/creamgod45/LanguageManage/issues/27) (namespace filter).
 
 Use **Visible Columns (n/m) ▾** in the toolbar to switch individual language columns on or off. The popup stays open while you toggle, so several languages can be changed at once; **Show All Languages** restores every column. Hidden columns are remembered per project and per scheme and only affect the table view, never the language files.
+
+When the active scheme has more than one namespace (for example several Laravel files such as `auth.php` and `validation.php`), a **Namespaces (n/m) ▾** filter appears next to the translation-status filter. It uses the same keep-open popup: tick or untick namespaces to show or hide their rows, and choose **Show All Namespaces** to restore them. The root namespace is listed as **(Root)**. The filter combines with search, language and translation-status filters, is reset when you switch schemes or locate an issue, and never changes language files. With a single namespace the filter is hidden.
 
 Right-click any cell to open the same actions as **Actions ▾**. The cell under the pointer is selected first, so row actions such as Edit Selected or Rename Key act on that row. Right-clicking inside an existing multi-row selection keeps the selection for bulk actions.
 
@@ -559,5 +567,7 @@ After a Marketplace update is uploaded, the current version section from [CHANGE
 | 1.8.0 | Visible Columns: show or hide language columns per scheme | [#21](https://github.com/creamgod45/LanguageManage/issues/21) | [Visible columns and context menu](#visible-columns-and-context-menu) |
 | 1.8.0 | Right-click context menu with the same actions as Actions ▾ | [#22](https://github.com/creamgod45/LanguageManage/issues/22) | [Visible columns and context menu](#visible-columns-and-context-menu) |
 | 1.8.0 | Keys keep leading and trailing spaces, with a warning | — | [Key whitespace](#key-whitespace) |
-| 1.8.1 | Rust i18n recommended usage Regex | — | [Usage Scan Settings](#10-usage-scan-settings) |
-| 1.8.1 | Saving a value keeps the original file text | — | [Saving keeps the original file text](#saving-keeps-the-original-file-text) |
+| 1.8.1 | Rust i18n recommended usage Regex | [#28](https://github.com/creamgod45/LanguageManage/issues/28) | [Usage Scan Settings](#10-usage-scan-settings) |
+| 1.8.1 | Saving a value keeps the original file text | [#26](https://github.com/creamgod45/LanguageManage/issues/26) | [Saving keeps the original file text](#saving-keeps-the-original-file-text) |
+| 1.8.1 | Namespaces filter for schemes with several namespaces | [#27](https://github.com/creamgod45/LanguageManage/issues/27) | [Visible columns and context menu](#visible-columns-and-context-menu) |
+| 1.8.1 | Open a tool window view in an editor tab | [#29](https://github.com/creamgod45/LanguageManage/issues/29) | [Open in an editor tab](#open-in-an-editor-tab) |
