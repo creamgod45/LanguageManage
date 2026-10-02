@@ -16,9 +16,10 @@ internal object LocaleMetadataSupport {
 
     fun normalizeNotes(notes: Map<String, String>): Map<String, String> {
         require(notes.size <= 256) { backendMessage("locale.notes.count.invalid") }
-        return notes.entries.associate { (locale, note) ->
-            require(locale.matches(localePattern)) { backendMessage("locale.invalid") }
-            locale to normalizeNote(note)
-        }.filterValues(String::isNotBlank)
+        return notes.entries
+            .associate { (locale, note) ->
+                require(locale.matches(localePattern)) { backendMessage("locale.invalid") }
+                locale to normalizeNote(note)
+            }.filterValues(String::isNotBlank)
     }
 }

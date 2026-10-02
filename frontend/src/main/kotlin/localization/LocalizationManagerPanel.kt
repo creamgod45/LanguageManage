@@ -9,27 +9,27 @@ import com.intellij.diff.DiffContentFactory
 import com.intellij.diff.DiffManager
 import com.intellij.diff.DiffRequestPanel
 import com.intellij.diff.requests.SimpleDiffRequest
-import com.intellij.icons.AllIcons
 import com.intellij.find.FindManager
 import com.intellij.find.findInProject.FindInProjectManager
+import com.intellij.icons.AllIcons
 import com.intellij.ide.BrowserUtil
 import com.intellij.ide.DataManager
 import com.intellij.notification.NotificationGroupManager
 import com.intellij.notification.NotificationType
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.EDT
+import com.intellij.openapi.editor.Document
+import com.intellij.openapi.editor.EditorFactory
 import com.intellij.openapi.fileChooser.FileChooserDescriptor
 import com.intellij.openapi.fileChooser.FileChooserFactory
 import com.intellij.openapi.fileChooser.FileSaverDescriptor
 import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.fileEditor.OpenFileDescriptor
 import com.intellij.openapi.fileTypes.FileTypeManager
-import com.intellij.openapi.editor.Document
-import com.intellij.openapi.editor.EditorFactory
-import com.intellij.openapi.project.Project
 import com.intellij.openapi.progress.ProcessCanceledException
 import com.intellij.openapi.progress.ProgressIndicator
 import com.intellij.openapi.progress.Task
+import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.ComboBox
 import com.intellij.openapi.ui.DialogWrapper
 import com.intellij.openapi.ui.Messages
@@ -373,7 +373,11 @@ internal class LocalizationManagerPanel(
                     if (event.clickCount != 2 || !SwingUtilities.isLeftMouseButton(event)) return
                     val viewRow = entryTable.rowAtPoint(event.point)
                     val viewColumn = entryTable.columnAtPoint(event.point)
-                    if (viewRow < 0 || viewColumn < 0 || entryTable.convertColumnIndexToModel(viewColumn) != entryModel.columnCount - 1) return
+                    if (viewRow < 0 || viewColumn < 0 ||
+                        entryTable.convertColumnIndexToModel(viewColumn) != entryModel.columnCount - 1
+                    ) {
+                        return
+                    }
                     val row = entryModel.items.getOrNull(entryTable.convertRowIndexToModel(viewRow)) ?: return
                     usageLocationTarget = row.namespace to row.key
                     currentUsagePage = 0
@@ -472,10 +476,12 @@ internal class LocalizationManagerPanel(
                 tabs.selectedIndex = 0
                 applyFilter()
             }
+
             is LocalizationUiCommand.AddDynamicSource -> {
                 dynamicSourcePanel.addDraft(command)
                 tabs.selectedIndex = 3
             }
+
             is LocalizationUiCommand.FocusDynamicSource -> {
                 tabs.selectedIndex = 3
                 dynamicSourcePanel.focusRule(command.ruleId)
@@ -702,7 +708,13 @@ internal class LocalizationManagerPanel(
                         currentUsageLocations.copy(
                             items =
                                 currentUsageLocations.items.map {
-                                    if (it.entryId == resolved.entryId && it.filePath == resolved.filePath && it.offset == resolved.offset) resolved else it
+                                    if (it.entryId == resolved.entryId && it.filePath == resolved.filePath &&
+                                        it.offset == resolved.offset
+                                    ) {
+                                        resolved
+                                    } else {
+                                        it
+                                    }
                                 },
                         )
                     renderUsageLocationTable()
@@ -1008,7 +1020,14 @@ internal class LocalizationManagerPanel(
         val namespaceByFile = current.entries.associate { it.filePath to it.namespace }
         return scheme.files.mapNotNull { path ->
             val extension =
-                runCatching { Path.of(path).fileName.toString().substringAfterLast('.', "").lowercase() }.getOrNull()
+                runCatching {
+                    Path
+                        .of(path)
+                        .fileName
+                        .toString()
+                        .substringAfterLast('.', "")
+                        .lowercase()
+                }.getOrNull()
                     ?: return@mapNotNull null
             if (extension !in setOf("php", "properties")) return@mapNotNull null
             NamespaceReferenceOption(path, namespaceByFile[path].orEmpty(), extension)
@@ -1022,10 +1041,22 @@ internal class LocalizationManagerPanel(
         val selectedPaths = pathDialog.selectedPaths()
         runAction {
             val discovery = repository.discoverAdditionalLanguageFiles(scheme.id, selectedPaths)
-            val existing = scheme.files.map { Path.of(it).toAbsolutePath().normalize().toString() }.toSet()
+            val existing =
+                scheme.files
+                    .map {
+                        Path
+                            .of(it)
+                            .toAbsolutePath()
+                            .normalize()
+                            .toString()
+                    }.toSet()
             val candidates =
                 discovery.files.filterNot { candidate ->
-                    Path.of(candidate.filePath).toAbsolutePath().normalize().toString() in existing
+                    Path
+                        .of(candidate.filePath)
+                        .toAbsolutePath()
+                        .normalize()
+                        .toString() in existing
                 }
             val selection =
                 withContext(Dispatchers.EDT) {
@@ -1603,8 +1634,14 @@ internal class LocalizationManagerPanel(
         value: String,
     ) {
         when (val result = InlineTranslationEdit.resolve(row, locale, value, current.entries)) {
-            InlineTranslationEditResult.NoChange -> Unit
-            is InlineTranslationEditResult.MissingLocaleFile -> showError(message("error.locale.file.not.found", result.locale))
+            InlineTranslationEditResult.NoChange -> {
+                Unit
+            }
+
+            is InlineTranslationEditResult.MissingLocaleFile -> {
+                showError(message("error.locale.file.not.found", result.locale))
+            }
+
             is InlineTranslationEditResult.Save -> {
                 val schemeId = current.activeSchemeId ?: return showError(message("error.no.active.scheme"))
                 status.text = message("status.inline.edit.saving", row.key, locale)
@@ -1628,7 +1665,11 @@ internal class LocalizationManagerPanel(
         if (newModelRow < 0 || newModelColumn < 0 || !entryModel.isCellEditable(newModelRow, newModelColumn)) return result
         val viewRow = entryTable.convertRowIndexToView(newModelRow)
         val viewColumn = entryTable.convertColumnIndexToView(newModelColumn)
-        if (viewRow >= 0 && viewColumn >= 0 && entryTable.editCellAt(viewRow, viewColumn)) InlineTableEditing.setEditorText(entryTable, draft)
+        if (viewRow >= 0 && viewColumn >= 0 &&
+            entryTable.editCellAt(viewRow, viewColumn)
+        ) {
+            InlineTableEditing.setEditorText(entryTable, draft)
+        }
         return result
     }
 
@@ -1825,7 +1866,11 @@ internal class LocalizationManagerPanel(
         indicator.text2 = progressStatusText(progress)
         indicator.isIndeterminate = progress.totalSteps <= 0
         if (progress.totalSteps > 0) {
-            indicator.fraction = progress.completedSteps.toDouble().div(progress.totalSteps).coerceIn(0.0, 1.0)
+            indicator.fraction =
+                progress.completedSteps
+                    .toDouble()
+                    .div(progress.totalSteps)
+                    .coerceIn(0.0, 1.0)
         }
     }
 
@@ -1862,7 +1907,18 @@ private class NamespaceFilesDialog(
                 ): Component {
                     val component = super.getListCellRendererComponent(list, value, index, selected, focus)
                     val option = value as? NamespaceReferenceOption
-                    text = option?.let { message("namespace.files.reference.item", it.namespace.ifBlank { message("field.namespace.root") }, it.format.uppercase(), it.path) }.orEmpty()
+                    text =
+                        option
+                            ?.let {
+                                message(
+                                    "namespace.files.reference.item",
+                                    it.namespace.ifBlank {
+                                        message("field.namespace.root")
+                                    },
+                                    it.format.uppercase(),
+                                    it.path,
+                                )
+                            }.orEmpty()
                     return component
                 }
             }
@@ -1920,7 +1976,18 @@ private class DeleteNamespaceFilesDialog(
                 ): Component {
                     val component = super.getListCellRendererComponent(list, value, index, selected, focus)
                     val option = value as? NamespaceReferenceOption
-                    text = option?.let { message("namespace.files.reference.item", it.namespace.ifBlank { message("field.namespace.root") }, it.format.uppercase(), it.path) }.orEmpty()
+                    text =
+                        option
+                            ?.let {
+                                message(
+                                    "namespace.files.reference.item",
+                                    it.namespace.ifBlank {
+                                        message("field.namespace.root")
+                                    },
+                                    it.format.uppercase(),
+                                    it.path,
+                                )
+                            }.orEmpty()
                     return component
                 }
             }
@@ -1956,8 +2023,7 @@ private class AdditionalTrackedFilesDialog(
         isOKActionEnabled = model.rows.any { it.selected && it.candidate.recognized }
     }
 
-    fun selectedFiles(): List<String> =
-        model.rows.filter { it.selected && it.candidate.recognized }.map { it.candidate.filePath }
+    fun selectedFiles(): List<String> = model.rows.filter { it.selected && it.candidate.recognized }.map { it.candidate.filePath }
 
     override fun createCenterPanel(): JComponent =
         JPanel(BorderLayout(6, 6)).apply {
@@ -2020,7 +2086,10 @@ private class AdditionalTrackedPathSelectionDialog(
             FileChooserDescriptor(files, !files, false, false, false, true)
                 .withTitle(message(if (files) "tracking.paths.files.title" else "tracking.paths.folders.title"))
         val existing = selectedPaths().toMutableSet()
-        FileChooserFactory.getInstance().createFileChooser(descriptor, dialogProject, pathList).choose(dialogProject)
+        FileChooserFactory
+            .getInstance()
+            .createFileChooser(descriptor, dialogProject, pathList)
+            .choose(dialogProject)
             .map { it.path }
             .filter(existing::add)
             .forEach(pathModel::addElement)
@@ -2076,8 +2145,8 @@ private class FolderSchemeDialog(
     private fun updateOkAction() {
         isOKActionEnabled =
             !loading &&
-                normalizeSchemeName(schemeName.text) != null &&
-                model.rows.any { it.selected && it.candidate.recognized }
+            normalizeSchemeName(schemeName.text) != null &&
+            model.rows.any { it.selected && it.candidate.recognized }
     }
 
     override fun doValidate(): ValidationInfo? =
@@ -2298,7 +2367,6 @@ internal class RowHighlightTable(
     private val tooltipForCell: ((viewRow: Int, viewColumn: Int) -> String?)? = null,
     private val tooltipForModelColumn: (Int) -> String? = { null },
 ) : JBTable(model) {
-
     override fun isCellSelected(
         row: Int,
         column: Int,
@@ -2588,8 +2656,7 @@ private class UsageLocationTableModel : AbstractTableModel() {
             }
         }
 
-    override fun getColumnClass(columnIndex: Int): Class<*> =
-        if (columnIndex == 5) Int::class.javaObjectType else String::class.java
+    override fun getColumnClass(columnIndex: Int): Class<*> = if (columnIndex == 5) Int::class.javaObjectType else String::class.java
 }
 
 private fun severityText(severity: IssueSeverity): String =
@@ -2879,8 +2946,7 @@ internal class ChangePreviewDialog(
                     .also {
                         currentAfterDocument = it
                         currentAfterPath = change.filePath
-                    }
-                    .let { document ->
+                    }.let { document ->
                         factory.create(project, document, fileType)
                     }
             } else {

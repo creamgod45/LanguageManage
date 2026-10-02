@@ -27,13 +27,15 @@ internal object TranslationMergeSupport {
                 targetCandidates.singleOrNull { targetKey in it.values }
                     ?: targetCandidates.singleOrNull()
                     ?: error(backendMessage("merge.target.locale.file.missing", locale))
-            val sourceValue = localeSources.firstNotNullOfOrNull { it.values[sourceKey]?.takeIf(String::isNotBlank) }
-                ?: localeSources.first().values.getValue(sourceKey)
+            val sourceValue =
+                localeSources.firstNotNullOfOrNull { it.values[sourceKey]?.takeIf(String::isNotBlank) }
+                    ?: localeSources.first().values.getValue(sourceKey)
             if (targetDocument.values[targetKey].isNullOrBlank()) {
                 targetDocument.values[targetKey] = sourceValue
                 val templatePath = targetTemplate.keyPaths[targetKey]
                 targetDocument.keyPaths[targetKey] =
-                    templatePath ?: if (targetKey.any(Char::isWhitespace)) listOf(targetKey) else targetKey.split('.').filter(String::isNotBlank)
+                    templatePath
+                        ?: if (targetKey.any(Char::isWhitespace)) listOf(targetKey) else targetKey.split('.').filter(String::isNotBlank)
                 if (targetKey in targetTemplate.structuredValueKeys || sourceKey in localeSources.first().structuredValueKeys) {
                     targetDocument.structuredValueKeys += targetKey
                 }

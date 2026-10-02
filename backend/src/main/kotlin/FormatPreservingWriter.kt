@@ -68,11 +68,33 @@ internal object FormatPreservingWriter {
         text: String,
     ): Map<String, Span>? =
         when (format) {
-            "json" -> JsonValueScanner(text).scan()
-            "yaml", "yml" -> yamlSpans(text)
-            "php" -> PhpArrayParser(text, Int.MAX_VALUE).let { parser -> parser.parse(); parser.valueSpans.mapValues { Span(it.value.first, it.value.last + 1) } }
-            "properties" -> propertiesSpans(text)
-            else -> null
+            "json" -> {
+                JsonValueScanner(text).scan()
+            }
+
+            "yaml", "yml" -> {
+                yamlSpans(text)
+            }
+
+            "php" -> {
+                PhpArrayParser(text, Int.MAX_VALUE).let { parser ->
+                    parser.parse()
+                    parser.valueSpans.mapValues {
+                        Span(
+                            it.value.first,
+                            it.value.last + 1,
+                        )
+                    }
+                }
+            }
+
+            "properties" -> {
+                propertiesSpans(text)
+            }
+
+            else -> {
+                null
+            }
         }
 
     /** Physical lines with their start offsets, without the line terminator. */
@@ -141,8 +163,16 @@ internal object FormatPreservingWriter {
     }
 
     private fun decode(rawKey: String): String? =
-        runCatching { LanguageFileCodec.parseText(java.nio.file.Path.of("key.properties"), "format-preserving", "$rawKey=\n").values.keys.single() }
-            .getOrNull()
+        runCatching {
+            LanguageFileCodec
+                .parseText(
+                    java.nio.file.Path
+                        .of("key.properties"),
+                    "format-preserving",
+                    "$rawKey=\n",
+                ).values.keys
+                .single()
+        }.getOrNull()
 
     /** Locates JSON values by the same dotted path the parser uses (object keys and array indexes). */
     private class JsonValueScanner(

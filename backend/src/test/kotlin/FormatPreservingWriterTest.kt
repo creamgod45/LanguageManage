@@ -39,7 +39,8 @@ class FormatPreservingWriterTest {
     ): String {
         val original = Files.readString(path)
         val document = LanguageFileCodec.parse(path, "scheme")
-        val entry = LanguageEntryDto("id", "scheme", path.toString(), document.locale, document.namespace, key, document.values.getValue(key))
+        val entry =
+            LanguageEntryDto("id", "scheme", path.toString(), document.locale, document.namespace, key, document.values.getValue(key))
         EntryMutationSupport.apply(
             listOf(document),
             listOf(entry),

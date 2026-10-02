@@ -61,7 +61,9 @@ class InlineTableEditingTest : BasePlatformTestCase() {
         listOf(1, 2).forEach { clicks ->
             listOf(MouseEvent.MOUSE_PRESSED, MouseEvent.MOUSE_RELEASED, MouseEvent.MOUSE_CLICKED).forEach { id ->
                 val modifiers = if (id == MouseEvent.MOUSE_RELEASED || id == MouseEvent.MOUSE_CLICKED) 0 else MouseEvent.BUTTON1_DOWN_MASK
-                dispatchEvent(MouseEvent(this, id, System.currentTimeMillis(), modifiers, point.x, point.y, clicks, false, MouseEvent.BUTTON1))
+                dispatchEvent(
+                    MouseEvent(this, id, System.currentTimeMillis(), modifiers, point.x, point.y, clicks, false, MouseEvent.BUTTON1),
+                )
             }
         }
     }
@@ -179,7 +181,12 @@ class InlineTableEditingTest : BasePlatformTestCase() {
 
     fun testTooltipWidthFollowsTheWindowAndFallsBackWhenOffScreen() {
         val table = table(Model())
-        assertEquals("Off-screen tables use the fixed fallback width", com.intellij.util.ui.JBUI.scale(480), InlineTableEditing.tooltipMaxWidth(table))
+        assertEquals(
+            "Off-screen tables use the fixed fallback width",
+            com.intellij.util.ui.JBUI
+                .scale(480),
+            InlineTableEditing.tooltipMaxWidth(table),
+        )
     }
 
     fun testLongValueDoubleClickStillEditsAndItsFullTextIsAvailableAsTooltip() {
@@ -214,7 +221,9 @@ class InlineTableEditingTest : BasePlatformTestCase() {
 
         fun tooltipAt(row: Int): String? {
             val cell = table.getCellRect(row, 2, true)
-            return table.getToolTipText(MouseEvent(table, MouseEvent.MOUSE_MOVED, 0L, 0, cell.centerX.toInt(), cell.centerY.toInt(), 0, false))
+            return table.getToolTipText(
+                MouseEvent(table, MouseEvent.MOUSE_MOVED, 0L, 0, cell.centerX.toInt(), cell.centerY.toInt(), 0, false),
+            )
         }
 
         assertEquals("cell 0", tooltipAt(0))
@@ -222,7 +231,9 @@ class InlineTableEditingTest : BasePlatformTestCase() {
 
         val cell = table.getCellRect(0, 2, true)
         val location =
-            table.getToolTipLocation(MouseEvent(table, MouseEvent.MOUSE_MOVED, 0L, 0, cell.centerX.toInt(), cell.centerY.toInt(), 0, false))!!
+            table.getToolTipLocation(
+                MouseEvent(table, MouseEvent.MOUSE_MOVED, 0L, 0, cell.centerX.toInt(), cell.centerY.toInt(), 0, false),
+            )!!
         assertTrue("Cell tooltip opens below the row so it never sits under the cursor", location.y >= cell.y + cell.height)
     }
 
@@ -266,7 +277,10 @@ class InlineTableEditingTest : BasePlatformTestCase() {
                     action.shortcutSet.shortcuts.any { (it as? com.intellij.openapi.actionSystem.KeyboardShortcut)?.firstKeyStroke == f2 }
                 }
 
-        action.actionPerformed(com.intellij.testFramework.TestActionEvent.createTestEvent(action))
+        action.actionPerformed(
+            com.intellij.testFramework.TestActionEvent
+                .createTestEvent(action),
+        )
 
         assertTrue("F2 edits the selected value cell", table.isEditing)
         assertEquals(1, table.editingRow)

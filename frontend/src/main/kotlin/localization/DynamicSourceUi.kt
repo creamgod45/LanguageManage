@@ -30,9 +30,11 @@ internal class DynamicGroupsEditor(
     onConvert: (() -> Unit)? = null,
 ) : JPanel(BorderLayout()) {
     private val suggestions =
-        entries.flatMap { entry ->
-            listOf(entry.key, if (entry.namespace.isBlank()) entry.key else "${entry.namespace}.${entry.key}")
-        }.distinct().sorted()
+        entries
+            .flatMap { entry ->
+                listOf(entry.key, if (entry.namespace.isBlank()) entry.key else "${entry.namespace}.${entry.key}")
+            }.distinct()
+            .sorted()
     private val groupsPanel = JPanel().apply { layout = BoxLayout(this, BoxLayout.Y_AXIS) }
     private val groupRows = mutableListOf<GroupRow>()
 
@@ -56,7 +58,10 @@ internal class DynamicGroupsEditor(
     fun validationInfo(): ValidationInfo? {
         if (groupRows.isEmpty()) return ValidationInfo(message("dynamic.validation.group.required"), this)
         groupRows.forEach { row ->
-            if (!row.name.text.trim().matches(Regex("[A-Za-z][A-Za-z0-9_-]{0,63}"))) {
+            if (!row.name.text
+                    .trim()
+                    .matches(Regex("[A-Za-z][A-Za-z0-9_-]{0,63}"))
+            ) {
                 return ValidationInfo(message("dynamic.validation.group.name"), row.name)
             }
             val populatedKeys = row.keys.filter { it.text.isNotBlank() }
@@ -76,12 +81,13 @@ internal class DynamicGroupsEditor(
 
     private fun addGroup(initial: DynamicSourceGroupDto = DynamicSourceGroupDto()) {
         lateinit var row: GroupRow
-        row = GroupRow(initial) {
-            groupRows.remove(row)
-            groupsPanel.remove(row.panel)
-            groupsPanel.revalidate()
-            groupsPanel.repaint()
-        }
+        row =
+            GroupRow(initial) {
+                groupRows.remove(row)
+                groupsPanel.remove(row.panel)
+                groupsPanel.revalidate()
+                groupsPanel.repaint()
+            }
         groupRows += row
         groupsPanel.add(row.panel)
         groupsPanel.revalidate()
@@ -97,7 +103,11 @@ internal class DynamicGroupsEditor(
         private val keysPanel = JPanel().apply { layout = BoxLayout(this, BoxLayout.Y_AXIS) }
         val panel =
             JPanel(BorderLayout(6, 4)).apply {
-                border = JBUI.Borders.compound(JBUI.Borders.customLine(JBUI.CurrentTheme.CustomFrameDecorations.separatorForeground()), JBUI.Borders.empty(5))
+                border =
+                    JBUI.Borders.compound(
+                        JBUI.Borders.customLine(JBUI.CurrentTheme.CustomFrameDecorations.separatorForeground()),
+                        JBUI.Borders.empty(5),
+                    )
                 add(
                     JPanel(FlowLayout(FlowLayout.LEFT, 4, 0)).apply {
                         add(JBLabel(message("dynamic.group.name")))
@@ -122,14 +132,17 @@ internal class DynamicGroupsEditor(
             val row = JPanel(BorderLayout(4, 0))
             field = DynamicKeyField(value, suggestions)
             row.add(field, BorderLayout.CENTER)
-            row.add(JButton(message("button.remove")).apply {
-                addActionListener {
-                    keys.remove(field)
-                    keysPanel.remove(row)
-                    keysPanel.revalidate()
-                    keysPanel.repaint()
-                }
-            }, BorderLayout.EAST)
+            row.add(
+                JButton(message("button.remove")).apply {
+                    addActionListener {
+                        keys.remove(field)
+                        keysPanel.remove(row)
+                        keysPanel.revalidate()
+                        keysPanel.repaint()
+                    }
+                },
+                BorderLayout.EAST,
+            )
             keys += field
             keysPanel.add(row)
             keysPanel.revalidate()
@@ -144,7 +157,9 @@ internal class DynamicGroupsEditor(
     }
 }
 
-private enum class BulkKeySeparator(val messageKey: String) {
+private enum class BulkKeySeparator(
+    val messageKey: String,
+) {
     LINES("dynamic.key.bulk.separator.lines"),
     COMMA("dynamic.key.bulk.separator.comma"),
     SEMICOLON("dynamic.key.bulk.separator.semicolon"),
@@ -207,16 +222,28 @@ private class BulkDynamicKeysDialog(
             )
         }
 
-    override fun doValidate(): ValidationInfo? = when {
-        input.text.isBlank() -> ValidationInfo(message("dynamic.key.bulk.validation.empty"), input)
-        separator.selectedItem == BulkKeySeparator.CUSTOM && customSeparator.text.isEmpty() ->
-            ValidationInfo(message("dynamic.key.bulk.validation.separator"), customSeparator)
-        customSeparator.text.length > 16 || customSeparator.text.any(Char::isISOControl) ->
-            ValidationInfo(message("dynamic.key.bulk.validation.separator"), customSeparator)
-        keys().any { it.length > 256 || it.any(Char::isISOControl) } ->
-            ValidationInfo(message("dynamic.validation.key.invalid"), input)
-        else -> null
-    }
+    override fun doValidate(): ValidationInfo? =
+        when {
+            input.text.isBlank() -> {
+                ValidationInfo(message("dynamic.key.bulk.validation.empty"), input)
+            }
+
+            separator.selectedItem == BulkKeySeparator.CUSTOM && customSeparator.text.isEmpty() -> {
+                ValidationInfo(message("dynamic.key.bulk.validation.separator"), customSeparator)
+            }
+
+            customSeparator.text.length > 16 || customSeparator.text.any(Char::isISOControl) -> {
+                ValidationInfo(message("dynamic.key.bulk.validation.separator"), customSeparator)
+            }
+
+            keys().any { it.length > 256 || it.any(Char::isISOControl) } -> {
+                ValidationInfo(message("dynamic.validation.key.invalid"), input)
+            }
+
+            else -> {
+                null
+            }
+        }
 }
 
 internal fun splitBulkDynamicKeys(
@@ -242,7 +269,9 @@ private class DynamicKeyField(
         val needle = text.trim().lowercase()
         val matches = suggestions.filter { needle.isBlank() || it.lowercase().contains(needle) }.take(200)
         if (matches.isEmpty()) return
-        JBPopupFactory.getInstance().createPopupChooserBuilder(matches)
+        JBPopupFactory
+            .getInstance()
+            .createPopupChooserBuilder(matches)
             .setTitle(message("dynamic.key.autocomplete.title"))
             .setItemChosenCallback { selected: String ->
                 text = selected

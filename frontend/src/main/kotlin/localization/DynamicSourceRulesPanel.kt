@@ -27,10 +27,11 @@ internal class DynamicSourceRulesPanel(
     private val navigateToMarker: (DynamicSourceRuleDto) -> Unit,
 ) : JPanel(BorderLayout()) {
     private val cards = JPanel().apply { layout = BoxLayout(this, BoxLayout.Y_AXIS) }
-    private val scrollPane = JBScrollPane(cards).apply {
-        verticalScrollBar.unitIncrement = JBUI.scale(18)
-        horizontalScrollBar.unitIncrement = JBUI.scale(18)
-    }
+    private val scrollPane =
+        JBScrollPane(cards).apply {
+            verticalScrollBar.unitIncrement = JBUI.scale(18)
+            horizontalScrollBar.unitIncrement = JBUI.scale(18)
+        }
     private val rows = mutableListOf<RuleRow>()
     private var entries: List<LanguageEntryDto> = emptyList()
     private var schemeId: String? = null
@@ -42,11 +43,13 @@ internal class DynamicSourceRulesPanel(
             JPanel(FlowLayout(FlowLayout.LEFT, 6, 3)).apply {
                 add(JBLabel(message("dynamic.wizard.help")))
                 add(JButton(message("dynamic.rule.add")).apply { addActionListener { addRule() } })
-                add(JButton(message("dynamic.save")).apply {
-                    addActionListener {
-                        validationMessage()?.let(reportError) ?: save(rows.map { it.value() })
-                    }
-                })
+                add(
+                    JButton(message("dynamic.save")).apply {
+                        addActionListener {
+                            validationMessage()?.let(reportError) ?: save(rows.map { it.value() })
+                        }
+                    },
+                )
             },
             BorderLayout.NORTH,
         )
@@ -93,12 +96,13 @@ internal class DynamicSourceRulesPanel(
 
     private fun addRule(initial: DynamicSourceRuleDto? = null) {
         lateinit var row: RuleRow
-        row = RuleRow(initial ?: DynamicSourceRuleDto(UUID.randomUUID().toString(), "", 1, 1, groups = listOf(DynamicSourceGroupDto()))) {
-            rows.remove(row)
-            cards.remove(row.panel)
-            cards.revalidate()
-            cards.repaint()
-        }
+        row =
+            RuleRow(initial ?: DynamicSourceRuleDto(UUID.randomUUID().toString(), "", 1, 1, groups = listOf(DynamicSourceGroupDto()))) {
+                rows.remove(row)
+                cards.remove(row.panel)
+                cards.revalidate()
+                cards.repaint()
+            }
         rows += row
         cards.add(row.panel)
         cards.revalidate()
@@ -127,44 +131,55 @@ internal class DynamicSourceRulesPanel(
         val panel: JPanel
 
         init {
-            groups = DynamicGroupsEditor(
-                project,
-                entries,
-                initial.groups,
-                message("dynamic.convert.to.marker"),
-            ) {
-                validationMessage()?.let(reportError) ?: convertToMarker(value(), rows.map { it.value() })
-            }
-            panel = JPanel(BorderLayout(6, 5)).apply {
-                border = JBUI.Borders.compound(JBUI.Borders.customLine(com.intellij.ui.JBColor.border()), JBUI.Borders.empty(6))
-                add(
-                    JPanel().apply {
-                        layout = BoxLayout(this, BoxLayout.Y_AXIS)
-                        add(
-                            JPanel(FlowLayout(FlowLayout.LEFT, 5, 0)).apply {
-                                alignmentX = LEFT_ALIGNMENT
-                                add(JBLabel(message("dynamic.file")))
-                                add(path)
-                                add(JBLabel(message("dynamic.line")))
-                                add(line)
-                                add(JBLabel(message("dynamic.column")))
-                                add(column)
-                            },
+            groups =
+                DynamicGroupsEditor(
+                    project,
+                    entries,
+                    initial.groups,
+                    message("dynamic.convert.to.marker"),
+                ) {
+                    validationMessage()?.let(reportError) ?: convertToMarker(value(), rows.map { it.value() })
+                }
+            panel =
+                JPanel(BorderLayout(6, 5)).apply {
+                    border =
+                        JBUI.Borders.compound(
+                            JBUI.Borders.customLine(
+                                com.intellij.ui.JBColor
+                                    .border(),
+                            ),
+                            JBUI.Borders.empty(6),
                         )
-                        add(
-                            JPanel(FlowLayout(FlowLayout.LEFT, 5, 3)).apply {
-                                alignmentX = LEFT_ALIGNMENT
-                                add(JButton(message("dynamic.navigate.to.marker")).apply {
-                                    addActionListener { navigateToMarker(value()) }
-                                })
-                                add(JButton(message("button.remove")).apply { addActionListener { remove() } })
-                            },
-                        )
-                    },
-                    BorderLayout.NORTH,
-                )
-                add(groups, BorderLayout.CENTER)
-            }
+                    add(
+                        JPanel().apply {
+                            layout = BoxLayout(this, BoxLayout.Y_AXIS)
+                            add(
+                                JPanel(FlowLayout(FlowLayout.LEFT, 5, 0)).apply {
+                                    alignmentX = LEFT_ALIGNMENT
+                                    add(JBLabel(message("dynamic.file")))
+                                    add(path)
+                                    add(JBLabel(message("dynamic.line")))
+                                    add(line)
+                                    add(JBLabel(message("dynamic.column")))
+                                    add(column)
+                                },
+                            )
+                            add(
+                                JPanel(FlowLayout(FlowLayout.LEFT, 5, 3)).apply {
+                                    alignmentX = LEFT_ALIGNMENT
+                                    add(
+                                        JButton(message("dynamic.navigate.to.marker")).apply {
+                                            addActionListener { navigateToMarker(value()) }
+                                        },
+                                    )
+                                    add(JButton(message("button.remove")).apply { addActionListener { remove() } })
+                                },
+                            )
+                        },
+                        BorderLayout.NORTH,
+                    )
+                    add(groups, BorderLayout.CENTER)
+                }
         }
 
         fun value() =

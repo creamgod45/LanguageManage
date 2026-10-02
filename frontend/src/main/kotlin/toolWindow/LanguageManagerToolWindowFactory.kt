@@ -1,8 +1,8 @@
 package cg.creamgod45.toolWindow
 
 import cg.creamgod45.LanguageManagerBundle.message
-import cg.creamgod45.localization.ui.LocalizationManagerPanel
 import cg.creamgod45.localization.ui.HardcodedAnalysisPanel
+import cg.creamgod45.localization.ui.LocalizationManagerPanel
 import cg.creamgod45.settings.LanguageManagerSettingsConfigurable
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.actionSystem.DefaultActionGroup
@@ -64,8 +64,11 @@ class LanguageManagerToolWindowFactory :
             toolWindow.contentManager.addContentManagerListener(
                 object : ContentManagerListener {
                     override fun selectionChanged(event: ContentManagerEvent) {
-                        if (toolWindow.contentManager.selectedContent === analysisContent) analysisPanel.onSelected()
-                        else analysisPanel.onDeselected()
+                        if (toolWindow.contentManager.selectedContent === analysisContent) {
+                            analysisPanel.onSelected()
+                        } else {
+                            analysisPanel.onDeselected()
+                        }
                     }
                 },
             )

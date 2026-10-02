@@ -55,7 +55,14 @@ internal object TranslationEditorSupport {
         return entries.filter { it.key == key && normalizedPath(it.filePath) in targetFiles }
     }
 
-    private fun normalizedPath(filePath: String) = runCatching { Path.of(filePath).toAbsolutePath().normalize().toString() }.getOrDefault(filePath)
+    private fun normalizedPath(filePath: String) =
+        runCatching {
+            Path
+                .of(filePath)
+                .toAbsolutePath()
+                .normalize()
+                .toString()
+        }.getOrDefault(filePath)
 
     fun targets(
         scheme: LanguageSchemeDto,
@@ -185,7 +192,10 @@ internal class MultiLanguageEntryDialog(
     internal fun keyWhitespaceHintForTest(): JBLabel = keyWhitespaceHint
 
     @TestOnly
-    internal fun valueEditorsForTest(): Map<String, JBTextArea> = editors.entries.associate { (target, editor) -> target.filePath to editor }
+    internal fun valueEditorsForTest(): Map<String, JBTextArea> =
+        editors.entries.associate { (target, editor) ->
+            target.filePath to editor
+        }
 
     fun draft(): TranslationEntryDraft {
         saveDraftValues()

@@ -25,16 +25,18 @@ class DynamicSourceInlaySupportTest {
 
     @Test
     fun `counts distinct keys and limits tooltip details`() {
-        val rule = DynamicSourceRuleDto(
-            id = "rule",
-            filePath = "example.php",
-            line = 1,
-            column = 1,
-            groups = listOf(
-                DynamicSourceGroupDto("first", listOf("one", "two")),
-                DynamicSourceGroupDto("second", listOf("two", "three") + List(500) { "long-key-$it" }),
-            ),
-        )
+        val rule =
+            DynamicSourceRuleDto(
+                id = "rule",
+                filePath = "example.php",
+                line = 1,
+                column = 1,
+                groups =
+                    listOf(
+                        DynamicSourceGroupDto("first", listOf("one", "two")),
+                        DynamicSourceGroupDto("second", listOf("two", "three") + List(500) { "long-key-$it" }),
+                    ),
+            )
         assertEquals(503, dynamicSourceKeyCount(rule))
         assertTrue(dynamicSourceTooltipDetails(rule).length <= 2_000)
     }

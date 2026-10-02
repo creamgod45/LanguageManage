@@ -1,10 +1,10 @@
 package cg.creamgod45.localization.ui
 
+import javax.swing.SwingUtilities
+import javax.swing.UIManager
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
-import javax.swing.SwingUtilities
-import javax.swing.UIManager
 
 class LocaleCodeSuggestionsTest {
     @Test

@@ -281,7 +281,10 @@ private data class AiSourceChoice(
     override fun toString(): String = locale?.let { localeLabel(it, note) } ?: message("dialog.ai.source.key")
 }
 
-private fun localeLabel(locale: String, note: String): String = if (note.isBlank()) locale else "$locale — $note"
+private fun localeLabel(
+    locale: String,
+    note: String,
+): String = if (note.isBlank()) locale else "$locale — $note"
 
 private class AiSourcePreviewTableModel(
     private val rows: List<JoinedTranslationRow>,

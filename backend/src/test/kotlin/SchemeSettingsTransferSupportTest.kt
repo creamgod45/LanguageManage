@@ -1,8 +1,8 @@
 package cg.creamgod45
 
-import cg.creamgod45.localization.LanguageSchemeDto
 import cg.creamgod45.localization.DynamicSourceGroupDto
 import cg.creamgod45.localization.DynamicSourceRuleDto
+import cg.creamgod45.localization.LanguageSchemeDto
 import cg.creamgod45.localization.SchemeSettingsTransferDto
 import cg.creamgod45.localization.UsageScanSettingsDto
 import kotlinx.serialization.encodeToString
@@ -32,10 +32,11 @@ class SchemeSettingsTransferSupportTest {
                 parent.createDirectories()
                 writeText("<?php return ['failed' => 'Invalid'];")
             }
-        val sourceFile = temp.resolve("src/controller.php").apply {
-            parent.createDirectories()
-            writeText("<?php __('auth.failed');")
-        }
+        val sourceFile =
+            temp.resolve("src/controller.php").apply {
+                parent.createDirectories()
+                writeText("<?php __('auth.failed');")
+            }
         val scheme =
             LanguageSchemeDto(
                 id = "scheme",
@@ -76,7 +77,13 @@ class SchemeSettingsTransferSupportTest {
                 .single()
                 .recognized,
         )
-        assertTrue(preview.schemes.single().dynamicSourceFiles.single().available)
+        assertTrue(
+            preview.schemes
+                .single()
+                .dynamicSourceFiles
+                .single()
+                .available,
+        )
         assertEquals(languageFile.toRealPath().toString(), imported.files.single())
         assertEquals(temp.toRealPath().toString(), imported.usageScanSettings.basePath)
         assertEquals(4_096, imported.usageScanSettings.maxLanguageFileKb)
@@ -87,7 +94,14 @@ class SchemeSettingsTransferSupportTest {
         assertTrue("localeNotes" in content)
         assertTrue("src/controller.php" in content)
         assertEquals(sourceFile.toRealPath().toString(), imported.dynamicSourceRules.single().filePath)
-        assertEquals(listOf("auth.failed"), imported.dynamicSourceRules.single().groups.single().keys)
+        assertEquals(
+            listOf("auth.failed"),
+            imported.dynamicSourceRules
+                .single()
+                .groups
+                .single()
+                .keys,
+        )
         assertEquals(3, preview.formatVersion)
     }
 

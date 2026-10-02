@@ -16,16 +16,38 @@ internal enum class AnalysisValuePatternFilter {
 
     fun matches(value: String): Boolean =
         when (this) {
-            ENGLISH_WORD ->
+            ENGLISH_WORD -> {
                 value.matches(Regex("(?:[a-z]+|[A-Z][a-z]+|[A-Z]+)")) &&
                     !CAMEL_CASE.matches(value) && !PASCAL_CASE.matches(value)
-            CAMEL_CASE -> value.matches(Regex("[a-z]+(?:[A-Z][A-Za-z0-9]*)+"))
-            PASCAL_CASE -> value.matches(Regex("[A-Z][A-Za-z0-9]*[A-Z][A-Za-z0-9]*"))
-            SNAKE_CASE -> value.matches(Regex("[a-z][a-z0-9]*(?:_[a-z0-9]+)+"))
-            MACRO_CASE -> value.matches(Regex("[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+"))
-            KEBAB_CASE -> value.matches(Regex("[a-z][a-z0-9]*(?:-[a-z0-9]+)+"))
-            DOT_CASE -> value.matches(Regex("[a-z][a-z0-9]*(?:\\.[a-z0-9]+)+"))
-            PHP_VARIABLE -> matchesPhpVariableOrBladeEcho(value)
+            }
+
+            CAMEL_CASE -> {
+                value.matches(Regex("[a-z]+(?:[A-Z][A-Za-z0-9]*)+"))
+            }
+
+            PASCAL_CASE -> {
+                value.matches(Regex("[A-Z][A-Za-z0-9]*[A-Z][A-Za-z0-9]*"))
+            }
+
+            SNAKE_CASE -> {
+                value.matches(Regex("[a-z][a-z0-9]*(?:_[a-z0-9]+)+"))
+            }
+
+            MACRO_CASE -> {
+                value.matches(Regex("[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+"))
+            }
+
+            KEBAB_CASE -> {
+                value.matches(Regex("[a-z][a-z0-9]*(?:-[a-z0-9]+)+"))
+            }
+
+            DOT_CASE -> {
+                value.matches(Regex("[a-z][a-z0-9]*(?:\\.[a-z0-9]+)+"))
+            }
+
+            PHP_VARIABLE -> {
+                matchesPhpVariableOrBladeEcho(value)
+            }
         }
 }
 

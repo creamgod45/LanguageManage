@@ -34,7 +34,11 @@ class HardcodedTextAnalysisSupportTest {
                 root,
                 emptyList(),
                 emptyList(),
-                UsageScanSettingsDto(basePath = root.toString(), regexPatterns = listOf("translate\\([^)]*\\)"), excludedDirectories = emptyList()),
+                UsageScanSettingsDto(
+                    basePath = root.toString(),
+                    regexPatterns = listOf("translate\\([^)]*\\)"),
+                    excludedDirectories = emptyList(),
+                ),
                 force = true,
                 progress = { progress += it.stage },
             )
@@ -72,7 +76,12 @@ class HardcodedTextAnalysisSupportTest {
             )
 
         assertEquals(listOf("Visible label"), result.items.map { it.text })
-        assertTrue(result.items.single().filePath.endsWith("keep.custom"))
+        assertTrue(
+            result.items
+                .single()
+                .filePath
+                .endsWith("keep.custom"),
+        )
     }
 
     @Test
@@ -81,7 +90,12 @@ class HardcodedTextAnalysisSupportTest {
         val source = root.resolve("code.txt")
         source.writeText("value = \"Cached label\"")
         val support = HardcodedTextAnalysisSupport()
-        val settings = UsageScanSettingsDto(basePath = root.toString(), regexPatterns = listOf("translate\\([^)]*\\)"), excludedDirectories = emptyList())
+        val settings =
+            UsageScanSettingsDto(
+                basePath = root.toString(),
+                regexPatterns = listOf("translate\\([^)]*\\)"),
+                excludedDirectories = emptyList(),
+            )
 
         support.analyze("scheme", root, emptyList(), emptyList(), settings, force = true)
         val refreshed = support.analyze("scheme", root, emptyList(), emptyList(), settings, force = true)
@@ -104,7 +118,11 @@ class HardcodedTextAnalysisSupportTest {
                 root,
                 emptyList(),
                 emptyList(),
-                UsageScanSettingsDto(basePath = root.toString(), regexPatterns = listOf("translate\\([^)]*\\)"), excludedDirectories = emptyList()),
+                UsageScanSettingsDto(
+                    basePath = root.toString(),
+                    regexPatterns = listOf("translate\\([^)]*\\)"),
+                    excludedDirectories = emptyList(),
+                ),
                 force = true,
             )
 

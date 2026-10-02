@@ -367,9 +367,10 @@ class BackendLocalizationManagerRpcApi : LocalizationManagerRpcApi {
         projectId: ProjectId,
         schemeId: String,
         request: NamespaceFilesRequestDto,
-    ): ChangePreviewDto = withContext(Dispatchers.IO) {
-        projectId.service()?.previewNamespaceFiles(schemeId, request) ?: ChangePreviewDto()
-    }
+    ): ChangePreviewDto =
+        withContext(Dispatchers.IO) {
+            projectId.service()?.previewNamespaceFiles(schemeId, request) ?: ChangePreviewDto()
+        }
 
     override suspend fun createNamespaceFiles(
         projectId: ProjectId,
@@ -385,9 +386,10 @@ class BackendLocalizationManagerRpcApi : LocalizationManagerRpcApi {
         projectId: ProjectId,
         schemeId: String,
         request: NamespaceFilesDeleteRequestDto,
-    ): ChangePreviewDto = withContext(Dispatchers.IO) {
-        projectId.service()?.previewDeleteNamespaceFiles(schemeId, request) ?: ChangePreviewDto()
-    }
+    ): ChangePreviewDto =
+        withContext(Dispatchers.IO) {
+            projectId.service()?.previewDeleteNamespaceFiles(schemeId, request) ?: ChangePreviewDto()
+        }
 
     override suspend fun deleteNamespaceFiles(
         projectId: ProjectId,

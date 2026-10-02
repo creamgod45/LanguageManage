@@ -223,7 +223,10 @@ internal object UsageSourceRenameSupport {
         return null
     }
 
-    private fun isEscaped(content: String, index: Int): Boolean {
+    private fun isEscaped(
+        content: String,
+        index: Int,
+    ): Boolean {
         var slashCount = 0
         var cursor = index - 1
         while (cursor >= 0 && content[cursor] == '\\') {

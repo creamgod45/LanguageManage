@@ -23,8 +23,7 @@ internal class UsagePathExclusions(
         return file.fileName?.toString()?.lowercase() in names || relative in paths
     }
 
-    private fun relative(path: Path): String =
-        root.relativize(path).joinToString("/") { it.toString() }.lowercase()
+    private fun relative(path: Path): String = root.relativize(path).joinToString("/") { it.toString() }.lowercase()
 
     private fun normalize(value: String): String = value.replace('\\', '/').trim('/').lowercase()
 }

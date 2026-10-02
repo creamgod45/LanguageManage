@@ -107,9 +107,10 @@ internal object SchemeSettingsTransferSupport {
                     }.orEmpty()
             val dynamicRoot = basePath.takeIf(String::isNotBlank)?.let(Path::of) ?: root
             val dynamicRules =
-                scheme.dynamicSourceRules.map { rule ->
-                    rule.copy(filePath = resolveConfiguredPath(rule.filePath, root).toString())
-                }.let { DynamicSourceSupport.normalizeRules(it, dynamicRoot) }
+                scheme.dynamicSourceRules
+                    .map { rule ->
+                        rule.copy(filePath = resolveConfiguredPath(rule.filePath, root).toString())
+                    }.let { DynamicSourceSupport.normalizeRules(it, dynamicRoot) }
             ResolvedImportedScheme(
                 name = scheme.name.trim(),
                 files = files,
@@ -127,7 +128,9 @@ internal object SchemeSettingsTransferSupport {
         val transfer =
             runCatching { json.decodeFromString<SchemeSettingsTransferDto>(content) }
                 .getOrElse { throw IllegalArgumentException(backendMessage("scheme.transfer.json.invalid", safeDetail(it))) }
-        require(transfer.formatVersion in SUPPORTED_FORMAT_VERSIONS) { backendMessage("scheme.transfer.version.invalid", transfer.formatVersion) }
+        require(
+            transfer.formatVersion in SUPPORTED_FORMAT_VERSIONS,
+        ) { backendMessage("scheme.transfer.version.invalid", transfer.formatVersion) }
         require(transfer.schemes.size in 1..MAX_SCHEMES) { backendMessage("scheme.transfer.scheme.count", MAX_SCHEMES) }
         require(transfer.schemes.sumOf { it.files.size } <= MAX_FILES) { backendMessage("scheme.transfer.file.count", MAX_FILES) }
         transfer.schemes.forEach { scheme ->
@@ -172,7 +175,10 @@ internal object SchemeSettingsTransferSupport {
                 return SchemeImportFilePreviewDto(configured, "", false, false, safeDetail(error))
             }
         return runCatching {
-            require(java.nio.file.Files.isRegularFile(resolved))
+            require(
+                java.nio.file.Files
+                    .isRegularFile(resolved),
+            )
             SchemeImportFilePreviewDto(configured, resolved.toRealPath().toString(), true, true)
         }.getOrElse { error ->
             SchemeImportFilePreviewDto(configured, resolved.toString(), false, false, safeDetail(error))

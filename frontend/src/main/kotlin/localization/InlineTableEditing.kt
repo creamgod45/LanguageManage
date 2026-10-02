@@ -91,8 +91,7 @@ internal object InlineTableEditing {
         }
 
         /** The focused (lead) cell, which is what F2 edits. */
-        fun startAtLead(): Boolean =
-            start(table.selectionModel.leadSelectionIndex, table.columnModel.selectionModel.leadSelectionIndex)
+        fun startAtLead(): Boolean = start(table.selectionModel.leadSelectionIndex, table.columnModel.selectionModel.leadSelectionIndex)
     }
 
     /** Text of the active in-place editor, if any. */
@@ -186,7 +185,11 @@ internal object InlineTableEditing {
             row: Int,
             column: Int,
         ) {
-            val width = table.columnModel.getColumn(column).width.coerceAtLeast(JBUI.scale(40))
+            val width =
+                table.columnModel
+                    .getColumn(column)
+                    .width
+                    .coerceAtLeast(JBUI.scale(40))
             textArea.setSize(width, Short.MAX_VALUE.toInt())
             val lineHeight = textArea.getFontMetrics(textArea.font).height
             val insets = textArea.insets
@@ -241,7 +244,11 @@ internal object InlineTableEditing {
     }
 
     private fun platformMultiClickInterval(): Long =
-        (java.awt.Toolkit.getDefaultToolkit().getDesktopProperty("awt.multiClickInterval") as? Int)?.toLong()
+        (
+            java.awt.Toolkit
+                .getDefaultToolkit()
+                .getDesktopProperty("awt.multiClickInterval") as? Int
+        )?.toLong()
             ?: DEFAULT_MULTI_CLICK_INTERVAL_MS
 
     private const val DEFAULT_MULTI_CLICK_INTERVAL_MS = 500L
@@ -286,7 +293,11 @@ internal object InlineTableEditing {
      */
     fun tooltipMaxWidth(table: JTable): Int {
         val windowWidth = SwingUtilities.getWindowAncestor(table)?.width?.takeIf { it > 0 }
-        val screenWidth = table.graphicsConfiguration?.bounds?.width?.takeIf { it > 0 }
+        val screenWidth =
+            table.graphicsConfiguration
+                ?.bounds
+                ?.width
+                ?.takeIf { it > 0 }
         val available = listOfNotNull(windowWidth, screenWidth).minOrNull() ?: return JBUI.scale(FALLBACK_TOOLTIP_WIDTH)
         return (available / 2).coerceAtLeast(JBUI.scale(MIN_TOOLTIP_WIDTH))
     }

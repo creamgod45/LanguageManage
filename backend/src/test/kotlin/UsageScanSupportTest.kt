@@ -1,12 +1,12 @@
 package cg.creamgod45
 
-import cg.creamgod45.localization.LanguageEntryDto
 import cg.creamgod45.localization.DynamicSourceGroupDto
 import cg.creamgod45.localization.DynamicSourceRuleDto
+import cg.creamgod45.localization.LanguageEntryDto
 import cg.creamgod45.localization.MAX_USAGE_EXCLUSIONS
 import cg.creamgod45.localization.UsageScanSettingsDto
-import java.nio.file.Files
 import kotlinx.coroutines.CancellationException
+import java.nio.file.Files
 import kotlin.io.path.createDirectories
 import kotlin.io.path.writeText
 import kotlin.test.AfterTest
@@ -172,9 +172,10 @@ class UsageScanSupportTest {
         }
         assertEquals(
             1_000,
-            UsageScanSupport.normalize(
-                UsageScanSettingsDto(regexPatterns = listOf("x"), excludedDirectories = List(1_000) { "folder-$it" }),
-            ).excludedDirectories.size,
+            UsageScanSupport
+                .normalize(
+                    UsageScanSettingsDto(regexPatterns = listOf("x"), excludedDirectories = List(1_000) { "folder-$it" }),
+                ).excludedDirectories.size,
         )
         assertFailsWith<IllegalArgumentException> {
             UsageScanSupport.normalize(
@@ -263,7 +264,10 @@ class UsageScanSupportTest {
 
         assertEquals(2, result.counts[entry.id])
         assertFalse(result.locationsTruncated)
-        assertEquals(listOf(content.indexOf("auth.failed"), content.lastIndexOf("auth.failed")), result.locations.map { it.offset }.sorted())
+        assertEquals(
+            listOf(content.indexOf("auth.failed"), content.lastIndexOf("auth.failed")),
+            result.locations.map { it.offset }.sorted(),
+        )
         assertTrue(result.locations.all { it.line == 0 && it.column == 0 })
         val second = result.locations.maxBy { it.offset }
         assertEquals(2 to 7, UsageLocationSupport.sourceLineColumn(source, second.offset))
@@ -272,10 +276,11 @@ class UsageScanSupportTest {
 
     @Test
     fun `invasive markers and configured dynamic rules augment regex usage counts and locations`() {
-        val invasive = temp.resolve("src/invasive.php").apply {
-            parent.createDirectories()
-            writeText("// @languageManager(method: dynamic, enum: auth.failed,status.ready)\n")
-        }
+        val invasive =
+            temp.resolve("src/invasive.php").apply {
+                parent.createDirectories()
+                writeText("// @languageManager(method: dynamic, enum: auth.failed,status.ready)\n")
+            }
         val configured = temp.resolve("src/configured.php").apply { writeText("dynamic lookup\n") }
         val auth = entry("auth", "failed")
         val status = entry("status", "ready")
@@ -302,9 +307,20 @@ class UsageScanSupportTest {
 
     @Test
     fun `source file planning count follows exclusions and skips managed language files`() {
-        val source = temp.resolve("src/app.txt").apply { parent.createDirectories(); writeText("x") }
-        val language = temp.resolve("lang/en.json").apply { parent.createDirectories(); writeText("{}") }
-        temp.resolve("vendor/ignored.txt").apply { parent.createDirectories(); writeText("x") }
+        val source =
+            temp.resolve("src/app.txt").apply {
+                parent.createDirectories()
+                writeText("x")
+            }
+        val language =
+            temp.resolve("lang/en.json").apply {
+                parent.createDirectories()
+                writeText("{}")
+            }
+        temp.resolve("vendor/ignored.txt").apply {
+            parent.createDirectories()
+            writeText("x")
+        }
         val settings = UsageScanSettingsDto(regexPatterns = listOf("x"), excludedDirectories = listOf("vendor"))
 
         assertEquals(1, UsageScanSupport.sourceFileCount(temp, listOf(language.toString()), settings), source.toString())
@@ -312,7 +328,11 @@ class UsageScanSupportTest {
 
     @Test
     fun `usage scan excludes an exact file while retaining its siblings`() {
-        val excluded = temp.resolve("src/generated.php").apply { parent.createDirectories(); writeText("tr(\"auth.failed\")") }
+        val excluded =
+            temp.resolve("src/generated.php").apply {
+                parent.createDirectories()
+                writeText("tr(\"auth.failed\")")
+            }
         val retained = temp.resolve("src/application.php").apply { writeText("tr(\"auth.failed\")") }
         val entry = entry("auth", "failed")
         val settings =
@@ -329,8 +349,14 @@ class UsageScanSupportTest {
 
     @Test
     fun `bare exclusion name applies to matching files as well as directories`() {
-        temp.resolve("first/ignored.generated").apply { parent.createDirectories(); writeText("tr(\"auth.failed\")") }
-        temp.resolve("second/ignored.generated").apply { parent.createDirectories(); writeText("tr(\"auth.failed\")") }
+        temp.resolve("first/ignored.generated").apply {
+            parent.createDirectories()
+            writeText("tr(\"auth.failed\")")
+        }
+        temp.resolve("second/ignored.generated").apply {
+            parent.createDirectories()
+            writeText("tr(\"auth.failed\")")
+        }
         temp.resolve("second/kept.php").writeText("tr(\"auth.failed\")")
         val entry = entry("auth", "failed")
         val settings =

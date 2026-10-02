@@ -86,9 +86,15 @@ class TranslationEditorSupportTest {
                 java.util.ResourceBundle.getBundle(
                     "messages.LanguageManagerFrontendBundle",
                     locale?.split('_')?.let { java.util.Locale.of(it[0], it.getOrElse(1) { "" }) } ?: java.util.Locale.ROOT,
-                    java.util.ResourceBundle.Control.getNoFallbackControl(java.util.ResourceBundle.Control.FORMAT_DEFAULT),
+                    java.util.ResourceBundle.Control
+                        .getNoFallbackControl(java.util.ResourceBundle.Control.FORMAT_DEFAULT),
                 )
-            val text = java.text.MessageFormat.format(bundle.getString("error.translation.key.exists"), "button.save", "Messages_de.properties")
+            val text =
+                java.text.MessageFormat.format(
+                    bundle.getString("error.translation.key.exists"),
+                    "button.save",
+                    "Messages_de.properties",
+                )
             assertTrue("button.save" in text && "Messages_de.properties" in text, "locale=$locale: $text")
         }
     }

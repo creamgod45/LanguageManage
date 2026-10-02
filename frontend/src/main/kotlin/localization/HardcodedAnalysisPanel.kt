@@ -14,16 +14,16 @@ import com.intellij.notification.NotificationType
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.EDT
-import com.intellij.openapi.fileEditor.OpenFileDescriptor
 import com.intellij.openapi.fileChooser.FileChooserFactory
 import com.intellij.openapi.fileChooser.FileSaverDescriptor
-import com.intellij.openapi.progress.ProgressIndicator
+import com.intellij.openapi.fileEditor.OpenFileDescriptor
 import com.intellij.openapi.progress.ProcessCanceledException
+import com.intellij.openapi.progress.ProgressIndicator
 import com.intellij.openapi.progress.Task
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.ComboBox
-import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.ui.Messages
+import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBScrollPane
 import com.intellij.ui.components.JBTextField
@@ -55,8 +55,11 @@ import javax.swing.table.AbstractTableModel
 
 internal class HardcodedAnalysisPanel(
     private val project: Project,
-) : JPanel(BorderLayout()), Disposable {
-    companion object { private const val PAGE_SIZE = 100 }
+) : JPanel(BorderLayout()),
+    Disposable {
+    companion object {
+        private const val PAGE_SIZE = 100
+    }
 
     private enum class ConfidenceFilter { ALL, HIGH, MEDIUM, LOW }
 
@@ -70,7 +73,11 @@ internal class HardcodedAnalysisPanel(
     private val refresh = JButton(message("analysis.action.refresh"))
     private val export = JButton(message("analysis.action.export.count", 0)).apply { isEnabled = false }
     private val stop = JButton(message("analysis.action.stop")).apply { isEnabled = false }
-    private val progress = JProgressBar(0, 100).apply { isStringPainted = true; isVisible = false }
+    private val progress =
+        JProgressBar(0, 100).apply {
+            isStringPainted = true
+            isVisible = false
+        }
     private val status = JBLabel(message("analysis.status.ready"))
     private val pageLabel = JBLabel()
     private val previous = JButton(message("button.previous"))
@@ -93,11 +100,13 @@ internal class HardcodedAnalysisPanel(
         add(footer(), BorderLayout.SOUTH)
         table.autoCreateRowSorter = true
         table.autoResizeMode = JBTable.AUTO_RESIZE_OFF
-        table.addMouseListener(object : MouseAdapter() {
-            override fun mouseClicked(event: MouseEvent) {
-                if (event.clickCount == 2 && SwingUtilities.isLeftMouseButton(event)) openSelected()
-            }
-        })
+        table.addMouseListener(
+            object : MouseAdapter() {
+                override fun mouseClicked(event: MouseEvent) {
+                    if (event.clickCount == 2 && SwingUtilities.isLeftMouseButton(event)) openSelected()
+                }
+            },
+        )
         wireEvents()
         scope.launch { repository.state.collect { withContext(Dispatchers.EDT) { updateState(it) } } }
         scope.launch { repository.hardcodedAnalysisProgress.collect { value -> withContext(Dispatchers.EDT) { updateProgress(value) } } }
@@ -179,16 +188,35 @@ internal class HardcodedAnalysisPanel(
         refresh.addActionListener { startAnalysis(force = true) }
         export.addActionListener { exportFilteredResults() }
         stop.addActionListener { runningIndicator?.cancel() }
-        previous.addActionListener { if (currentPage > 0) { currentPage--; renderPage() } }
-        next.addActionListener { currentPage++; renderPage() }
-        confidence.addActionListener { currentPage = 0; renderPage() }
+        previous.addActionListener {
+            if (currentPage > 0) {
+                currentPage--
+                renderPage()
+            }
+        }
+        next.addActionListener {
+            currentPage++
+            renderPage()
+        }
+        confidence.addActionListener {
+            currentPage = 0
+            renderPage()
+        }
         patternFilterButton.addActionListener { showPatternFilterMenu() }
-        search.document.addDocumentListener(object : DocumentListener {
-            override fun insertUpdate(e: DocumentEvent?) = changed()
-            override fun removeUpdate(e: DocumentEvent?) = changed()
-            override fun changedUpdate(e: DocumentEvent?) = changed()
-            private fun changed() { currentPage = 0; renderPage() }
-        })
+        search.document.addDocumentListener(
+            object : DocumentListener {
+                override fun insertUpdate(e: DocumentEvent?) = changed()
+
+                override fun removeUpdate(e: DocumentEvent?) = changed()
+
+                override fun changedUpdate(e: DocumentEvent?) = changed()
+
+                private fun changed() {
+                    currentPage = 0
+                    renderPage()
+                }
+            },
+        )
     }
 
     private fun updateState(nextState: LocalizationStateDto) {
@@ -275,11 +303,31 @@ internal class HardcodedAnalysisPanel(
         progress.value = if (total > 0) (value.processedFiles * 100 / total).coerceIn(0, 100) else 0
         progress.string =
             when (value.stage) {
-                HardcodedAnalysisStage.DISCOVERING -> message("analysis.progress.discovering", value.discoveredFiles)
-                HardcodedAnalysisStage.SCANNING -> message("analysis.progress.scanning", value.processedFiles, total, value.cachedFiles, value.currentPath)
-                HardcodedAnalysisStage.CANCELLED -> message("analysis.status.cancelled")
-                HardcodedAnalysisStage.FAILED -> message("analysis.status.failed")
-                else -> message("analysis.status.ready")
+                HardcodedAnalysisStage.DISCOVERING -> {
+                    message("analysis.progress.discovering", value.discoveredFiles)
+                }
+
+                HardcodedAnalysisStage.SCANNING -> {
+                    message(
+                        "analysis.progress.scanning",
+                        value.processedFiles,
+                        total,
+                        value.cachedFiles,
+                        value.currentPath,
+                    )
+                }
+
+                HardcodedAnalysisStage.CANCELLED -> {
+                    message("analysis.status.cancelled")
+                }
+
+                HardcodedAnalysisStage.FAILED -> {
+                    message("analysis.status.failed")
+                }
+
+                else -> {
+                    message("analysis.status.ready")
+                }
             }
         status.text = progress.string
     }
@@ -369,7 +417,9 @@ internal class HardcodedAnalysisPanel(
             )
         val base = project.basePath?.let { LocalFileSystem.getInstance().findFileByPath(it) }
         val target =
-            FileChooserFactory.getInstance().createSaveFileDialog(descriptor, project)
+            FileChooserFactory
+                .getInstance()
+                .createSaveFileDialog(descriptor, project)
                 .save(base, "language-manager-untranslated-locations.csv") ?: return
         scope.launch {
             try {
@@ -394,7 +444,9 @@ internal class HardcodedAnalysisPanel(
     }
 
     private fun notifyError(error: Throwable) {
-        NotificationGroupManager.getInstance().getNotificationGroup("Language Manager Notifications")
+        NotificationGroupManager
+            .getInstance()
+            .getNotificationGroup("Language Manager Notifications")
             .createNotification(message("analysis.status.failed"), error.message.orEmpty().take(500), NotificationType.ERROR)
             .notify(project)
     }
@@ -405,17 +457,39 @@ internal class HardcodedAnalysisPanel(
     }
 
     private inner class AnalysisConfidenceRenderer : javax.swing.DefaultListCellRenderer() {
-        override fun getListCellRendererComponent(list: javax.swing.JList<*>?, value: Any?, index: Int, selected: Boolean, focus: Boolean) =
-            super.getListCellRendererComponent(list, message("analysis.confidence.${(value as? ConfidenceFilter ?: ConfidenceFilter.ALL).name.lowercase()}"), index, selected, focus)
+        override fun getListCellRendererComponent(
+            list: javax.swing.JList<*>?,
+            value: Any?,
+            index: Int,
+            selected: Boolean,
+            focus: Boolean,
+        ) = super.getListCellRendererComponent(
+            list,
+            message("analysis.confidence.${(value as? ConfidenceFilter ?: ConfidenceFilter.ALL).name.lowercase()}"),
+            index,
+            selected,
+            focus,
+        )
     }
 
     private class CandidateTableModel : AbstractTableModel() {
         var items: List<HardcodedTextCandidateDto> = emptyList()
-            set(value) { field = value; fireTableDataChanged() }
+            set(value) {
+                field = value
+                fireTableDataChanged()
+            }
+
         override fun getRowCount() = items.size
+
         override fun getColumnCount() = 4
-        override fun getColumnName(column: Int) = message(arrayOf("analysis.column.text", "analysis.column.file", "analysis.column.line", "analysis.column.column")[column])
-        override fun getValueAt(rowIndex: Int, columnIndex: Int): Any {
+
+        override fun getColumnName(column: Int) =
+            message(arrayOf("analysis.column.text", "analysis.column.file", "analysis.column.line", "analysis.column.column")[column])
+
+        override fun getValueAt(
+            rowIndex: Int,
+            columnIndex: Int,
+        ): Any {
             val item = items[rowIndex]
             return when (columnIndex) {
                 0 -> item.text

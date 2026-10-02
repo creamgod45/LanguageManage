@@ -27,12 +27,14 @@ private class DynamicMarkerDocumentationTarget(
 ) : DocumentationTarget {
     override fun createPointer(): Pointer<out DocumentationTarget> =
         Pointer.fileRangePointer(file, TextRange(marker.startOffset, marker.endOffsetExclusive)) { restoredFile, restoredRange ->
-            DynamicMarkerSyntax.findAt(restoredFile.text, restoredRange.startOffset, restoredRange.endOffset)
+            DynamicMarkerSyntax
+                .findAt(restoredFile.text, restoredRange.startOffset, restoredRange.endOffset)
                 ?.let { DynamicMarkerDocumentationTarget(restoredFile, it) }
         }
 
     override fun computePresentation(): TargetPresentation =
-        TargetPresentation.builder("@languageManager")
+        TargetPresentation
+            .builder("@languageManager")
             .locationText(file.name)
             .presentation()
 
@@ -52,5 +54,9 @@ private class DynamicMarkerDocumentationTarget(
     }
 
     private fun escape(value: String): String =
-        value.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;")
+        value
+            .replace("&", "&amp;")
+            .replace("<", "&lt;")
+            .replace(">", "&gt;")
+            .replace("\"", "&quot;")
 }

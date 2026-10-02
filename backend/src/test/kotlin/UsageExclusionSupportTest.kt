@@ -1,7 +1,7 @@
 package cg.creamgod45
 
-import java.nio.file.Path
 import java.nio.file.Files
+import java.nio.file.Path
 import kotlin.io.path.createDirectories
 import kotlin.test.AfterTest
 import kotlin.test.Test
@@ -113,10 +113,11 @@ class UsageExclusionSupportTest {
     fun `accepts files and folders in one exclusion batch`() {
         val root = newTempDir("lm-path-exclusions")
         val folder = root.resolve("generated").createDirectories()
-        val file = root.resolve("src/legacy.php").apply {
-            parent.createDirectories()
-            Files.writeString(this, "legacy")
-        }
+        val file =
+            root.resolve("src/legacy.php").apply {
+                parent.createDirectories()
+                Files.writeString(this, "legacy")
+            }
 
         val resolution = UsageExclusionSupport.resolve(root, listOf(file.toString(), folder.toString()))
 

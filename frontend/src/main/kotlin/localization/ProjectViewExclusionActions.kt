@@ -100,7 +100,8 @@ class ExcludeFoldersFromActiveSchemeAction : DumbAwareAction() {
         val project = event.project ?: return
         if (!LocalizationActionContext.getInstance(project).hasActiveScheme()) return
         val selectedPaths =
-            event.getData(CommonDataKeys.VIRTUAL_FILE_ARRAY)
+            event
+                .getData(CommonDataKeys.VIRTUAL_FILE_ARRAY)
                 .orEmpty()
                 .map { it.path }
                 .distinct()
@@ -112,18 +113,25 @@ class ExcludeFoldersFromActiveSchemeAction : DumbAwareAction() {
                     val skipped = result.skippedDirectories.size
                     val (text, type) =
                         when {
-                            added > 0 && skipped > 0 ->
+                            added > 0 && skipped > 0 -> {
                                 message("notification.exclusion.added.partial", added, skipped, result.schemeName) to
                                     NotificationType.INFORMATION
-                            added > 0 ->
+                            }
+
+                            added > 0 -> {
                                 message("notification.exclusion.added", added, result.schemeName) to
                                     NotificationType.INFORMATION
-                            skipped > 0 ->
+                            }
+
+                            skipped > 0 -> {
                                 message("notification.exclusion.skipped", skipped, result.schemeName) to
                                     NotificationType.WARNING
-                            else ->
+                            }
+
+                            else -> {
                                 message("notification.exclusion.already.exists", result.schemeName) to
                                     NotificationType.INFORMATION
+                            }
                         }
                     notify(project, text, type)
                 }.onFailure { error ->

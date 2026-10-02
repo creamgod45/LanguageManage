@@ -257,10 +257,15 @@ internal class SchemeUsageSettingsDialog(
         selected.forEach { virtualFile ->
             val path = runCatching { Path.of(virtualFile.path).toAbsolutePath().normalize() }.getOrNull()
             val relative =
-                path?.takeIf { it != root && it.startsWith(root) }
+                path
+                    ?.takeIf { it != root && it.startsWith(root) }
                     ?.let { root.relativize(it).joinToString("/") { part -> part.toString() } }
                     ?.takeIf(String::isNotBlank)
-            if (relative == null) skipped++ else if (existing.add(relative)) model.addElement(relative)
+            if (relative == null) {
+                skipped++
+            } else if (existing.add(relative)) {
+                model.addElement(relative)
+            }
         }
         if (skipped > 0) {
             Messages.showWarningDialog(

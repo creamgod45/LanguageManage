@@ -9,7 +9,11 @@ import javax.swing.table.DefaultTableModel
 /** Issue #21 (show or hide language columns) and issue #22 (row context menu targeting). */
 class TranslationTableViewOptionsTest : BasePlatformTestCase() {
     private fun table(): JTable {
-        val model = DefaultTableModel(arrayOf(arrayOf<Any>("ns", "key", "A", "B", "C", 1)), arrayOf("Namespace", "Key", "en", "ja", "zh_TW", "Usage"))
+        val model =
+            DefaultTableModel(
+                arrayOf(arrayOf<Any>("ns", "key", "A", "B", "C", 1)),
+                arrayOf("Namespace", "Key", "en", "ja", "zh_TW", "Usage"),
+            )
         return RowHighlightTable(model).apply {
             cellSelectionEnabled = true
             rowSelectionAllowed = true
@@ -79,7 +83,11 @@ class TranslationTableViewOptionsTest : BasePlatformTestCase() {
                 },
                 listOf(KeepOpenTogglePopup.Command("Clear") { cleared = true }),
             )
-        val actions = group.getChildren(com.intellij.testFramework.TestActionEvent.createTestEvent())
+        val actions =
+            group.getChildren(
+                com.intellij.testFramework.TestActionEvent
+                    .createTestEvent(),
+            )
         val items = actions.filterNot { it is com.intellij.openapi.actionSystem.Separator }
 
         assertEquals(3, items.size)
@@ -92,12 +100,17 @@ class TranslationTableViewOptionsTest : BasePlatformTestCase() {
             )
         }
         val snake = items[1] as com.intellij.openapi.actionSystem.ToggleAction
-        val event = com.intellij.testFramework.TestActionEvent.createTestEvent(snake)
+        val event =
+            com.intellij.testFramework.TestActionEvent
+                .createTestEvent(snake)
         assertFalse(snake.isSelected(event))
         snake.setSelected(event, true)
         assertEquals(setOf("camelCase", "snake_case"), selected)
 
-        items[2].actionPerformed(com.intellij.testFramework.TestActionEvent.createTestEvent(items[2]))
+        items[2].actionPerformed(
+            com.intellij.testFramework.TestActionEvent
+                .createTestEvent(items[2]),
+        )
         assertTrue(cleared)
     }
 
@@ -107,7 +120,11 @@ class TranslationTableViewOptionsTest : BasePlatformTestCase() {
     ) = getCellRect(row, column, true).let { Point(it.centerX.toInt(), it.centerY.toInt()) }
 
     fun testContextMenuSelectsThePointedCellSoRowActionsTargetThatRow() {
-        val model = DefaultTableModel(arrayOf(arrayOf<Any>("ns", "a", "A"), arrayOf<Any>("ns", "b", "B"), arrayOf<Any>("ns", "c", "C")), arrayOf("Namespace", "Key", "en"))
+        val model =
+            DefaultTableModel(
+                arrayOf(arrayOf<Any>("ns", "a", "A"), arrayOf<Any>("ns", "b", "B"), arrayOf<Any>("ns", "c", "C")),
+                arrayOf("Namespace", "Key", "en"),
+            )
         val table =
             RowHighlightTable(model).apply {
                 cellSelectionEnabled = true
@@ -125,7 +142,11 @@ class TranslationTableViewOptionsTest : BasePlatformTestCase() {
     }
 
     fun testContextMenuInsideAMultiRowSelectionKeepsItForBulkActions() {
-        val model = DefaultTableModel(arrayOf(arrayOf<Any>("ns", "a", "A"), arrayOf<Any>("ns", "b", "B"), arrayOf<Any>("ns", "c", "C")), arrayOf("Namespace", "Key", "en"))
+        val model =
+            DefaultTableModel(
+                arrayOf(arrayOf<Any>("ns", "a", "A"), arrayOf<Any>("ns", "b", "B"), arrayOf<Any>("ns", "c", "C")),
+                arrayOf("Namespace", "Key", "en"),
+            )
         val table =
             RowHighlightTable(model).apply {
                 cellSelectionEnabled = true

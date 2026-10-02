@@ -49,7 +49,10 @@ internal object SelectionReplacementSupport {
         val scanRoot = root.toRealPath()
         val exclusions = UsagePathExclusions(scanRoot, settings.excludedDirectories)
 
-        fun report(stage: SelectionScanStage, path: Path = scanRoot) {
+        fun report(
+            stage: SelectionScanStage,
+            path: Path = scanRoot,
+        ) {
             val relative = runCatching { scanRoot.relativize(path).joinToString("/") { it.toString() } }.getOrDefault("")
             progress(
                 SelectionScanProgressDto(
@@ -71,7 +74,10 @@ internal object SelectionReplacementSupport {
         Files.walkFileTree(
             scanRoot,
             object : SimpleFileVisitor<Path>() {
-                override fun preVisitDirectory(dir: Path, attrs: BasicFileAttributes): FileVisitResult {
+                override fun preVisitDirectory(
+                    dir: Path,
+                    attrs: BasicFileAttributes,
+                ): FileVisitResult {
                     cancellationCheck()
                     visitedDirectories++
                     if (dir == scanRoot) {
@@ -82,7 +88,10 @@ internal object SelectionReplacementSupport {
                     return if (exclusions.excludesDirectory(dir)) FileVisitResult.SKIP_SUBTREE else FileVisitResult.CONTINUE
                 }
 
-                override fun visitFile(file: Path, attrs: BasicFileAttributes): FileVisitResult {
+                override fun visitFile(
+                    file: Path,
+                    attrs: BasicFileAttributes,
+                ): FileVisitResult {
                     cancellationCheck()
                     if (!attrs.isRegularFile) return FileVisitResult.CONTINUE
                     visitedFiles++
@@ -165,18 +174,31 @@ internal object SelectionReplacementSupport {
         return raw
     }
 
-    private fun matchingRule(path: Path, rules: List<ReplacementTemplateRuleDto>): ReplacementTemplateRuleDto? {
+    private fun matchingRule(
+        path: Path,
+        rules: List<ReplacementTemplateRuleDto>,
+    ): ReplacementTemplateRuleDto? {
         val name = path.fileName.toString().lowercase()
         return rules.firstOrNull { name.endsWith(it.fileSuffix.lowercase()) }
     }
 
-    private fun validateSourceFile(root: Path, raw: String): Path {
+    private fun validateSourceFile(
+        root: Path,
+        raw: String,
+    ): Path {
         require(raw.isNotBlank() && raw.length <= 4096 && raw.none(Char::isISOControl)) { backendMessage("selection.file.invalid") }
         val lower = raw.lowercase()
-        require(!lower.contains("://") && !lower.startsWith("ldap:") && !lower.startsWith("file:")) { backendMessage("selection.file.invalid") }
+        require(
+            !lower.contains("://") && !lower.startsWith("ldap:") && !lower.startsWith("file:"),
+        ) { backendMessage("selection.file.invalid") }
         require(!lower.startsWith("\\\\.\\") && !lower.contains("globalroot")) { backendMessage("selection.file.invalid") }
         val scanRoot = root.toRealPath()
-        val file = Path.of(raw).toAbsolutePath().normalize().toRealPath()
+        val file =
+            Path
+                .of(raw)
+                .toAbsolutePath()
+                .normalize()
+                .toRealPath()
         require(file.startsWith(scanRoot) && Files.isRegularFile(file) && Files.size(file) <= MAX_SOURCE_FILE_BYTES) {
             backendMessage("selection.file.invalid")
         }
@@ -196,7 +218,10 @@ internal object SelectionReplacementSupport {
                 .toString()
         }.getOrNull()
 
-    private fun literalOccurrenceCount(content: String, needle: String): Int {
+    private fun literalOccurrenceCount(
+        content: String,
+        needle: String,
+    ): Int {
         var count = 0
         var start = 0
         while (true) {

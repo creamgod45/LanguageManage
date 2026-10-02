@@ -425,7 +425,10 @@ class LanguageFileSupportTest {
                 listOf(temp.resolve("lang").toString(), directFile.toString()),
             )
 
-        assertEquals(setOf(folderFile.toRealPath().toString(), directFile.toRealPath().toString()), discovery.files.map { it.filePath }.toSet())
+        assertEquals(
+            setOf(folderFile.toRealPath().toString(), directFile.toRealPath().toString()),
+            discovery.files.map { it.filePath }.toSet(),
+        )
         assertTrue(discovery.files.all { it.recognized })
     }
 
@@ -550,7 +553,12 @@ class LanguageFileSupportTest {
             LanguageFileCodec.write(document)
             val reread = LanguageFileCodec.parse(path, "scheme")
             assertTrue(reread.issues.isEmpty(), "$name: ${reread.issues}")
-            keys.forEachIndexed { index, key -> assertEquals("value $index", reread.values[key], "$name key=[$key] keys=${reread.values.keys}") }
+            keys.forEachIndexed {
+                index,
+                key,
+                ->
+                assertEquals("value $index", reread.values[key], "$name key=[$key] keys=${reread.values.keys}")
+            }
             assertEquals("value", reread.values["old"], name)
         }
     }

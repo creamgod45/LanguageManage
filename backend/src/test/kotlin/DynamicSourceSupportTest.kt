@@ -35,10 +35,11 @@ class DynamicSourceSupportTest {
 
     @Test
     fun `configured rule is normalized under root and resolves lazy source offset`() {
-        val source = temp.resolve("src/service.php").apply {
-            parent.createDirectories()
-            writeText("first line\n  selected value\n")
-        }
+        val source =
+            temp.resolve("src/service.php").apply {
+                parent.createDirectories()
+                writeText("first line\n  selected value\n")
+            }
         val rule =
             DynamicSourceRuleDto(
                 id = "rule-1",
@@ -61,7 +62,14 @@ class DynamicSourceSupportTest {
     fun `configured rule rejects files outside scheme usage root`() {
         val outside = Files.createTempFile("language-manager-outside", ".php")
         try {
-            val rule = DynamicSourceRuleDto("rule", outside.toString(), 1, 1, groups = listOf(DynamicSourceGroupDto("enum", listOf("auth.failed"))))
+            val rule =
+                DynamicSourceRuleDto(
+                    "rule",
+                    outside.toString(),
+                    1,
+                    1,
+                    groups = listOf(DynamicSourceGroupDto("enum", listOf("auth.failed"))),
+                )
             assertFailsWith<IllegalArgumentException> { DynamicSourceSupport.normalizeRules(listOf(rule), temp) }
         } finally {
             assertTrue(Files.deleteIfExists(outside))
@@ -76,7 +84,10 @@ class DynamicSourceSupportTest {
             // @languageManager(method: dynamic, enum: auth.failed,status.ready)
             after
             """.trimIndent()
-        val marker = cg.creamgod45.localization.DynamicMarkerSyntax.findAll(source).single()
+        val marker =
+            cg.creamgod45.localization.DynamicMarkerSyntax
+                .findAll(source)
+                .single()
 
         assertEquals("before\nafter", DynamicSourceSupport.removeMarker(source, marker.startOffset, marker.endOffsetExclusive))
     }
@@ -84,7 +95,10 @@ class DynamicSourceSupportTest {
     @Test
     fun `embedded marker conversion preserves surrounding comment text`() {
         val source = "// keep @languageManager(method: dynamic, enum: auth.failed) note"
-        val marker = cg.creamgod45.localization.DynamicMarkerSyntax.findAll(source).single()
+        val marker =
+            cg.creamgod45.localization.DynamicMarkerSyntax
+                .findAll(source)
+                .single()
 
         assertEquals("// keep  note", DynamicSourceSupport.removeMarker(source, marker.startOffset, marker.endOffsetExclusive))
     }

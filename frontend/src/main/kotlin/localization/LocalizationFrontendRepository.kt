@@ -146,7 +146,12 @@ internal class LocalizationFrontendRepository(
         rules: List<ReplacementTemplateRuleDto>,
         filePath: String,
     ) = LocalizationManagerRpcApi.getInstance().previewSelectionReplacementFile(
-        project.projectId(), id, selectedText, replacementKey, rules, filePath,
+        project.projectId(),
+        id,
+        selectedText,
+        replacementKey,
+        rules,
+        filePath,
     )
 
     suspend fun previewSelectionTranslation(
@@ -160,7 +165,11 @@ internal class LocalizationFrontendRepository(
         editedFiles: List<EditedFileContentDto>,
         expectedBeforeHashes: Map<String, String>,
     ) = LocalizationManagerRpcApi.getInstance().applyPreviewedSelectionTranslation(
-        project.projectId(), id, request, editedFiles, expectedBeforeHashes,
+        project.projectId(),
+        id,
+        request,
+        editedFiles,
+        expectedBeforeHashes,
     )
 
     suspend fun delete(
@@ -204,7 +213,11 @@ internal class LocalizationFrontendRepository(
         editedFiles: List<EditedFileContentDto>,
         expectedBeforeHashes: Map<String, String>,
     ) = LocalizationManagerRpcApi.getInstance().applyPreviewedMergeTranslations(
-        project.projectId(), id, request, editedFiles, expectedBeforeHashes,
+        project.projectId(),
+        id,
+        request,
+        editedFiles,
+        expectedBeforeHashes,
     )
 
     suspend fun repair(id: String) = LocalizationManagerRpcApi.getInstance().repair(project.projectId(), id)

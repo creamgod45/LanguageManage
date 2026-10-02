@@ -1,15 +1,15 @@
 package cg.creamgod45
 
+import cg.creamgod45.localization.DynamicMarkerSyntax
 import cg.creamgod45.localization.DynamicSourceGroupDto
 import cg.creamgod45.localization.DynamicSourceRuleDto
-import cg.creamgod45.localization.DynamicMarkerSyntax
 import cg.creamgod45.localization.MAX_DYNAMIC_SOURCE_GROUPS_PER_RULE
 import cg.creamgod45.localization.MAX_DYNAMIC_SOURCE_KEYS_PER_GROUP
 import cg.creamgod45.localization.MAX_DYNAMIC_SOURCE_RULES
+import kotlinx.coroutines.CancellationException
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 import java.nio.file.Path
-import kotlinx.coroutines.CancellationException
 
 internal data class DynamicKeyOccurrence(
     val key: String,
@@ -30,22 +30,27 @@ internal object DynamicSourceSupport {
     ): List<DynamicSourceRuleDto> {
         require(rules.size <= MAX_DYNAMIC_SOURCE_RULES)
         val normalizedRoot = root.toRealPath()
-        return rules.map { rule ->
-            require(rule.id.length in 1..100 && rule.id.none(Char::isISOControl))
-            require(rule.method == "dynamic")
-            require(rule.line in 1..10_000_000 && rule.column in 1..10_000_000)
-            require(rule.groups.size in 1..MAX_DYNAMIC_SOURCE_GROUPS_PER_RULE)
-            val file = safeSourceFile(rule.filePath, normalizedRoot)
-            val groups =
-                rule.groups.map { group ->
-                    val name = group.name.trim()
-                    require(name.matches(Regex("[A-Za-z][A-Za-z0-9_-]{0,63}")))
-                    val keys = group.keys.map(String::trim).map(TranslationInputValidation::key).distinct()
-                    require(keys.size in 1..MAX_DYNAMIC_SOURCE_KEYS_PER_GROUP)
-                    DynamicSourceGroupDto(name, keys)
-                }
-            rule.copy(filePath = file.toString(), groups = groups)
-        }.distinctBy { it.id }
+        return rules
+            .map { rule ->
+                require(rule.id.length in 1..100 && rule.id.none(Char::isISOControl))
+                require(rule.method == "dynamic")
+                require(rule.line in 1..10_000_000 && rule.column in 1..10_000_000)
+                require(rule.groups.size in 1..MAX_DYNAMIC_SOURCE_GROUPS_PER_RULE)
+                val file = safeSourceFile(rule.filePath, normalizedRoot)
+                val groups =
+                    rule.groups.map { group ->
+                        val name = group.name.trim()
+                        require(name.matches(Regex("[A-Za-z][A-Za-z0-9_-]{0,63}")))
+                        val keys =
+                            group.keys
+                                .map(String::trim)
+                                .map(TranslationInputValidation::key)
+                                .distinct()
+                        require(keys.size in 1..MAX_DYNAMIC_SOURCE_KEYS_PER_GROUP)
+                        DynamicSourceGroupDto(name, keys)
+                    }
+                rule.copy(filePath = file.toString(), groups = groups)
+            }.distinctBy { it.id }
     }
 
     fun ruleOccurrences(
@@ -157,10 +162,10 @@ internal object DynamicSourceSupport {
         val lineEnd = content.indexOf('\n', markerEndExclusive).let { if (it < 0) content.length else it }
         val trimmedLine = content.substring(lineStart, lineEnd).trim()
         return trimmedLine == "// $markerText" ||
-                trimmedLine == "# $markerText" ||
-                trimmedLine == "/* $markerText */" ||
-                trimmedLine == "* $markerText" ||
-                trimmedLine == "<!-- $markerText -->" ||
-                trimmedLine == "{{-- $markerText --}}"
+            trimmedLine == "# $markerText" ||
+            trimmedLine == "/* $markerText */" ||
+            trimmedLine == "* $markerText" ||
+            trimmedLine == "<!-- $markerText -->" ||
+            trimmedLine == "{{-- $markerText --}}"
     }
 }

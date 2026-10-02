@@ -17,8 +17,24 @@ internal data class LocaleCodeSuggestion(
 internal object LocaleCodeCatalog {
     private val recommendedTags =
         listOf(
-            "en-US", "en-GB", "es-ES", "es-MX", "es-419", "fr-FR", "fr-CA", "pt-BR", "pt-PT",
-            "zh-CN", "zh-TW", "zh-Hans", "zh-Hant", "sr-Cyrl", "sr-Latn", "ja-JP", "ko-KR", "th-TH",
+            "en-US",
+            "en-GB",
+            "es-ES",
+            "es-MX",
+            "es-419",
+            "fr-FR",
+            "fr-CA",
+            "pt-BR",
+            "pt-PT",
+            "zh-CN",
+            "zh-TW",
+            "zh-Hans",
+            "zh-Hant",
+            "sr-Cyrl",
+            "sr-Latn",
+            "ja-JP",
+            "ko-KR",
+            "th-TH",
         )
 
     val suggestions: List<LocaleCodeSuggestion> by lazy {

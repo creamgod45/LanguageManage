@@ -147,7 +147,12 @@ class AddTranslationDuplicateKeyTest : BasePlatformTestCase() {
     }
 
     private fun DialogWrapper.clickOk() {
-        val okAction = DialogWrapper::class.java.getDeclaredMethod("getOKAction").apply { isAccessible = true }.invoke(this) as javax.swing.Action
+        val okAction =
+            DialogWrapper::class.java
+                .getDeclaredMethod(
+                    "getOKAction",
+                ).apply { isAccessible = true }
+                .invoke(this) as javax.swing.Action
         okAction.actionPerformed(java.awt.event.ActionEvent(this, java.awt.event.ActionEvent.ACTION_PERFORMED, "OK"))
     }
 

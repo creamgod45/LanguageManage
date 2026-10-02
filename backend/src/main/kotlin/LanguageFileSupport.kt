@@ -143,9 +143,16 @@ internal data class IdeFileReloadResult(
 
 internal object IdeFileReloadSupport {
     fun reloadFromDisk(paths: Collection<Path>): IdeFileReloadResult {
-        val requested = paths.asSequence().map(Path::toAbsolutePath).map(Path::normalize).distinct().toList()
+        val requested =
+            paths
+                .asSequence()
+                .map(Path::toAbsolutePath)
+                .map(Path::normalize)
+                .distinct()
+                .toList()
         val files =
-            requested.asSequence()
+            requested
+                .asSequence()
                 .mapNotNull { path ->
                     VirtualFileManager.getInstance().refreshAndFindFileByNioPath(path)
                 }.toList()
@@ -155,12 +162,13 @@ internal object IdeFileReloadSupport {
         val fileDocumentManager = FileDocumentManager.getInstance()
         val documents = files.mapNotNull(fileDocumentManager::getCachedDocument).distinct()
         var reloadedDocuments = 0
-        val reloadDocuments = Runnable {
-            documents.forEach {
-                fileDocumentManager.reloadFromDisk(it)
-                reloadedDocuments++
+        val reloadDocuments =
+            Runnable {
+                documents.forEach {
+                    fileDocumentManager.reloadFromDisk(it)
+                    reloadedDocuments++
+                }
             }
-        }
         val application = ApplicationManager.getApplication()
         if (application.isDispatchThread) {
             reloadDocuments.run()
@@ -176,7 +184,8 @@ internal object IdeFileReloadSupport {
 
     fun refreshDeletedFiles(paths: Collection<Path>) {
         val parents =
-            paths.asSequence()
+            paths
+                .asSequence()
                 .mapNotNull(Path::getParent)
                 .map(Path::toAbsolutePath)
                 .map(Path::normalize)
@@ -262,7 +271,13 @@ internal object LanguageFolderDiscovery {
         val directories = paths.filter(Files::isDirectory)
         val discovered =
             if (directories.isEmpty()) {
-                FolderDiscoveryDto(paths.first().parent?.toString().orEmpty())
+                FolderDiscoveryDto(
+                    paths
+                        .first()
+                        .parent
+                        ?.toString()
+                        .orEmpty(),
+                )
             } else {
                 discover(directories.map(Path::toString), settings)
             }
@@ -479,14 +494,17 @@ internal object LanguageNamespaceFileSupport {
                     }
                 }
 
-                "properties" ->
+                "properties" -> {
                     documents.filter { document ->
                         document.path.extension.equals("properties", true) &&
                             document.path.parent == reference.path.parent &&
                             document.namespace == reference.namespace
                     }
+                }
 
-                else -> error(backendMessage("namespace.format.unsupported"))
+                else -> {
+                    error(backendMessage("namespace.format.unsupported"))
+                }
             }
         require(family.isNotEmpty()) { backendMessage("namespace.locale.missing") }
         return family.sortedBy { it.path.toString().lowercase() }
@@ -497,10 +515,12 @@ internal object LanguageNamespaceFileSupport {
         reference: ParsedLanguageFile,
         segments: List<String>,
     ): List<LocaleVersionTarget> {
-        val familyRoot = phpIdentity(reference.path).localeDirectory.parent
-            ?: error(backendMessage("locale.version.path.invalid"))
+        val familyRoot =
+            phpIdentity(reference.path).localeDirectory.parent
+                ?: error(backendMessage("locale.version.path.invalid"))
         val localeDirectories =
-            documents.asSequence()
+            documents
+                .asSequence()
                 .filter { it.path.extension.equals("php", true) }
                 .map { phpIdentity(it.path) }
                 .filter { it.localeDirectory.parent == familyRoot }
@@ -509,7 +529,9 @@ internal object LanguageNamespaceFileSupport {
                 .toList()
         return localeDirectories.map { localeDirectory ->
             val relative =
-                segments.dropLast(1).fold(localeDirectory) { path, segment -> path.resolve(segment) }
+                segments
+                    .dropLast(1)
+                    .fold(localeDirectory) { path, segment -> path.resolve(segment) }
                     .resolve("${segments.last()}.php")
             emptyTarget(safeTargetUnder(localeDirectory, relative), localeDirectory.fileName.toString(), segments.joinToString("."))
         }
@@ -828,13 +850,21 @@ internal object LanguageFileCodec {
             value.forEachIndexed { index, char ->
                 when (char) {
                     '\\' -> append("\\\\")
+
                     '\t' -> append("\\t")
+
                     '\n' -> append("\\n")
+
                     '\r' -> append("\\r")
+
                     '\u000C' -> append("\\f")
+
                     ' ' -> if (key || index == 0) append("\\ ") else append(char)
+
                     '=', ':' -> if (key) append('\\').append(char) else append(char)
+
                     '#', '!' -> if (key && index == 0) append('\\').append(char) else append(char)
+
                     // The parser splits keys and skips leading value whitespace with Char.isWhitespace (e.g. U+3000).
                     else -> if (char.isWhitespace() && (key || index == 0)) append("\\u%04x".format(char.code)) else append(char)
                 }

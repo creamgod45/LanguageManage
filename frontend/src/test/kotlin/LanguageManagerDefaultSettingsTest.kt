@@ -48,7 +48,8 @@ class LanguageManagerDefaultSettingsTest {
             """.trimIndent()
         val legacy =
             com.intellij.util.xmlb.XmlSerializer.deserialize(
-                com.intellij.openapi.util.JDOMUtil.load(legacyXml),
+                com.intellij.openapi.util.JDOMUtil
+                    .load(legacyXml),
                 LanguageManagerSettings.SettingsState::class.java,
             )
 

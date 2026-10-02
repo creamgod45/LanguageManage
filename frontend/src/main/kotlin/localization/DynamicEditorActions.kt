@@ -3,9 +3,9 @@ package cg.creamgod45.localization.ui
 import cg.creamgod45.CoroutineScopeHolder
 import cg.creamgod45.LanguageManagerBundle.message
 import cg.creamgod45.localization.DynamicMarkerConversionRequestDto
-import cg.creamgod45.localization.DynamicSourceGroupDto
 import cg.creamgod45.localization.DynamicMarkerMatch
 import cg.creamgod45.localization.DynamicMarkerSyntax
+import cg.creamgod45.localization.DynamicSourceGroupDto
 import com.intellij.openapi.actionSystem.ActionUpdateThread
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.actionSystem.CommonDataKeys
@@ -21,12 +21,14 @@ import com.intellij.openapi.wm.ToolWindowManager
 import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBScrollPane
 import com.intellij.util.ui.FormBuilder
+import kotlinx.coroutines.launch
 import java.awt.BorderLayout
 import javax.swing.JComponent
 import javax.swing.JPanel
-import kotlinx.coroutines.launch
 
-class SearchSelectedTranslationGroup : DefaultActionGroup(), DumbAware {
+class SearchSelectedTranslationGroup :
+    DefaultActionGroup(),
+    DumbAware {
     override fun update(event: AnActionEvent) {
         event.presentation.text = message("action.editor.search.group")
         event.presentation.isEnabledAndVisible = selectedContext(event) != null
@@ -37,17 +39,21 @@ class SearchSelectedTranslationGroup : DefaultActionGroup(), DumbAware {
 
 class SearchSelectedTranslationExactAction : SelectedTextAction() {
     override val titleKey = "action.editor.search.exact"
+
     override fun perform(context: EditorSelectionContext) =
         openToolWindow(context) { LocalizationUiCommand.SearchTranslations(context.text, true) }
 }
 
 class SearchSelectedTranslationFuzzyAction : SelectedTextAction() {
     override val titleKey = "action.editor.search.fuzzy"
+
     override fun perform(context: EditorSelectionContext) =
         openToolWindow(context) { LocalizationUiCommand.SearchTranslations(context.text, false) }
 }
 
-class DynamicSourceActionGroup : DefaultActionGroup(), DumbAware {
+class DynamicSourceActionGroup :
+    DefaultActionGroup(),
+    DumbAware {
     override fun update(event: AnActionEvent) {
         event.presentation.text = message("action.editor.dynamic.group")
         event.presentation.isEnabledAndVisible = dynamicSourceContext(event) != null || markerContext(event) != null
@@ -73,9 +79,14 @@ class CreateDynamicMarkerAction : EditorPositionAction() {
         if (!dialog.showAndGet()) return
         val marker = markerText(context.filePath, dialog.groups())
         val lineStart = context.editor.document.getLineStartOffset((draft.line - 1).coerceAtLeast(0))
-        WriteCommandAction.runWriteCommandAction(context.project, message(titleKey), null, Runnable {
-            context.editor.document.insertString(lineStart, marker)
-        })
+        WriteCommandAction.runWriteCommandAction(
+            context.project,
+            message(titleKey),
+            null,
+            Runnable {
+                context.editor.document.insertString(lineStart, marker)
+            },
+        )
     }
 }
 
@@ -110,9 +121,11 @@ class EditDynamicMarkerAction : DumbAwareAction() {
                     filePath = context.filePath,
                     markerStartOffset = context.marker.startOffset,
                     markerEndOffsetExclusive = context.marker.endOffsetExclusive,
-                    expectedMarker = context.editor.document.getText(
-                        com.intellij.openapi.util.TextRange(context.marker.startOffset, context.marker.endOffsetExclusive),
-                    ),
+                    expectedMarker =
+                        context.editor.document.getText(
+                            com.intellij.openapi.util
+                                .TextRange(context.marker.startOffset, context.marker.endOffsetExclusive),
+                        ),
                     line = position.line + 1,
                     column = position.column + 1,
                     groups = dialog.groups(),
@@ -128,13 +141,18 @@ class EditDynamicMarkerAction : DumbAwareAction() {
             }
             return
         }
-        WriteCommandAction.runWriteCommandAction(context.project, message("action.editor.dynamic.edit"), null, Runnable {
-            context.editor.document.replaceString(
-                context.marker.startOffset,
-                context.marker.endOffsetExclusive,
-                DynamicMarkerSyntax.render(dialog.groups()),
-            )
-        })
+        WriteCommandAction.runWriteCommandAction(
+            context.project,
+            message("action.editor.dynamic.edit"),
+            null,
+            Runnable {
+                context.editor.document.replaceString(
+                    context.marker.startOffset,
+                    context.marker.endOffsetExclusive,
+                    DynamicMarkerSyntax.render(dialog.groups()),
+                )
+            },
+        )
     }
 
     override fun getActionUpdateThread() = ActionUpdateThread.BGT
@@ -142,11 +160,13 @@ class EditDynamicMarkerAction : DumbAwareAction() {
 
 class AddNonInvasiveDynamicSourceAction : EditorPositionAction() {
     override val titleKey = "action.editor.dynamic.noninvasive"
+
     override fun perform(context: EditorSelectionContext) = openToolWindow(context) { context.toDraft() }
 }
 
 abstract class EditorPositionAction : DumbAwareAction() {
     protected abstract val titleKey: String
+
     protected abstract fun perform(context: EditorSelectionContext)
 
     override fun update(event: AnActionEvent) {
@@ -163,6 +183,7 @@ abstract class EditorPositionAction : DumbAwareAction() {
 
 abstract class SelectedTextAction : DumbAwareAction() {
     protected abstract val titleKey: String
+
     protected abstract fun perform(context: EditorSelectionContext)
 
     override fun update(event: AnActionEvent) {
@@ -216,7 +237,14 @@ private fun dynamicSourceContext(event: AnActionEvent): EditorSelectionContext? 
     if (!LocalizationActionContext.getInstance(project).hasActiveScheme()) return null
     val editor = event.getData(CommonDataKeys.EDITOR) ?: return null
     val filePath = event.getData(CommonDataKeys.VIRTUAL_FILE)?.path?.takeIf(String::isNotBlank) ?: return null
-    return EditorSelectionContext(project, editor, filePath, editor.selectionModel.selectedText.orEmpty().trim())
+    return EditorSelectionContext(
+        project,
+        editor,
+        filePath,
+        editor.selectionModel.selectedText
+            .orEmpty()
+            .trim(),
+    )
 }
 
 private data class MarkerEditorContext(
@@ -263,7 +291,8 @@ private fun notifyConversion(
     error: Boolean = false,
 ) {
     com.intellij.openapi.application.ApplicationManager.getApplication().invokeLater {
-        com.intellij.notification.NotificationGroupManager.getInstance()
+        com.intellij.notification.NotificationGroupManager
+            .getInstance()
             .getNotificationGroup("LanguageManager")
             .createNotification(
                 text.take(500),
@@ -282,13 +311,14 @@ private class DynamicMarkerDialog(
     allowConversion: Boolean = false,
 ) : DialogWrapper(project) {
     private var conversionRequested = false
-    private val editor = DynamicGroupsEditor(
-        project,
-        entries,
-        initialGroups,
-        if (allowConversion) message("dynamic.convert.to.rule") else null,
-        if (allowConversion) ::requestConversion else null,
-    )
+    private val editor =
+        DynamicGroupsEditor(
+            project,
+            entries,
+            initialGroups,
+            if (allowConversion) message("dynamic.convert.to.rule") else null,
+            if (allowConversion) ::requestConversion else null,
+        )
 
     init {
         title = message("dialog.dynamic.marker.title")
@@ -310,23 +340,34 @@ private class DynamicMarkerDialog(
     }
 
     override fun createCenterPanel(): JComponent =
-        FormBuilder.createFormBuilder()
+        FormBuilder
+            .createFormBuilder()
             .addLabeledComponent(message("dynamic.file"), JBLabel(filePath))
             .addLabeledComponent(message("dynamic.line.column"), JBLabel("$line:$column"))
             .addComponent(
                 JBScrollPane(editor).apply {
-                    preferredSize = java.awt.Dimension(com.intellij.util.ui.JBUI.scale(720), com.intellij.util.ui.JBUI.scale(420))
-                    verticalScrollBar.unitIncrement = com.intellij.util.ui.JBUI.scale(18)
-                    horizontalScrollBar.unitIncrement = com.intellij.util.ui.JBUI.scale(18)
+                    preferredSize =
+                        java.awt.Dimension(
+                            com.intellij.util.ui.JBUI
+                                .scale(720),
+                            com.intellij.util.ui.JBUI
+                                .scale(420),
+                        )
+                    verticalScrollBar.unitIncrement =
+                        com.intellij.util.ui.JBUI
+                            .scale(18)
+                    horizontalScrollBar.unitIncrement =
+                        com.intellij.util.ui.JBUI
+                            .scale(18)
                 },
-            )
-            .panel
+            ).panel
 
     override fun doValidate(): ValidationInfo? = editor.validationInfo()
 }
 
 internal fun splitSelectedKeys(text: String): List<String> =
-    text.split(Regex("[,\\s]+"))
+    text
+        .split(Regex("[,\\s]+"))
         .map { it.trim().trim('\'', '"') }
         .filter { it.isNotBlank() }
         .distinct()

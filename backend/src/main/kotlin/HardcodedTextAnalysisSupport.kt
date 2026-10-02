@@ -26,8 +26,16 @@ internal class HardcodedTextAnalysisSupport {
         private val QUOTED_LITERAL = Regex("(?s)([\\\"'`])((?:\\\\.|(?!\\1).){2,500})\\1")
     }
 
-    private data class FileFingerprint(val modifiedAt: Long, val size: Long)
-    private data class CachedFile(val fingerprint: FileFingerprint, val items: List<HardcodedTextCandidateDto>, val skipped: Boolean)
+    private data class FileFingerprint(
+        val modifiedAt: Long,
+        val size: Long,
+    )
+
+    private data class CachedFile(
+        val fingerprint: FileFingerprint,
+        val items: List<HardcodedTextCandidateDto>,
+        val skipped: Boolean,
+    )
 
     private var cacheScope = ""
     private val fileCache = mutableMapOf<String, CachedFile>()
@@ -71,16 +79,35 @@ internal class HardcodedTextAnalysisSupport {
         Files.walkFileTree(
             scanRoot,
             object : SimpleFileVisitor<Path>() {
-                override fun preVisitDirectory(dir: Path, attrs: BasicFileAttributes): FileVisitResult {
+                override fun preVisitDirectory(
+                    dir: Path,
+                    attrs: BasicFileAttributes,
+                ): FileVisitResult {
                     cancellationCheck()
-                    return if (dir != scanRoot && exclusions.excludesDirectory(dir)) FileVisitResult.SKIP_SUBTREE else FileVisitResult.CONTINUE
+                    return if (dir != scanRoot &&
+                        exclusions.excludesDirectory(dir)
+                    ) {
+                        FileVisitResult.SKIP_SUBTREE
+                    } else {
+                        FileVisitResult.CONTINUE
+                    }
                 }
 
-                override fun visitFile(file: Path, attrs: BasicFileAttributes): FileVisitResult {
+                override fun visitFile(
+                    file: Path,
+                    attrs: BasicFileAttributes,
+                ): FileVisitResult {
                     cancellationCheck()
                     discovered++
                     if (discovered % 128 == 0) {
-                        progress(HardcodedAnalysisProgressDto(schemeId, HardcodedAnalysisStage.DISCOVERING, discoveredFiles = discovered, currentPath = relative(scanRoot, file)))
+                        progress(
+                            HardcodedAnalysisProgressDto(
+                                schemeId,
+                                HardcodedAnalysisStage.DISCOVERING,
+                                discoveredFiles = discovered,
+                                currentPath = relative(scanRoot, file),
+                            ),
+                        )
                     }
                     if (candidates.size >= MAX_DISCOVERED_FILES) {
                         discoveryTruncated = true
@@ -93,7 +120,12 @@ internal class HardcodedTextAnalysisSupport {
         )
 
         val knownPatterns = settings.regexPatterns.map(::Regex)
-        val managedValues = entries.asSequence().map { it.value.trim() }.filter { it.length >= 2 }.toHashSet()
+        val managedValues =
+            entries
+                .asSequence()
+                .map { it.value.trim() }
+                .filter { it.length >= 2 }
+                .toHashSet()
         val items = ArrayList<HardcodedTextCandidateDto>()
         var processed = 0
         var cacheHits = 0
@@ -146,7 +178,12 @@ internal class HardcodedTextAnalysisSupport {
                 skippedFiles = skipped,
                 matchedFiles = matchedFiles,
                 candidateLocations = items.size,
-                uniqueTexts = items.asSequence().map { it.text }.distinct().count(),
+                uniqueTexts =
+                    items
+                        .asSequence()
+                        .map { it.text }
+                        .distinct()
+                        .count(),
                 highConfidence = items.count { it.confidence == HardcodedTextConfidence.HIGH },
                 mediumConfidence = items.count { it.confidence == HardcodedTextConfidence.MEDIUM },
                 lowConfidence = items.count { it.confidence == HardcodedTextConfidence.LOW },
@@ -161,7 +198,11 @@ internal class HardcodedTextAnalysisSupport {
         managedValues: Set<String>,
         cancellationCheck: () -> Unit,
     ): CachedFile {
-        if (fingerprint == null || fingerprint.size > MAX_SOURCE_FILE_BYTES) return CachedFile(fingerprint ?: FileFingerprint(0, 0), emptyList(), true)
+        if (fingerprint == null ||
+            fingerprint.size > MAX_SOURCE_FILE_BYTES
+        ) {
+            return CachedFile(fingerprint ?: FileFingerprint(0, 0), emptyList(), true)
+        }
         val found = mutableListOf<HardcodedTextCandidateDto>()
         return try {
             Files.newBufferedReader(file, StandardCharsets.UTF_8).useLines { lines ->
@@ -174,7 +215,11 @@ internal class HardcodedTextAnalysisSupport {
                         val value = match.groupValues[2].trim()
                         val range = match.range
                         if (knownRanges.none { it.first <= range.last && range.first <= it.last } && isCandidate(value)) {
-                            val commentLine = line.trimStart().let { it.startsWith("//") || it.startsWith("#") || it.startsWith("/*") || it.startsWith("*") }
+                            val commentLine =
+                                line.trimStart().let {
+                                    it.startsWith("//") || it.startsWith("#") || it.startsWith("/*") ||
+                                        it.startsWith("*")
+                                }
                             found +=
                                 HardcodedTextCandidateDto(
                                     file.toString(),
@@ -198,12 +243,33 @@ internal class HardcodedTextAnalysisSupport {
     private fun isCandidate(value: String): Boolean =
         value.length in 2..500 && value.any(Char::isLetter) && !value.contains("://") && !value.startsWith("/")
 
-    private fun confidence(value: String, managedValues: Set<String>): HardcodedTextConfidence =
+    private fun confidence(
+        value: String,
+        managedValues: Set<String>,
+    ): HardcodedTextConfidence =
         when {
             value in managedValues -> HardcodedTextConfidence.HIGH
-            value.any { it.isWhitespace() } || value.any { Character.UnicodeScript.of(it.code) in setOf(Character.UnicodeScript.HAN, Character.UnicodeScript.HIRAGANA, Character.UnicodeScript.KATAKANA, Character.UnicodeScript.HANGUL, Character.UnicodeScript.THAI) } -> HardcodedTextConfidence.MEDIUM
+
+            value.any { it.isWhitespace() } ||
+                value.any {
+                    Character.UnicodeScript.of(it.code) in
+                        setOf(
+                            Character.UnicodeScript.HAN,
+                            Character.UnicodeScript.HIRAGANA,
+                            Character.UnicodeScript.KATAKANA,
+                            Character.UnicodeScript.HANGUL,
+                            Character.UnicodeScript.THAI,
+                        )
+                } -> HardcodedTextConfidence.MEDIUM
+
             else -> HardcodedTextConfidence.LOW
         }
 
-    private fun relative(root: Path, file: Path): String = runCatching { root.relativize(file).joinToString("/") }.getOrDefault(file.fileName.toString())
+    private fun relative(
+        root: Path,
+        file: Path,
+    ): String =
+        runCatching {
+            root.relativize(file).joinToString("/")
+        }.getOrDefault(file.fileName.toString())
 }

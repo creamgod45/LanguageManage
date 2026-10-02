@@ -40,33 +40,43 @@ class RegexPresetUiTest {
 
     @Test
     fun `Rust i18n captures only literal macro keys`() {
-        val preset = RegexPresetUi.presets.single {
-            it.name == LanguageManagerBundle.message("settings.regex.preset.rust.i18n")
-        }
+        val preset =
+            RegexPresetUi.presets.single {
+                it.name == LanguageManagerBundle.message("settings.regex.preset.rust.i18n")
+            }
         assertEquals(LanguageManagerBundle.message("settings.regex.preset.rust.group"), preset.group)
         val patterns = preset.patterns.map(::Regex)
-        val cases = mapOf(
-            """t!("hello")""" to "hello",
-            """t!("hello", locale = "zh-CN")""" to "hello",
-            """t!("messages.hello", name = "world")""" to "messages.hello",
-            """t!("messages.hello", "name" => "world")""" to "messages.hello",
-            """rust_i18n::t!("Calendar.week.monday")""" to "Calendar.week.monday",
-            """t! { "hello" }""" to "hello",
-            """t! [ "hello" ]""" to "hello",
-            """t!(r"hello")""" to "hello",
-            """rust_i18n::t!(r##"messages.hello"##, name = "world")""" to "messages.hello",
-            "t! (\n  \"hello\"\n)" to "hello",
-        )
+        val cases =
+            mapOf(
+                """t!("hello")""" to "hello",
+                """t!("hello", locale = "zh-CN")""" to "hello",
+                """t!("messages.hello", name = "world")""" to "messages.hello",
+                """t!("messages.hello", "name" => "world")""" to "messages.hello",
+                """rust_i18n::t!("Calendar.week.monday")""" to "Calendar.week.monday",
+                """t! { "hello" }""" to "hello",
+                """t! [ "hello" ]""" to "hello",
+                """t!(r"hello")""" to "hello",
+                """rust_i18n::t!(r##"messages.hello"##, name = "world")""" to "messages.hello",
+                "t! (\n  \"hello\"\n)" to "hello",
+            )
         cases.forEach { (source, expected) ->
-            assertEquals(listOf(expected), patterns.flatMap { pattern ->
-                pattern.findAll(source).map { it.groups["key"]!!.value }.toList()
-            }, source)
+            assertEquals(
+                listOf(expected),
+                patterns.flatMap { pattern ->
+                    pattern.findAll(source).map { it.groups["key"]!!.value }.toList()
+                },
+                source,
+            )
         }
         listOf(
-            """t!(key)""", """t!(format!("hello {}", name))""",
-            """i18n!("locales")""", """not_t!("hello")""",
-            """other::t!("hello")""", """t!("hello" + suffix)""",
-            """t!(r##"hello"#)""", """t!('hello')""",
+            """t!(key)""",
+            """t!(format!("hello {}", name))""",
+            """i18n!("locales")""",
+            """not_t!("hello")""",
+            """other::t!("hello")""",
+            """t!("hello" + suffix)""",
+            """t!(r##"hello"#)""",
+            """t!('hello')""",
             "t!(\"${"x".repeat(257)}\")",
         ).forEach { source -> assertTrue(patterns.none { it.containsMatchIn(source) }, source) }
     }

@@ -4,6 +4,10 @@ import cg.creamgod45.localization.LanguageEntryDto
 import cg.creamgod45.localization.LocalizationStateDto
 import cg.creamgod45.localization.UsageLocationDto
 import cg.creamgod45.localization.UsageScanSettingsDto
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
+import org.openjdk.jol.info.GraphLayout
 import java.nio.file.Files
 import kotlin.io.path.createDirectories
 import kotlin.io.path.writeText
@@ -11,10 +15,6 @@ import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
-import kotlinx.serialization.Serializable
-import kotlinx.serialization.encodeToString
-import kotlinx.serialization.json.Json
-import org.openjdk.jol.info.GraphLayout
 
 class LocalizationMemoryFootprintTest {
     private val temp = Files.createTempDirectory("language-manager-memory-test")
@@ -112,7 +112,8 @@ class LocalizationMemoryFootprintTest {
             backend_retained_bytes=$backendRetainedBytes
             """.trimIndent()
         val reportFile =
-            PathForTest.projectBuildDirectory()
+            PathForTest
+                .projectBuildDirectory()
                 .resolve("reports/language-manager-memory/12-language.properties")
                 .apply {
                     parent.createDirectories()

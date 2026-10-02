@@ -1,14 +1,14 @@
 package cg.creamgod45
 
+import cg.creamgod45.localization.DynamicSourceRuleDto
 import cg.creamgod45.localization.HARD_MAX_ENTRIES_PER_FILE
 import cg.creamgod45.localization.HARD_MAX_ENTRIES_PER_SCHEME
 import cg.creamgod45.localization.HARD_MAX_LANGUAGE_FILE_KB
 import cg.creamgod45.localization.HARD_MAX_LANGUAGE_SCHEME_MB
 import cg.creamgod45.localization.LanguageEntryDto
-import cg.creamgod45.localization.DynamicSourceRuleDto
 import cg.creamgod45.localization.MAX_USAGE_EXCLUSIONS
-import cg.creamgod45.localization.UsageScanSettingsDto
 import cg.creamgod45.localization.UsageLocationDto
+import cg.creamgod45.localization.UsageScanSettingsDto
 import com.intellij.openapi.diagnostic.Logger
 import kotlinx.coroutines.CancellationException
 import java.nio.charset.StandardCharsets
@@ -100,9 +100,13 @@ internal object UsageScanSupport {
         additions.forEach { raw ->
             val entry = sanitizeExclusion(raw)
             when {
-                entry.isEmpty() || entry in existing || entry in accepted -> Unit // duplicate/blank: not new, not an error
+                entry.isEmpty() || entry in existing || entry in accepted -> Unit
+
+                // duplicate/blank: not new, not an error
                 !isSafeExclusion(entry) -> skipped += raw
+
                 accepted.size >= remainingCapacity -> skipped += raw
+
                 else -> accepted += entry
             }
         }
@@ -151,6 +155,7 @@ internal object UsageScanSupport {
                 needleOwners.getOrPut(needle) { linkedSetOf() } += entry.id
             }
         }
+
         fun record(
             candidate: String,
             file: Path,

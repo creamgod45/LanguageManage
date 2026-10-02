@@ -18,12 +18,16 @@ internal fun dynamicSourceOffset(
                 currentLine++
                 lineStart = index
             }
+
             '\n' -> {
                 index++
                 currentLine++
                 lineStart = index
             }
-            else -> index++
+
+            else -> {
+                index++
+            }
         }
     }
     if (currentLine != line) return null
@@ -34,12 +38,16 @@ internal fun dynamicSourceOffset(
 }
 
 internal fun dynamicSourceKeyCount(rule: DynamicSourceRuleDto): Int =
-    rule.groups.flatMap { it.keys }.distinct().size
+    rule.groups
+        .flatMap { it.keys }
+        .distinct()
+        .size
 
 internal fun dynamicSourceTooltipDetails(rule: DynamicSourceRuleDto): String {
-    val groups = rule.groups.joinToString("\n") { group ->
-        "${group.name}: ${group.keys.distinct().joinToString(", ")}"
-    }
+    val groups =
+        rule.groups.joinToString("\n") { group ->
+            "${group.name}: ${group.keys.distinct().joinToString(", ")}"
+        }
     return groups.take(MAX_DYNAMIC_INLAY_TOOLTIP_CHARS)
 }
 
