@@ -190,6 +190,8 @@ Related issues: [#21](https://github.com/creamgod45/LanguageManage/issues/21) (v
 
 Use **Visible Columns (n/m) ▾** in the toolbar to switch individual language columns on or off. The popup stays open while you toggle, so several languages can be changed at once; **Show All Languages** restores every column. Hidden columns are remembered per project and per scheme and only affect the table view, never the language files.
 
+When the active scheme has more than one namespace (for example several Laravel files such as `auth.php` and `validation.php`), a **Namespaces (n/m) ▾** filter appears next to the translation-status filter. It uses the same keep-open popup: tick or untick namespaces to show or hide their rows, and choose **Show All Namespaces** to restore them. The root namespace is listed as **(Root)**. The filter combines with search, language and translation-status filters, is reset when you switch schemes or locate an issue, and never changes language files. With a single namespace the filter is hidden.
+
 Right-click any cell to open the same actions as **Actions ▾**. The cell under the pointer is selected first, so row actions such as Edit Selected or Rename Key act on that row. Right-clicking inside an existing multi-row selection keeps the selection for bulk actions.
 
 ### Quick in-place edit
@@ -561,3 +563,4 @@ After a Marketplace update is uploaded, the current version section from [CHANGE
 | 1.8.0 | Keys keep leading and trailing spaces, with a warning | — | [Key whitespace](#key-whitespace) |
 | 1.8.1 | Rust i18n recommended usage Regex | — | [Usage Scan Settings](#10-usage-scan-settings) |
 | 1.8.1 | Saving a value keeps the original file text | — | [Saving keeps the original file text](#saving-keeps-the-original-file-text) |
+| 1.8.1 | Namespaces filter for schemes with several namespaces | — | [Visible columns and context menu](#visible-columns-and-context-menu) |

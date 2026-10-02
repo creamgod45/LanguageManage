@@ -14,6 +14,7 @@ import com.intellij.openapi.project.ProjectManager
 import com.intellij.openapi.wm.ToolWindow
 import com.intellij.openapi.wm.ToolWindowFactory
 import com.intellij.openapi.wm.ToolWindowManager
+import com.intellij.openapi.wm.impl.content.ToolWindowContentUi
 import com.intellij.ui.content.ContentFactory
 import com.intellij.ui.content.ContentManagerEvent
 import com.intellij.ui.content.ContentManagerListener
@@ -49,18 +50,25 @@ class LanguageManagerToolWindowFactory :
             project: Project,
             toolWindow: ToolWindow,
         ) {
+            // 關閉 Tab 拖曳與重排屬性
+            ToolWindowContentUi.setAllowTabsReordering(toolWindow, false)
+
             toolWindow.contentManager.removeAllContents(true)
             val panel = LocalizationManagerPanel(project)
             val analysisPanel = HardcodedAnalysisPanel(project)
             toolWindow.title = message("app.title")
             toolWindow.stripeTitle = message("app.title")
-            toolWindow.setAdditionalGearActions(settingsActions(project))
             val content = ContentFactory.getInstance().createContent(panel, message("toolwindow.content.title"), false)
             content.setDisposer(panel)
             toolWindow.contentManager.addContent(content)
             val analysisContent = ContentFactory.getInstance().createContent(analysisPanel, message("toolwindow.content.analysis"), false)
             analysisContent.setDisposer(analysisPanel)
             toolWindow.contentManager.addContent(analysisContent)
+            val selectedView = {
+                val analysisSelected = toolWindow.contentManager.selectedContent === analysisContent
+                if (analysisSelected) LanguageManagerView.ANALYSIS else LanguageManagerView.TRANSLATIONS
+            }
+            toolWindow.setAdditionalGearActions(gearActions(project, toolWindow, selectedView))
             toolWindow.contentManager.addContentManagerListener(
                 object : ContentManagerListener {
                     override fun selectionChanged(event: ContentManagerEvent) {
@@ -74,10 +82,15 @@ class LanguageManagerToolWindowFactory :
             )
         }
 
-        private fun settingsActions(project: Project) =
-            DefaultActionGroup().apply {
-                add(openSettingsAction(project, message("action.settings.plugin")))
-            }
+        private fun gearActions(
+            project: Project,
+            toolWindow: ToolWindow,
+            selectedView: () -> LanguageManagerView,
+        ) = DefaultActionGroup().apply {
+            add(OpenInEditorTabAction(toolWindow, selectedView))
+            addSeparator()
+            add(openSettingsAction(project, message("action.settings.plugin")))
+        }
 
         private fun openSettingsAction(
             project: Project,

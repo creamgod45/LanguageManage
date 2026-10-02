@@ -6,6 +6,8 @@
 
 - Add **Rust → Rust i18n** to the recommended usage Regex formats. Capture literal keys from `t!` and `rust_i18n::t!`, including locale/interpolation arguments and raw strings.
 - Keep the original file text when saving translation values. Quick in-place edits, Edit Selected, and pasting now replace only the edited value inside the file, so comments, blank lines, quoting, indentation, key order, Unicode escapes, `declare(strict_types=1)`, and every untouched entry stay byte-for-byte identical; saving an unchanged value no longer rewrites the file. Adding or removing keys still renders the whole file, and every in-place patch is re-parsed and verified before it is written.
+- Add **Open in Editor Tab** to the tool window options (⋮) menu. The current view (Language Schemes or Analysis) opens as a full-size editor tab and the tool window is hidden; choosing it again focuses the existing tab instead of opening a duplicate. The editor tab is a separate view of the same scheme state, so the tool window keeps working and closing the tab changes nothing on disk.
+- Add a **Namespaces (n/m) ▾** filter to the translation table toolbar. It appears only when the active scheme has more than one namespace (for example several files such as `auth.php` and `validation.php`) and uses the same keep-open checkbox popup as Visible Columns, so several namespaces can be switched in one go; **Show All Namespaces** restores them. It combines with search, language and translation-status filters, resets when switching schemes, and only affects the table view.
 
 ---
 
@@ -13,6 +15,8 @@
 
 - 使用率掃描的推薦 Regex 格式新增 **Rust → Rust i18n**，可擷取 `t!` 與 `rust_i18n::t!` 的字串 key，支援 locale／插值參數及 raw string。
 - 儲存翻譯值時保留原檔內容。快速直接編輯、「編輯所選」與貼上現在只會替換檔案中被修改的那個值，註解、空行、引號、縮排、key 順序、Unicode 跳脫、`declare(strict_types=1)` 與其他未修改的項目都維持原樣；值未變更時不再重寫檔案。新增或刪除 key 仍會重新輸出整個檔案，且每次局部替換在寫入前都會重新 parse 驗證。
+- 工具視窗選項（⋮）選單新增「**在編輯器頁籤中開啟**」。會將目前的檢視（語言方案或分析）以完整大小的編輯器頁籤開啟並隱藏工具視窗；再次選擇時會切換到已開啟的頁籤，不會重複開啟。編輯器頁籤與工具視窗共用同一份方案狀態，工具視窗仍可照常使用，關閉頁籤不會修改任何檔案。
+- 翻譯表工具列新增「**Namespace（n/m）▾**」過濾。只有目前方案包含多個 Namespace 時才會顯示（例如 `auth.php`、`validation.php` 等多個檔案），並使用與「顯示欄位」相同的不關閉勾選選單，可一次切換多個 Namespace；「全部顯示」可還原。可與搜尋、語言及翻譯狀態過濾同時使用，切換方案時會重設，只影響表格顯示。
 
 ## 1.8.0
 

@@ -183,4 +183,38 @@ class EntrySearchTest {
         assertEquals(2, selection.rowCount)
         assertEquals(setOf("1", "2", "3"), selection.entryIds.toSet())
     }
+
+    @Test
+    fun `namespaces are distinct and sorted including the root namespace`() {
+        val entries =
+            listOf(
+                entry("en", "validation", "required", "Required"),
+                entry("zh", "validation", "required", "必填"),
+                entry("en", "", "title", "Title"),
+                entry("en", "auth", "failed", "Login failed"),
+            )
+
+        assertEquals(listOf("", "auth", "validation"), EntrySearch.namespaces(entries))
+    }
+
+    @Test
+    fun `excluding namespaces keeps every locale of the remaining namespaces`() {
+        val entries =
+            listOf(
+                entry("en", "auth", "failed", "Login failed"),
+                entry("zh", "auth", "failed", "登入失敗"),
+                entry("en", "validation", "required", "Required"),
+                entry("en", "", "title", "Title"),
+            )
+
+        assertEquals(entries, EntrySearch.excludeNamespaces(entries, emptySet()))
+        assertEquals(
+            listOf("auth.failed", "auth.failed"),
+            EntrySearch.excludeNamespaces(entries, setOf("validation", "")).map { "${it.namespace}.${it.key}" },
+        )
+        assertEquals(
+            listOf("validation", ""),
+            EntrySearch.excludeNamespaces(entries, setOf("auth", "unknown")).map { it.namespace },
+        )
+    }
 }

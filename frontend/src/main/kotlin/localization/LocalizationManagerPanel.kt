@@ -79,6 +79,15 @@ internal class LocalizationManagerPanel(
     private val localeBox = ComboBox<String>()
     private val rowFilterBox = ComboBox(TranslationRowFilter.entries.toTypedArray())
     private val hiddenLocaleColumns = HiddenLocaleColumns(project)
+
+    /** Namespaces turned off in the translation table for the active scheme; view state only, reset on scheme change. */
+    private val excludedNamespaces = mutableSetOf<String>()
+    private val namespaceFilterButton =
+        JButton().apply {
+            toolTipText = message("action.namespaces.dropdown.tooltip")
+            isVisible = false
+            addActionListener { showNamespaceFilterPopup() }
+        }
     private val columnVisibilityButton =
         JButton().apply {
             toolTipText = message("action.columns.dropdown.tooltip")
@@ -97,7 +106,7 @@ internal class LocalizationManagerPanel(
     private val issueTable = JBTable(issueModel)
     private val usageLocationModel = UsageLocationTableModel()
     private val usageLocationTable = JBTable(usageLocationModel)
-    private val tabs = JTabbedPane()
+    private val tabs = JBTabbedPane()
     private val dynamicSourcePanel =
         DynamicSourceRulesPanel(
             project,
@@ -251,6 +260,7 @@ internal class LocalizationManagerPanel(
                     rowFilterBox.preferredSize =
                         Dimension(190, rowFilterBox.preferredSize.height)
                     add(rowFilterBox)
+                    add(namespaceFilterButton)
                     add(actionDropdown())
                     add(columnVisibilityButton)
                 }
@@ -342,7 +352,7 @@ internal class LocalizationManagerPanel(
                     )
                 }
             addTab(message("tab.usage.locations"), usageLocationsPanel)
-            setEnabledAt(USAGE_LOCATIONS_TAB_INDEX, false)
+            setTabEnabled(USAGE_LOCATIONS_TAB_INDEX, false)
             addTab(message("tab.dynamic.sources"), dynamicSourcePanel)
         }
 
@@ -381,7 +391,7 @@ internal class LocalizationManagerPanel(
                     val row = entryModel.items.getOrNull(entryTable.convertRowIndexToModel(viewRow)) ?: return
                     usageLocationTarget = row.namespace to row.key
                     currentUsagePage = 0
-                    tabs.setEnabledAt(USAGE_LOCATIONS_TAB_INDEX, true)
+                    tabs.setTabEnabled(USAGE_LOCATIONS_TAB_INDEX, true)
                     loadUsageLocationPage()
                     tabs.selectedIndex = USAGE_LOCATIONS_TAB_INDEX
                 }
@@ -460,6 +470,8 @@ internal class LocalizationManagerPanel(
         } finally {
             updatingFilters = false
         }
+        if (schemeChanged) excludedNamespaces.clear()
+        updateNamespaceFilter()
         val displayedIssues = displayedIssues(state.issues)
         issueModel.items = displayedIssues
         dynamicSourcePanel.render(state.schemes.firstOrNull { it.id == state.activeSchemeId }, state.entries)
@@ -532,7 +544,7 @@ internal class LocalizationManagerPanel(
         val locale = localeBox.selectedItem?.toString()?.takeUnless { it == message("filter.locale.all") }
         val matches =
             EntrySearch.filter(
-                current.entries,
+                EntrySearch.excludeNamespaces(current.entries, excludedNamespaces),
                 searchField.text,
                 searchMode.selectedItem as? SearchMode ?: SearchMode.FUZZY,
                 locale,
@@ -621,6 +633,47 @@ internal class LocalizationManagerPanel(
         )
     }
 
+    /** Drops namespaces that no longer exist and only shows the filter when the scheme has several namespaces. */
+    private fun updateNamespaceFilter() {
+        val namespaces = EntrySearch.namespaces(current.entries)
+        excludedNamespaces.retainAll(namespaces.toSet())
+        namespaceFilterButton.text =
+            message("action.namespaces.dropdown", namespaces.count { it !in excludedNamespaces }, namespaces.size)
+        val visible = namespaces.size > 1
+        if (namespaceFilterButton.isVisible != visible) {
+            namespaceFilterButton.isVisible = visible
+            namespaceFilterButton.parent?.revalidate()
+        }
+    }
+
+    private fun showNamespaceFilterPopup() {
+        val namespaces = EntrySearch.namespaces(current.entries)
+        if (namespaces.size < 2) return
+        // Several namespaces can be toggled in one go without the popup closing.
+        KeepOpenTogglePopup.show(
+            namespaceFilterButton,
+            message("namespaces.popup.title"),
+            namespaces.map { namespace ->
+                KeepOpenTogglePopup.Toggle(
+                    namespace.ifEmpty { message("field.namespace.root") },
+                    isSelected = { namespace !in excludedNamespaces },
+                    setSelected = { visible ->
+                        if (visible) excludedNamespaces.remove(namespace) else excludedNamespaces.add(namespace)
+                        updateNamespaceFilter()
+                        applyFilter()
+                    },
+                )
+            },
+            listOf(
+                KeepOpenTogglePopup.Command(message("namespaces.show.all")) {
+                    excludedNamespaces.clear()
+                    updateNamespaceFilter()
+                    applyFilter()
+                },
+            ),
+        )
+    }
+
     private fun loadUsageLocationPage() {
         val target = usageLocationTarget
         val schemeId = current.activeSchemeId
@@ -692,7 +745,7 @@ internal class LocalizationManagerPanel(
         currentUsagePage = 0
         currentUsageLocations = UsageLocationPageDto()
         renderUsageLocationTable()
-        if (tabs.tabCount > USAGE_LOCATIONS_TAB_INDEX) tabs.setEnabledAt(USAGE_LOCATIONS_TAB_INDEX, false)
+        if (tabs.tabCount > USAGE_LOCATIONS_TAB_INDEX) tabs.setTabEnabled(USAGE_LOCATIONS_TAB_INDEX, false)
     }
 
     private fun openSelectedUsageLocation() {
@@ -1506,6 +1559,8 @@ internal class LocalizationManagerPanel(
     private fun locateIssue(issue: LanguageIssueDto) {
         if (issue.key.isBlank()) return openIssueFile(issue)
         localeBox.selectedItem = message("filter.locale.all")
+        excludedNamespaces.clear()
+        updateNamespaceFilter()
         searchMode.selectedItem = SearchMode.EXACT
         searchField.text = issue.key
         tabs.selectedIndex = 0
@@ -1878,6 +1933,18 @@ internal class LocalizationManagerPanel(
         schemeLoadIndicator?.cancel()
         scope.cancel()
     }
+}
+
+/**
+ * JBTabbedPane renders each title through its own tab component label, which `setEnabledAt` does
+ * not update, so a disabled tab would still look enabled. Keep the label in sync.
+ */
+internal fun JTabbedPane.setTabEnabled(
+    index: Int,
+    enabled: Boolean,
+) {
+    setEnabledAt(index, enabled)
+    getTabComponentAt(index)?.isEnabled = enabled
 }
 
 private data class NamespaceReferenceOption(
