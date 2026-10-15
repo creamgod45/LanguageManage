@@ -18,6 +18,16 @@ class LocalizationModelsTest {
     }
 
     @Test
+    fun `properties bundle identity splits namespace and locale suffix`() {
+        assertEquals("messages" to "fallback", propertiesBundleIdentity("messages"))
+        assertEquals("messages" to "en", propertiesBundleIdentity("messages_en"))
+        assertEquals("messages" to "zh_TW", propertiesBundleIdentity("messages_zh_TW"))
+        assertEquals("messages" to "zh-Hant", propertiesBundleIdentity("messages_zh-Hant"))
+        assertEquals("messages" to "es-419", propertiesBundleIdentity("messages_es-419"))
+        assertEquals("LanguageManagerBundle" to "fallback", propertiesBundleIdentity("LanguageManagerBundle"))
+    }
+
+    @Test
     fun `preferred source locale picks explicit English before the properties fallback`() {
         assertEquals("en", preferredSourceLocale(listOf("fallback", "ja", "en")))
         assertEquals("fallback", preferredSourceLocale(listOf("ja", "fallback")))

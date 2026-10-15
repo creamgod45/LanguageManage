@@ -65,6 +65,17 @@ class TranslationEditorSupportTest {
     }
 
     @Test
+    fun `infers BCP 47 resource bundle locales for empty files like the backend`() {
+        val root = Path.of("workspace", "messages").toAbsolutePath()
+        val files = listOf("messages_zh-Hant.properties", "messages_es-419.properties").map { root.resolve(it).toString() }
+
+        val targets = TranslationEditorSupport.targets(LanguageSchemeDto("scheme", "Bundle", files, 1), emptyList())
+
+        assertEquals(listOf("es-419", "zh-Hant"), targets.map { it.locale })
+        assertEquals(setOf("messages"), targets.map { it.namespace }.toSet())
+    }
+
+    @Test
     fun `infers resource bundle locale and namespace for empty files`() {
         val root = Path.of("workspace", "messages").toAbsolutePath()
         val files =

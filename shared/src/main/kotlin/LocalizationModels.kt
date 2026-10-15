@@ -52,6 +52,16 @@ val DEFAULT_USAGE_EXCLUDED_DIRECTORIES: List<String> =
 /** Locale column for a ResourceBundle base file without a locale suffix, such as `messages.properties`. */
 const val PROPERTIES_FALLBACK_LOCALE = "fallback"
 
+private val PROPERTIES_LOCALE_SUFFIX = Regex("^(.+)_([a-z]{2,3}(?:[-_](?:[A-Za-z]{2,4}|[0-9]{3}))*)$")
+
+/**
+ * Splits a ResourceBundle file name without extension into bundle namespace and locale, for example
+ * `messages_zh-Hant` -> (`messages`, `zh-Hant`). A name without a locale suffix is the [PROPERTIES_FALLBACK_LOCALE] bundle.
+ */
+fun propertiesBundleIdentity(stem: String): Pair<String, String> =
+    PROPERTIES_LOCALE_SUFFIX.matchEntire(stem)?.let { it.groupValues[1] to it.groupValues[2] }
+        ?: (stem to PROPERTIES_FALLBACK_LOCALE)
+
 /** Default source locale for translation dialogs: explicit English first, then a ResourceBundle fallback file. */
 fun preferredSourceLocale(locales: Collection<String>): String? =
     locales.firstOrNull { it.equals("en", ignoreCase = true) }

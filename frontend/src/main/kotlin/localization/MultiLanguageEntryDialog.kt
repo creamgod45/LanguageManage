@@ -5,7 +5,7 @@ import cg.creamgod45.localization.EntryMutationDto
 import cg.creamgod45.localization.JoinedTranslationRow
 import cg.creamgod45.localization.LanguageEntryDto
 import cg.creamgod45.localization.LanguageSchemeDto
-import cg.creamgod45.localization.PROPERTIES_FALLBACK_LOCALE
+import cg.creamgod45.localization.propertiesBundleIdentity
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.ComboBox
 import com.intellij.openapi.ui.DialogWrapper
@@ -44,8 +44,6 @@ internal data class TranslationEntryDraft(
 )
 
 internal object TranslationEditorSupport {
-    private val propertiesLocaleSuffix = Regex("^(.+)_([a-z]{2,3}(?:_[A-Z]{2})?)$")
-
     /** Existing entries that would make adding [key] to [targets] fail with a duplicate-key error. */
     fun existingKeyConflicts(
         key: String,
@@ -94,12 +92,8 @@ internal object TranslationEditorSupport {
             }
 
             "properties" -> {
-                val match = propertiesLocaleSuffix.matchEntire(path.nameWithoutExtension)
-                if (match == null) {
-                    TranslationEditorTarget(filePath, PROPERTIES_FALLBACK_LOCALE, path.nameWithoutExtension)
-                } else {
-                    TranslationEditorTarget(filePath, match.groupValues[2], match.groupValues[1])
-                }
+                val (namespace, locale) = propertiesBundleIdentity(path.nameWithoutExtension)
+                TranslationEditorTarget(filePath, locale, namespace)
             }
 
             else -> {

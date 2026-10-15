@@ -8,6 +8,7 @@ import cg.creamgod45.localization.LanguageIssueDto
 import cg.creamgod45.localization.LanguageLoadBudget
 import cg.creamgod45.localization.PROPERTIES_FALLBACK_LOCALE
 import cg.creamgod45.localization.UsageScanSettingsDto
+import cg.creamgod45.localization.propertiesBundleIdentity
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.ModalityState
 import com.intellij.openapi.fileEditor.FileDocumentManager
@@ -44,7 +45,6 @@ internal data class ParsedLanguageFile(
     val issues: MutableList<LanguageIssueDto> = mutableListOf(),
 )
 
-private val PROPERTIES_LOCALE_SUFFIX = Regex("^(.+)_([a-z]{2,3}(?:[-_](?:[A-Za-z]{2,4}|[0-9]{3}))*)$")
 private val PHP_LOCALE_DIRECTORY = Regex("^[A-Za-z]{2,3}(?:[-_](?:[A-Za-z]{2,4}|[0-9]{3}))*$")
 
 private data class PhpFileIdentity(
@@ -73,11 +73,7 @@ private fun phpIdentity(path: Path): PhpFileIdentity {
     )
 }
 
-private fun propertiesIdentity(path: Path): Pair<String, String> {
-    val stem = path.nameWithoutExtension
-    val match = PROPERTIES_LOCALE_SUFFIX.matchEntire(stem)
-    return if (match == null) stem to PROPERTIES_FALLBACK_LOCALE else match.groupValues[1] to match.groupValues[2]
-}
+private fun propertiesIdentity(path: Path): Pair<String, String> = propertiesBundleIdentity(path.nameWithoutExtension)
 
 internal object SafeLanguageFileAccess {
     private const val MAX_FILE_BYTES = 10L * 1024 * 1024
