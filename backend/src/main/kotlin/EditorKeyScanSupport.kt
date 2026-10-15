@@ -93,7 +93,10 @@ internal object EditorKeyScanSupport {
 
     private class ScanDeadlineExceeded : RuntimeException(null, null, false, false)
 
-    /** Lets a catastrophically backtracking user regex give up: [kotlin.text.Regex] reads input only through [get]. */
+    /**
+     * Lets a catastrophically backtracking user regex give up. The JDK matcher reads input through [get]; sub-sequences
+     * stay guarded too, so no read path skips the deadline.
+     */
     private class DeadlineCharSequence(
         private val text: CharSequence,
         private val deadline: Long,
@@ -111,7 +114,7 @@ internal object EditorKeyScanSupport {
         override fun subSequence(
             startIndex: Int,
             endIndex: Int,
-        ): CharSequence = text.subSequence(startIndex, endIndex)
+        ): CharSequence = DeadlineCharSequence(text.subSequence(startIndex, endIndex), deadline, nanoTime)
 
         override fun toString(): String = text.toString()
     }
