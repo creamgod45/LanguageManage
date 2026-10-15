@@ -33,6 +33,7 @@ The UI and diagnostics are available in English, Traditional Chinese, Simplified
 - Choose **Open in Editor Tab** from the tool window options (⋮) menu to show the current view in a full-size editor tab.
 - Use **Visible Columns ▾** to hide or show language columns per scheme, **Namespaces ▾** (shown only when a scheme has several namespaces) to filter rows by namespace, and right-click a cell for the same actions as **Actions ▾** on that row.
 - Double-click a language value cell (or press F2) to edit it in place; long and multi-line values wrap in the editor, Enter or focus loss saves only that locale file, Shift+Enter inserts a line break, and Esc cancels. Only cells combining several same-locale values are not edited in place and show a status hint; no dialog opens. Turn the feature off with the **Quick in-place editing** option in the plugin settings.
+- **Experimental:** turn on **Settings → Tools → LanguageManager → Experimental → Editor translation key hover** to underline a translation key under the mouse in writable editors. Keys are found with the active scheme's usage Regex, only in files inside the scheme base path that are not excluded (read-only/locked editors are skipped). After the configurable hover delay (default 0.7 s) a menu lists every language's translation in a scrollable, screen-bounded popup with **Open in Translation Table** and **Edit Translation**; a key without translations offers **Create Translation** with the key prefilled.
 - Double-click a translation row's Usage cell to enable the on-demand **Usage Locations** tab. Location records remain backend-only and the frontend requests only that key's current page, limited to 100 rows; opening a row lazily resolves and caches its line/column before navigating the IDE caret.
 - The default usage-scan exclusions cover `.git`, `.github`, `docs`, `vendor`, `storage`, `database`, `gradle`, `.gradle`, `build`, `out`, `dist`, `target`, `node_modules`, and IDE-generated directories such as `.idea`, `.fleet`, `.vs`, `.settings`, `.metadata`, and `nbproject`. Users can customize the list.
 - Display an IDE two-pane Diff before repairing or deleting. SHA-256 is checked before applying a preview so external changes made after the preview are never overwritten silently.
@@ -128,6 +129,9 @@ The root project uses the IntelliJ Platform Gradle Plugin to assemble three cont
 | `localization/SchemeSettingsTransferDialog.kt` | Safe scheme JSON IO, atomic export, and per-file import preview |
 | `settings/LanguageManagerSettings.kt` | Persists display language, issue preferences, new-scheme base path, Regex, and exclusions; migrates old defaults |
 | `settings/LanguageManagerSettingsConfigurable.kt` | IDE Settings page for plugin language, issue preferences, and new-scheme defaults |
+| `settings/LanguageManagerExperimentalConfigurable.kt` | **Experimental** child settings page (editor key hover switch and hover delay) |
+| `localization/EditorKeyHoverService.kt` | Experimental editor key hover: mouse tracking, hyperlink highlight, dwell timer, event-driven scan cache, and edit/create dialogs |
+| `localization/EditorKeyHoverPopup.kt` / `EditorKeyHoverSupport.kt` | Hover popup with per-language translations and actions; pure eligibility, match lookup, and screen-bounded size rules |
 | `localization/SchemeUsageSettingsDialog.kt` | Edits managed files, scan path, Regex patterns, and exclusions for the active scheme |
 | `localization/ProjectViewExclusionActions.kt` | Provides the Project-tree action group and active-scheme exclusion shortcut |
 | `LanguageManagerBundle.kt` | Frontend resource bundle access |
@@ -143,6 +147,7 @@ The root project uses the IntelliJ Platform Gradle Plugin to assemble three cont
 | `LocalizationManagerService.kt` | Core workflow for schemes, state, cache, CRUD, repair previews, conflict checks, and usage scans |
 | `LanguageFileSupport.kt` | Safe path/folder validation, bounded discovery, UTF-8 IO, atomic writes, targeted JetBrains VFS/document reload, and JSON/YAML/PHP/Properties parsing/rendering |
 | `UsageScanSupport.kt` | Usage setting validation, Regex key extraction, base path scanning, exclusions, and resource limits |
+| `EditorKeyScanSupport.kt` | Matches the usage Regex in one editor's text with a time budget and match cap, and resolves captures to `namespace + key` rows for the editor key hover |
 | `HardcodedTextAnalysisSupport.kt` | Incremental per-file detection and statistics for likely untranslated quoted source text |
 | `UsageExclusionSupport.kt` | Converts selected local folders into safe, precise exclusions relative to the scheme scan root |
 | `LanguageLoadBudget.kt` | Applies pre-parse file-size and post-parse entry budgets across one isolated scheme |
@@ -165,6 +170,8 @@ The root project uses the IntelliJ Platform Gradle Plugin to assemble three cont
 | `frontend/src/test/kotlin/LanguageManagerDefaultSettingsTest.kt` | Base path levels, new-scheme defaults, issue defaults, and legacy exclusion migration |
 | `frontend/src/test/kotlin/ToolWindowIconVariantsTest.kt` | Presence, dimensions, and theme colors of all four Tool Window icon variants |
 | `backend/src/test/kotlin/UsageScanSupportTest.kt` | Custom Regex, relative exclusions, counts, and rejection of unsafe settings |
+| `backend/src/test/kotlin/EditorKeyScanSupportTest.kt` | Editor key hover Regex ranges, key resolution, create-translation suggestions, match cap, Regex time budget, and base-path/exclusion/language-file status |
+| `frontend/src/test/kotlin/EditorKeyHoverSupportTest.kt` | Writable-editor eligibility, match lookup, translation listing, hover delay settings, and popup size limits |
 | `backend/src/test/kotlin/TranslationInputValidationTest.kt` | Sentence/Unicode keys and rejection of blank, control-character, and oversized keys |
 | `backend/src/test/kotlin/FormatPreservingWriterTest.kt` | One-value edits keep PHP/JSON/YAML/Properties comments, quoting, escapes, continuation lines, and CRLF unchanged; unchanged values do not rewrite; structural changes fall back |
 | `backend/src/test/kotlin/SchemeSettingsTransferSupportTest.kt` | Relative path round trips, missing files, parent traversal, and format version rejection |
@@ -177,6 +184,7 @@ The root project uses the IntelliJ Platform Gradle Plugin to assemble three cont
 | --- | --- | --- |
 | `state(projectId)` | Streams schemes, entries, issues, busy state, and errors | No |
 | `hardcodedAnalysisProgress(projectId)` | Streams lazy hardcoded-analysis discovery, scan, cache, match, and current-path progress | No |
+| `scanEditorKeys(...)` | Experimental editor key hover: checks the file against the active scheme base path, exclusions, and language files, then returns usage-Regex key ranges and their `namespace + key` rows; requested only when the mouse moves over a stale editor | No |
 | `analyzeHardcodedText(...)` | Runs the active scheme's cancellable incremental hardcoded-text analysis and returns locations plus separate statistics | No |
 | `createScheme(...)` | Validates user-selected files, persists the scheme, and loads it | No; writes plugin scheme data only |
 | `deleteScheme(...)` | Deletes a scheme and its cache without deleting language files | No |

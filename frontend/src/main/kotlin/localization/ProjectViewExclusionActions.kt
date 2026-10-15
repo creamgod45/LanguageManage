@@ -35,6 +35,12 @@ internal sealed interface LocalizationUiCommand {
     data class FocusDynamicSource(
         val ruleId: String,
     ) : LocalizationUiCommand
+
+    /** Shows the translation table filtered to one `namespace + key` row and selects it (editor key hover). */
+    data class FocusTranslation(
+        val namespace: String,
+        val key: String,
+    ) : LocalizationUiCommand
 }
 
 @Service(Service.Level.PROJECT)

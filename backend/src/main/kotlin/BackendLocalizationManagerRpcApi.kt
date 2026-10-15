@@ -55,6 +55,16 @@ class BackendLocalizationManagerRpcApi : LocalizationManagerRpcApi {
                 ?: error(LanguageManagerBackendBundle.message("project.unavailable"))
         }
 
+    override suspend fun scanEditorKeys(
+        projectId: ProjectId,
+        schemeId: String,
+        request: EditorKeyScanRequestDto,
+    ): EditorKeyScanResultDto =
+        withContext(Dispatchers.IO) {
+            projectId.service()?.scanEditorKeys(schemeId, request)
+                ?: EditorKeyScanResultDto(EditorKeyScanStatus.NOT_ACTIVE)
+        }
+
     override suspend fun createScheme(
         projectId: ProjectId,
         name: String,

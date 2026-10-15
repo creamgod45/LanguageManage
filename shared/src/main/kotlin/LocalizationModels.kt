@@ -203,6 +203,67 @@ data class UsageLocationPageDto(
     val truncated: Boolean = false,
 )
 
+/** Largest editor text, in characters, that the experimental editor key hover sends to the backend. */
+const val MAX_EDITOR_KEY_SCAN_CHARS = 2_000_000
+
+/** Most key matches the backend returns for one editor scan. */
+const val MAX_EDITOR_KEY_MATCHES = 5_000
+
+@Serializable
+enum class EditorKeyScanStatus {
+    /** The file is scanned with the active scheme's usage regex. */
+    OK,
+
+    /** The scheme is not the active scheme (or no longer exists). */
+    NOT_ACTIVE,
+
+    /** The scheme is still loading its translations. */
+    LOADING,
+
+    /** The file is outside the scheme's usage scan base path. */
+    OUTSIDE_BASE_PATH,
+
+    /** The file, or one of its folders, is in the scheme's usage exclusion list. */
+    EXCLUDED,
+
+    /** The file is one of the scheme's own language files. */
+    LANGUAGE_FILE,
+
+    /** The file is not a regular local file, or its text is too large. */
+    UNSUPPORTED,
+}
+
+@Serializable
+data class EditorKeyScanRequestDto(
+    val filePath: String,
+    val text: String,
+)
+
+@Serializable
+data class EditorKeyTargetDto(
+    val namespace: String,
+    val key: String,
+)
+
+@Serializable
+data class EditorKeyMatchDto(
+    val startOffset: Int,
+    val endOffsetExclusive: Int,
+    val candidate: String,
+    /** Translation rows (`namespace + key`) the candidate resolves to; empty when no translation exists yet. */
+    val targets: List<EditorKeyTargetDto> = emptyList(),
+    /** Namespace and key prefilled by "Create translation" when [targets] is empty. */
+    val suggestedNamespace: String = "",
+    val suggestedKey: String = "",
+)
+
+@Serializable
+data class EditorKeyScanResultDto(
+    val status: EditorKeyScanStatus,
+    val matches: List<EditorKeyMatchDto> = emptyList(),
+    val truncated: Boolean = false,
+)
+
 @Serializable
 data class EntryMutationDto(
     val id: String? = null,

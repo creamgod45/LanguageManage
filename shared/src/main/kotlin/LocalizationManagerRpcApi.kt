@@ -44,6 +44,13 @@ interface LocalizationManagerRpcApi : RemoteApi<Unit> {
         offset: Int,
     ): UsageLocationDto
 
+    /** Matches the active scheme's usage regex in an open editor's text (experimental editor key hover). */
+    suspend fun scanEditorKeys(
+        projectId: ProjectId,
+        schemeId: String,
+        request: EditorKeyScanRequestDto,
+    ): EditorKeyScanResultDto
+
     suspend fun createScheme(
         projectId: ProjectId,
         name: String,

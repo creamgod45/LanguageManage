@@ -29,6 +29,7 @@ LanguageManager 是支援 JetBrains IDE split mode 的在地化檔案管理插�
 - 兩種動態來源編輯器都能捲動並支援批次貼上 Key，可選換行、逗號、分號或自訂純文字分隔符。將游標移到有效的 `@languageManager` 標記可查看說明，也能從編輯器右鍵選單或浮動式代碼工具欄使用「編輯在地化動態使用標記」修改既有或複製的標記。
 - 可在任一動態來源編輯表單無痛轉換為另一種表示方式。轉換以可回復流程一起更新來源檔與方案規則，並重新載入 VFS／Document、清除快取及重算。開啟的編輯器會為兩種類型顯示裝訂區圖示：marker 圖示在程式碼中導航，非侵入式圖示則開啟並定位對應 Tool Window 規則。
 - 有效的非侵入式規則也會在目標程式碼上一行顯示輕量 block inlay，並與登錄的程式碼位置對齊，外觀類似參數名稱提示。提示會顯示去重後的動態 key 數量，懸停可查看規則細節，點擊則定位到確切規則；失效座標不會被插入無關程式碼。
+- **實驗功能：**在「Settings → Tools → LanguageManager → 實驗功能 → 編輯器翻譯 key 快捷選單」開啟後，滑鼠移到可編輯編輯器中的翻譯 key 會顯示類似超連結的底線。Key 以作用中方案的使用率 Regex 偵測，只在方案 base path 內、未被排除的檔案生效（唯讀／顯示鎖頭的編輯器不顯示）。停留超過可調整的時間（預設 0.7 秒）後顯示快捷選單，以可捲動、不超出螢幕的 popup 列出所有語言的翻譯，並提供「在翻譯表中開啟」與「編輯翻譯」；尚未建立翻譯的 key 則顯示「建立翻譯」並預填 key。
 - 雙擊翻譯 row 的「使用次數」cell 才會啟用按需載入的「使用位置」Tab；位置紀錄只保留於 backend，frontend 僅請求該 key 當頁最多 100 筆，開啟 row 時才計算及快取行／欄，再把 IDE 游標移到精確位置。
 - 預設使用率排除清單包含 `.git`、`.github`、`docs`、`vendor`、`storage`、`database`、`gradle`、`.gradle`、`build`、`out`、`dist`、`target`、`node_modules`，以及 `.idea`、`.fleet`、`.vs`、`.settings`、`.metadata`、`nbproject` 等 IDE 目錄，並允許使用者自訂。
 - 修復或刪除前顯示 IDE 雙欄 Diff；套用前驗證 SHA-256，避免覆蓋預覽後產生的外部修改。
@@ -123,6 +124,9 @@ flowchart LR
 | `localization/SchemeSettingsTransferDialog.kt` | 方案 JSON 安全讀寫、原子匯出與匯入逐檔預覽表格 |
 | `settings/LanguageManagerSettings.kt` | 持久化顯示語言、issue 顯示偏好、新方案 base path、Regex 與排除清單，並負責舊預設遷移 |
 | `settings/LanguageManagerSettingsConfigurable.kt` | IDE Settings 頁面；編輯插件語言、issue 顯示偏好與新方案預設 |
+| `settings/LanguageManagerExperimentalConfigurable.kt` | 「實驗功能」設定子頁面（編輯器 key 快捷選單開關與停留時間） |
+| `localization/EditorKeyHoverService.kt` | 實驗功能編輯器 key 快捷選單：滑鼠追蹤、超連結強調、停留計時、事件驅動的掃描快取與編輯／建立對話框 |
+| `localization/EditorKeyHoverPopup.kt`／`EditorKeyHoverSupport.kt` | 列出各語言翻譯與操作的 popup；可測試的編輯器資格、匹配查詢與螢幕尺寸限制邏輯 |
 | `localization/SchemeUsageSettingsDialog.kt` | Tool Window 目前方案的列管檔案、掃描路徑、Regex 與排除清單編輯視窗 |
 | `localization/ProjectViewExclusionActions.kt` | Project 檔案樹的插件操作群組與目前方案排除快捷操作 |
 | `LanguageManagerBundle.kt` | frontend `DynamicBundle` 存取入口 |
@@ -138,6 +142,7 @@ flowchart LR
 | `LocalizationManagerService.kt` | 核心主程序：方案、狀態、快取、CRUD、修復預覽、衝突檢查與使用率掃描 |
 | `LanguageFileSupport.kt` | 安全路徑／資料夾驗證、受限遞迴探索、UTF-8 讀寫、原子寫入、指定目標的 JetBrains VFS／document 重載、JSON/YAML/PHP/Properties parse/render |
 | `UsageScanSupport.kt` | 使用率設定驗證、Regex key 擷取、base path 掃描、排除目錄與計數限制 |
+| `EditorKeyScanSupport.kt` | 以時間預算與匹配數上限在單一編輯器文字中套用使用率 Regex，並將擷取結果解析為 `namespace + key` 列，供編輯器 key 快捷選單使用 |
 | `HardcodedTextAnalysisSupport.kt` | 疑似未翻譯引號文字的逐檔增量分析、位置建立與分項統計 |
 | `UsageExclusionSupport.kt` | 將選取的本機資料夾安全轉成相對於方案掃描根目錄的精確排除路徑 |
 | `LanguageLoadBudget.kt` | 在單一隔離方案內套用解析前檔案大小與解析後翻譯筆數預算 |
@@ -159,6 +164,8 @@ flowchart LR
 | `frontend/src/test/kotlin/LanguageManagerDefaultSettingsTest.kt` | base path 層級、新方案預設、issue 顯示預設與舊排除清單遷移 |
 | `frontend/src/test/kotlin/ToolWindowIconVariantsTest.kt` | 四種 Tool Window 圖示的資源存在性、尺寸與主題色 |
 | `backend/src/test/kotlin/UsageScanSupportTest.kt` | 自訂 Regex、排除相對路徑、計數結果與不安全設定拒絕 |
+| `backend/src/test/kotlin/EditorKeyScanSupportTest.kt` | 編輯器 key 快捷選單的 Regex 範圍、key 解析、建立翻譯建議、匹配上限、Regex 時間預算與 base path／排除／語言檔判斷 |
+| `frontend/src/test/kotlin/EditorKeyHoverSupportTest.kt` | 可編輯編輯器資格、匹配查詢、翻譯列表、停留時間設定與 popup 尺寸限制 |
 | `docs/compatibility.zh.md` | Marketplace／Plugin Verifier 已驗證的 IDE 版本與插件相容範圍 |
 | `backend/src/test/kotlin/TranslationInputValidationTest.kt` | 句子型／Unicode key 接受，空白、控制字元與超長 key 拒絕 |
 | `backend/src/test/kotlin/SchemeSettingsTransferSupportTest.kt` | 專案相對路徑 round trip、缺失檔案、父目錄 traversal 與格式版本拒絕 |
@@ -171,6 +178,7 @@ flowchart LR
 | --- | --- | --- |
 | `state(projectId)` | 持續推送方案、entries、issues、busy 與錯誤狀態 | 否 |
 | `hardcodedAnalysisProgress(projectId)` | 推送延遲硬編碼分析的檔案尋找、掃描、快取、命中與目前路徑進度 | 否 |
+| `scanEditorKeys(...)` | 實驗功能編輯器 key 快捷選單：檢查檔案是否在作用中方案 base path 內、未被排除且不是語言檔，再回傳使用率 Regex 的 key 範圍與對應 `namespace + key`；只在滑鼠移到掃描結果過期的編輯器時請求 | 否 |
 | `analyzeHardcodedText(...)` | 依作用中方案執行可取消的逐檔增量硬編碼文字分析，回傳位置與各項統計 | 否 |
 | `createScheme(...)` | 驗證使用者選取的檔案、保存方案並載入 | 否，僅寫入插件方案資料 |
 | `deleteScheme(...)` | 刪除方案及其 cache，不刪除語言檔 | 否 |

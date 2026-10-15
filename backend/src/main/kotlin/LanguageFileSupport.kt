@@ -101,6 +101,13 @@ internal object SafeLanguageFileAccess {
         return path.toRealPath()
     }
 
+    /** A regular local source file of any type (for the editor key hover); same path rules as language files. */
+    fun validateSourceFile(raw: String): Path {
+        val path = safeNormalizedPath(raw)
+        require(Files.isRegularFile(path)) { backendMessage("path.not.file", path) }
+        return path.toRealPath()
+    }
+
     fun validateDirectory(raw: String): Path {
         val path = safeNormalizedPath(raw)
         require(Files.isDirectory(path)) { backendMessage("path.not.directory", path) }
