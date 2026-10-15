@@ -121,12 +121,15 @@ lang/zh_TW/validation.php  -> locale: zh_TW, namespace: validation
 
 ### JetBrains／Java ResourceBundle Properties
 
-檔名的 base 部分是 namespace；沒有 locale 後綴的 bundle 視為英文：
+檔名的 base 部分是 namespace；沒有 locale 後綴的 bundle 是 ResourceBundle 的 fallback，會獨立顯示為 `fallback` 欄位，不會與明確的 `_en` 檔合併：
 
 ```text
-LanguageManagerBundle.properties        -> locale: en, namespace: LanguageManagerBundle
+LanguageManagerBundle.properties        -> locale: fallback, namespace: LanguageManagerBundle
+LanguageManagerBundle_en.properties     -> locale: en, namespace: LanguageManagerBundle
 LanguageManagerBundle_zh_TW.properties  -> locale: zh_TW, namespace: LanguageManagerBundle
 ```
+
+`fallback` 為保留名稱，不能作為新增語言版本的名稱。AI 翻譯與「以編輯器選取範圍建立翻譯」預設以 `en` 為來源語系，方案沒有 `en` 欄位時改用 `fallback`。
 
 ## 5. 使用翻譯表
 
@@ -571,3 +574,4 @@ Regex 命中、程式碼備註標記及已儲存的非侵入式規則會合併�
 | 1.8.1 | 儲存值時保留原檔內容 | [#26](https://github.com/creamgod45/LanguageManage/issues/26) | [儲存時保留原檔內容](#儲存時保留原檔內容) |
 | 1.8.1 | 多個 Namespace 時提供 Namespace 過濾 | [#27](https://github.com/creamgod45/LanguageManage/issues/27) | [顯示欄位與右鍵選單](#顯示欄位與右鍵選單) |
 | 1.8.1 | 將工具視窗檢視開成編輯器頁籤 | [#29](https://github.com/creamgod45/LanguageManage/issues/29) | [在編輯器頁籤中開啟](#在編輯器頁籤中開啟) |
+| 1.8.2 | Properties base bundle 獨立顯示為 `fallback` 欄位 | [#34](https://github.com/creamgod45/LanguageManage/issues/34) | [JetBrains／Java ResourceBundle Properties](#jetbrainsjava-resourcebundle-properties) |

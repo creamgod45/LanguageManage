@@ -10,6 +10,7 @@ import cg.creamgod45.localization.SelectionReplacementCandidateDto
 import cg.creamgod45.localization.SelectionScanProgressDto
 import cg.creamgod45.localization.SelectionScanStage
 import cg.creamgod45.localization.SelectionTranslationRequestDto
+import cg.creamgod45.localization.preferredSourceLocale
 import com.intellij.diff.DiffContentFactory
 import com.intellij.diff.DiffManager
 import com.intellij.diff.requests.SimpleDiffRequest
@@ -391,7 +392,7 @@ private class SelectionTranslationDialog(
                 .map { it.value.first() }
                 .sortedBy { it.locale }
         sourceLocale =
-            selectedTargets.firstOrNull { it.locale.equals("en", true) }?.locale ?: selectedTargets.firstOrNull()?.locale.orEmpty()
+            preferredSourceLocale(selectedTargets.map { it.locale }) ?: selectedTargets.firstOrNull()?.locale.orEmpty()
         selectedTargets.forEachIndexed { index, target ->
             val editor =
                 JBTextArea(

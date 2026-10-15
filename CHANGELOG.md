@@ -1,5 +1,21 @@
 # Language Manager Changelog
 
+## 1.8.2
+
+### English
+
+- Fix English translations being shown twice for Java ResourceBundle Properties ([#34](https://github.com/creamgod45/LanguageManage/issues/34)). A base bundle without a locale suffix (for example `messages.properties`) was treated as English, so when the scheme also tracked `messages_en.properties` both files were joined into the same `en` column and an edit made the duplicate visible. The base bundle is now its own **`fallback`** column, separate from `en`, and each column writes only to its own file. Adding namespace files now creates both `errors.properties` and `errors_en.properties` for such families instead of skipping the `_en` file.
+- `fallback` is reserved and cannot be used as the name of a new language version. AI translation and Create Translation from Editor Selection still default to `en` as the source and use `fallback` when a scheme has no `en` column.
+- Note for Properties-only schemes: the base bundle column is now named `fallback` instead of `en`. A hidden-column choice or language note saved for `en` in such a scheme needs to be set again for `fallback`.
+
+---
+
+### 繁體中文
+
+- 修正 Java ResourceBundle Properties 的英文翻譯顯示兩次（[#34](https://github.com/creamgod45/LanguageManage/issues/34)）。沒有 locale 後綴的 base bundle（例如 `messages.properties`）原本被視為英文，方案同時列管 `messages_en.properties` 時，兩個檔案會被合併到同一個 `en` 欄位，編輯後重複就會顯現。現在 base bundle 獨立顯示為 **`fallback`** 欄位，與 `en` 分開，各欄位只寫入自己的檔案。對這類檔案家族「新增 Namespace 檔」時，也會同時建立 `errors.properties` 與 `errors_en.properties`，不再略過 `_en` 檔。
+- `fallback` 為保留名稱，不能作為新增語言版本的名稱。AI 翻譯與「以編輯器選取範圍建立翻譯」仍預設以 `en` 為來源語系，方案沒有 `en` 欄位時改用 `fallback`。
+- 只有 Properties 的方案請注意：base bundle 欄位名稱由 `en` 改為 `fallback`。這類方案先前對 `en` 設定的隱藏欄位或語言備註，需要對 `fallback` 重新設定。
+
 ## 1.8.1
 
 ### English

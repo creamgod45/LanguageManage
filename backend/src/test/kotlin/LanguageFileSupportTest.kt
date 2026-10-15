@@ -702,7 +702,7 @@ class LanguageFileSupportTest {
             LanguageLocaleVersionSupport
                 .buildTargets(
                     listOf(sourceDocument),
-                    "en",
+                    "fallback",
                     "es",
                 ).single()
 
@@ -712,6 +712,46 @@ class LanguageFileSupportTest {
         assertEquals("es", parsed.locale)
         assertEquals("LanguageManagerFrontendBundle", parsed.namespace)
         assertTrue(parsed.values.values.all(String::isEmpty))
+    }
+
+    @Test
+    fun `properties base bundle uses its own fallback column next to an explicit English file`() {
+        val base = temp.resolve("messages.properties").apply { writeText("hello=Hello fallback\n") }
+        val english = temp.resolve("messages_en.properties").apply { writeText("hello=Hello\n") }
+
+        val baseDocument = LanguageFileCodec.parse(base, "scheme")
+        val englishDocument = LanguageFileCodec.parse(english, "scheme")
+
+        assertEquals("fallback", baseDocument.locale)
+        assertEquals("en", englishDocument.locale)
+        assertEquals("messages", baseDocument.namespace)
+        assertEquals("messages", englishDocument.namespace)
+    }
+
+    @Test
+    fun `new properties namespace creates both the fallback and the explicit English file`() {
+        val documents =
+            listOf("messages.properties", "messages_en.properties", "messages_zh_TW.properties").map { name ->
+                LanguageFileCodec.parse(temp.resolve(name).apply { writeText("hello=Hello\n") }, "scheme")
+            }
+
+        val targets = LanguageNamespaceFileSupport.buildTargets(documents, documents.first().path.toString(), "errors")
+
+        assertEquals(
+            listOf("errors.properties", "errors_en.properties", "errors_zh_TW.properties"),
+            targets.map { it.path.fileName.toString() },
+        )
+    }
+
+    @Test
+    fun `fallback is reserved and cannot be created as a new locale version`() {
+        val source = temp.resolve("messages_ja.properties").apply { writeText("hello=こんにちは\n") }
+        val documents = listOf(LanguageFileCodec.parse(source, "scheme"))
+
+        assertEquals(1, LanguageLocaleVersionSupport.buildTargets(documents, "ja", "es").size)
+        listOf("fallback", "Fallback").forEach { target ->
+            assertFailsWith<IllegalArgumentException> { LanguageLocaleVersionSupport.buildTargets(documents, "ja", target) }
+        }
     }
 
     @Test

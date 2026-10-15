@@ -57,7 +57,7 @@ class TranslationEditorSupportTest {
 
         val targets = TranslationEditorSupport.targets(scheme, emptyList())
 
-        assertEquals(listOf("en", "ja"), targets.map { it.locale })
+        assertEquals(listOf("fallback", "ja"), targets.map { it.locale })
         assertEquals(setOf("LanguageManagerBundle"), targets.map { it.namespace }.toSet())
     }
 

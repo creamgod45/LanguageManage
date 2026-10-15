@@ -18,6 +18,13 @@ class LocalizationModelsTest {
     }
 
     @Test
+    fun `preferred source locale picks explicit English before the properties fallback`() {
+        assertEquals("en", preferredSourceLocale(listOf("fallback", "ja", "en")))
+        assertEquals("fallback", preferredSourceLocale(listOf("ja", "fallback")))
+        assertNull(preferredSourceLocale(listOf("ja", "zh_TW")))
+    }
+
+    @Test
     fun `old schemes receive default usage scan settings`() {
         val scheme =
             Json.decodeFromString<LanguageSchemeDto>(

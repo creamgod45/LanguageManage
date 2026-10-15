@@ -1,6 +1,7 @@
 package cg.creamgod45.localization.ui
 
 import cg.creamgod45.LanguageManagerBundle.message
+import cg.creamgod45.localization.PROPERTIES_FALLBACK_LOCALE
 import cg.creamgod45.localization.EntryMutationDto
 import cg.creamgod45.localization.JoinedTranslationRow
 import cg.creamgod45.localization.LanguageEntryDto
@@ -95,7 +96,7 @@ internal object TranslationEditorSupport {
             "properties" -> {
                 val match = propertiesLocaleSuffix.matchEntire(path.nameWithoutExtension)
                 if (match == null) {
-                    TranslationEditorTarget(filePath, "en", path.nameWithoutExtension)
+                    TranslationEditorTarget(filePath, PROPERTIES_FALLBACK_LOCALE, path.nameWithoutExtension)
                 } else {
                     TranslationEditorTarget(filePath, match.groupValues[2], match.groupValues[1])
                 }
