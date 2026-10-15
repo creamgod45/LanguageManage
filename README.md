@@ -109,7 +109,7 @@ The root project uses the IntelliJ Platform Gradle Plugin to assemble three cont
 
 | File | Purpose |
 | --- | --- |
-| `LocalizationModels.kt` | Scheme, locale-note, entry, issue, usage-default, row-filter, folder-recognition, AI-request, mutation, and Diff-preview DTOs |
+| `LocalizationModels.kt` | Scheme, locale-note, entry, issue, usage-default, row-filter, folder-recognition, AI-request, mutation, and Diff-preview DTOs; shared ResourceBundle locale rules (`PROPERTIES_FALLBACK_LOCALE`, `propertiesBundleIdentity()` used by both the backend parser and frontend dialogs, and `preferredSourceLocale()`) |
 | `LocalizationManagerRpcApi.kt` | Shared `@Rpc` contract; every remote call identifies its project with `ProjectId` |
 | `EntrySearch.kt` | Pure search, `namespace + key` JOIN, missing/zero-usage filters, and pagination capped at 100 rows |
 

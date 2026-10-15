@@ -104,7 +104,7 @@ flowchart LR
 
 | 檔案 | 關鍵資訊 |
 | --- | --- |
-| `LocalizationModels.kt` | 方案、locale 備註、entry、issue、使用率預設、翻譯 row filter、AI request、資料夾識別結果、mutation 與 Diff preview DTO |
+| `LocalizationModels.kt` | 方案、locale 備註、entry、issue、使用率預設、翻譯 row filter、AI request、資料夾識別結果、mutation 與 Diff preview DTO；共用的 ResourceBundle locale 規則（`PROPERTIES_FALLBACK_LOCALE`、backend parser 與 frontend 對話框共用的 `propertiesBundleIdentity()`，以及 `preferredSourceLocale()`） |
 | `LocalizationManagerRpcApi.kt` | frontend/backend 共用的 `@Rpc` 契約，所有遠端呼叫以 `ProjectId` 定位專案 |
 | `EntrySearch.kt` | 純函式形式的搜尋、`namespace + key` JOIN、缺少翻譯／零使用次數篩選及最多 100 列分頁 |
 
