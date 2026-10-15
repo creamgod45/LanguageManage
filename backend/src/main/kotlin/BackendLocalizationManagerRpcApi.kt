@@ -86,8 +86,9 @@ class BackendLocalizationManagerRpcApi : LocalizationManagerRpcApi {
         schemeId: String,
         name: String,
         settings: UsageScanSettingsDto,
+        localeNotes: Map<String, String>,
     ) = withContext(Dispatchers.IO) {
-        projectId.service()?.updateSchemeSettings(schemeId, name, settings)
+        projectId.service()?.updateSchemeSettings(schemeId, name, settings, localeNotes)
         Unit
     }
 

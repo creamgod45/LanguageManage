@@ -186,7 +186,7 @@ Open **Actions ▾** to access the following commands.
 1. Choose **Actions ▾ → Add Locale Version**.
 2. Select a source locale such as `en`.
 3. Type a new locale code freely, or click the field's suggestion button to open ISO 639 languages and common BCP 47 variants such as `es`, `th`, `es-MX`, `zh-Hant`, and `es-419`. Typing and deleting never selects or inserts a suggestion automatically; only an explicit popup choice replaces the field value. Any project-specific code that passes locale validation remains supported.
-4. Optionally enter a language note such as `Mexican Spanish, formal tone`. The note is limited to 500 characters, saved with the scheme, included in scheme export/import, and supplied to later AI requests for that locale. It never changes the locale file path.
+4. Optionally enter a language note such as `Mexican Spanish, formal tone`. The note is limited to 500 characters, saved with the scheme, included in scheme export/import, and supplied to later AI requests for that locale. It never changes the locale file path. Notes for every loaded language, including the Properties `fallback` column, can be edited or cleared later under **Scheme Settings → Language notes**.
 5. The plugin maps every source file to a target: `en/auth.php` becomes `es/auth.php`, and `en.json` becomes `es.json`.
 6. Normal values and each expanded JSON array item are cleared independently for translation. The array structure is retained so the new file remains parseable.
 7. Review every new file in the Diff and apply before files are created, the note is saved, and the files are added to the scheme.
@@ -575,3 +575,4 @@ After a Marketplace update is uploaded, the current version section from [CHANGE
 | 1.8.1 | Namespaces filter for schemes with several namespaces | [#27](https://github.com/creamgod45/LanguageManage/issues/27) | [Visible columns and context menu](#visible-columns-and-context-menu) |
 | 1.8.1 | Open a tool window view in an editor tab | [#29](https://github.com/creamgod45/LanguageManage/issues/29) | [Open in an editor tab](#open-in-an-editor-tab) |
 | 1.8.2 | Properties base bundle gets its own `fallback` column | [#34](https://github.com/creamgod45/LanguageManage/issues/34) | [JetBrains/Java ResourceBundle Properties](#jetbrainsjava-resourcebundle-properties) |
+| 1.8.2 | Edit language notes in Scheme Settings | [#36](https://github.com/creamgod45/LanguageManage/issues/36) | [Add locale version](#add-locale-version) |

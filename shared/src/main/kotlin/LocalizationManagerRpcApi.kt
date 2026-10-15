@@ -66,6 +66,7 @@ interface LocalizationManagerRpcApi : RemoteApi<Unit> {
         schemeId: String,
         name: String,
         settings: UsageScanSettingsDto,
+        localeNotes: Map<String, String>,
     )
 
     suspend fun updateDynamicSourceRules(

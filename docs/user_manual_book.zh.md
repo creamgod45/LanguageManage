@@ -186,7 +186,7 @@ LanguageManagerBundle_zh_TW.properties  -> locale: zh_TW, namespace: LanguageMan
 1. 點擊「操作 ▾」→「新增語言版本」。
 2. 選擇來源語言，例如 `en`。
 3. 可自由輸入新語言代碼，或點擊欄位右側建議按鈕開啟 ISO 639 語言及常用 BCP 47 變體，例如 `es`、`th`、`es-MX`、`zh-Hant`、`es-419`。輸入與刪除期間不會自動選取或插入候選；只有在 Popup 明確選取後才會取代欄位內容，通過 locale 驗證的專案自訂代碼仍可保留。
-4. 可選填語言備註，例如「墨西哥西班牙文、正式語氣」。備註上限 500 字元，會保存於方案、包含於方案匯入／匯出，並帶入日後針對該 locale 的 AI 請求；備註不會改變語言檔路徑。
+4. 可選填語言備註，例如「墨西哥西班牙文、正式語氣」。備註上限 500 字元，會保存於方案、包含於方案匯入／匯出，並帶入日後針對該 locale 的 AI 請求；備註不會改變語言檔路徑。之後可在「方案設定 → 語言備註」編輯或清空所有已載入語言的備註，包含 Properties 的 `fallback` 欄位。
 5. 插件會依來源語言的全部檔案建立目標清單：Laravel `en/auth.php` 會對應為 `es/auth.php`；`en.json` 會對應為 `es.json`。
 6. 一般翻譯 value 與展開後的每個 JSON array 項目都會各自清空以等待翻譯；array 結構會保留，避免產生無法解析的檔案。
 7. 在 Diff 視窗逐一確認新檔案；按下套用後才會建立檔案、保存備註並加入目前方案。
@@ -575,3 +575,4 @@ Regex 命中、程式碼備註標記及已儲存的非侵入式規則會合併�
 | 1.8.1 | 多個 Namespace 時提供 Namespace 過濾 | [#27](https://github.com/creamgod45/LanguageManage/issues/27) | [顯示欄位與右鍵選單](#顯示欄位與右鍵選單) |
 | 1.8.1 | 將工具視窗檢視開成編輯器頁籤 | [#29](https://github.com/creamgod45/LanguageManage/issues/29) | [在編輯器頁籤中開啟](#在編輯器頁籤中開啟) |
 | 1.8.2 | Properties base bundle 獨立顯示為 `fallback` 欄位 | [#34](https://github.com/creamgod45/LanguageManage/issues/34) | [JetBrains／Java ResourceBundle Properties](#jetbrainsjava-resourcebundle-properties) |
+| 1.8.2 | 在方案設定編輯語言備註 | [#36](https://github.com/creamgod45/LanguageManage/issues/36) | [新增語言版本](#新增語言版本) |
