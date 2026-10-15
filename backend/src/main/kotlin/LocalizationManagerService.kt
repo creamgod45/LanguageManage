@@ -217,14 +217,17 @@ class LocalizationManagerService(
         id: String,
         name: String,
         rawSettings: UsageScanSettingsDto,
+        rawLocaleNotes: Map<String, String>,
     ) = mutex.withLock {
         val scheme = requireScheme(id)
         val normalizedName = requireNotNull(normalizeSchemeName(name)) { backendMessage("scheme.name.length") }
         val settings = UsageScanSupport.normalize(rawSettings)
+        val localeNotes = LocaleMetadataSupport.normalizeNotes(rawLocaleNotes)
         val updated =
             scheme.copy(
                 name = sanitizeText(normalizedName, MAX_SCHEME_NAME_LENGTH),
                 usageScanSettings = settings,
+                localeNotes = localeNotes,
                 updatedAtEpochMs = System.currentTimeMillis(),
             )
         val schemes = mutableState.value.schemes.map { if (it.id == id) updated else it }

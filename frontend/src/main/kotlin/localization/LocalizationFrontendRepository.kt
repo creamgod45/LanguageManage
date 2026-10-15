@@ -49,7 +49,8 @@ internal class LocalizationFrontendRepository(
         id: String,
         name: String,
         settings: UsageScanSettingsDto,
-    ) = LocalizationManagerRpcApi.getInstance().updateSchemeSettings(project.projectId(), id, name, settings)
+        localeNotes: Map<String, String>,
+    ) = LocalizationManagerRpcApi.getInstance().updateSchemeSettings(project.projectId(), id, name, settings, localeNotes)
 
     suspend fun updateDynamicSourceRules(
         id: String,
