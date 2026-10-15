@@ -1,11 +1,11 @@
 package cg.creamgod45.localization.ui
 
 import cg.creamgod45.LanguageManagerBundle.message
-import cg.creamgod45.localization.PROPERTIES_FALLBACK_LOCALE
 import cg.creamgod45.localization.EntryMutationDto
 import cg.creamgod45.localization.JoinedTranslationRow
 import cg.creamgod45.localization.LanguageEntryDto
 import cg.creamgod45.localization.LanguageSchemeDto
+import cg.creamgod45.localization.PROPERTIES_FALLBACK_LOCALE
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.ComboBox
 import com.intellij.openapi.ui.DialogWrapper

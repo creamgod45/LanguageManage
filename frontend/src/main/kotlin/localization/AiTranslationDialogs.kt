@@ -1,9 +1,9 @@
 package cg.creamgod45.localization.ui
 
 import cg.creamgod45.LanguageManagerBundle.message
-import cg.creamgod45.localization.preferredSourceLocale
 import cg.creamgod45.localization.AiTranslationSuggestionDto
 import cg.creamgod45.localization.JoinedTranslationRow
+import cg.creamgod45.localization.preferredSourceLocale
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.ComboBox
 import com.intellij.openapi.ui.DialogWrapper

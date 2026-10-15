@@ -46,6 +46,25 @@ class TranslationEditorSupportTest {
     }
 
     @Test
+    fun `resource bundle base and explicit English files stay separate edit targets`() {
+        val root = Path.of("workspace", "messages").toAbsolutePath()
+        val files = listOf("messages.properties", "messages_en.properties", "messages_zh_TW.properties").map { root.resolve(it).toString() }
+        val scheme = LanguageSchemeDto("scheme", "Bundle", files, 1)
+        val entries =
+            listOf(
+                LanguageEntryDto("1", "scheme", files[0], "fallback", "messages", "greeting", "Hello fallback"),
+                LanguageEntryDto("2", "scheme", files[1], "en", "messages", "greeting", "Hello"),
+            )
+
+        val targets = TranslationEditorSupport.targets(scheme, entries)
+
+        assertEquals(
+            listOf("en" to files[1], "fallback" to files[0], "zh_TW" to files[2]),
+            targets.map { it.locale to it.filePath },
+        )
+    }
+
+    @Test
     fun `infers resource bundle locale and namespace for empty files`() {
         val root = Path.of("workspace", "messages").toAbsolutePath()
         val files =
