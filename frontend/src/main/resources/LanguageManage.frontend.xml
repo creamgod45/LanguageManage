@@ -11,12 +11,6 @@
                 instance="cg.creamgod45.settings.LanguageManagerSettingsConfigurable"
                 bundle="messages.LanguageManagerFrontendBundle"
                 key="settings.display.name"/>
-        <projectConfigurable
-                parentId="cg.creamgod45.localization.LanguageManagerSettings"
-                id="cg.creamgod45.localization.LanguageManagerSettings.Experimental"
-                instance="cg.creamgod45.settings.LanguageManagerExperimentalConfigurable"
-                bundle="messages.LanguageManagerFrontendBundle"
-                key="settings.experimental.display.name"/>
         <toolWindow
                 id="Language Manager"
                 anchor="right"

@@ -454,7 +454,7 @@ Regex 命中、程式碼備註標記及已儲存的非侵入式規則會合併�
 
 ### 編輯器翻譯 key 快捷選單（實驗功能）
 
-此功能為實驗功能，預設關閉。請在「Settings → Tools → LanguageManager → 實驗功能」勾選「滑鼠停在編輯器中的翻譯 key 上時顯示翻譯快捷選單」；同一頁可調整「停留時間」（預設 0.7 秒，可設 0.2–5 秒）。
+此功能為實驗功能，預設關閉。請在「Settings → Tools → LanguageManager」頁面的「實驗功能」區段勾選「滑鼠停在編輯器中的翻譯 key 上時顯示翻譯快捷選單」；同一區段可調整「停留時間」（預設 0.7 秒，可設 0.2–5 秒）。
 
 - 只在可編輯的主編輯器生效；唯讀檔案（編輯器頁籤顯示鎖頭）、viewer、Diff、Console 與預覽編輯器不會顯示。
 - 必須有作用中方案，且檔案位於方案的「掃描基準路徑」內、沒有被方案的檔案／資料夾排除清單排除，也不是方案的語言檔。
@@ -584,4 +584,4 @@ Regex 命中、程式碼備註標記及已儲存的非侵入式規則會合併�
 | 1.8.1 | 儲存值時保留原檔內容 | [#26](https://github.com/creamgod45/LanguageManage/issues/26) | [儲存時保留原檔內容](#儲存時保留原檔內容) |
 | 1.8.1 | 多個 Namespace 時提供 Namespace 過濾 | [#27](https://github.com/creamgod45/LanguageManage/issues/27) | [顯示欄位與右鍵選單](#顯示欄位與右鍵選單) |
 | 1.8.1 | 將工具視窗檢視開成編輯器頁籤 | [#29](https://github.com/creamgod45/LanguageManage/issues/29) | [在編輯器頁籤中開啟](#在編輯器頁籤中開啟) |
-| 1.9.0 | 實驗功能設定頁面與編輯器翻譯 key 快捷選單 | [#38](https://github.com/creamgod45/LanguageManage/issues/38) | [編輯器翻譯 key 快捷選單（實驗功能）](#編輯器翻譯-key-快捷選單實驗功能) |
+| 1.9.0 | 實驗功能設定區段與編輯器翻譯 key 快捷選單 | [#38](https://github.com/creamgod45/LanguageManage/issues/38) | [編輯器翻譯 key 快捷選單（實驗功能）](#編輯器翻譯-key-快捷選單實驗功能) |

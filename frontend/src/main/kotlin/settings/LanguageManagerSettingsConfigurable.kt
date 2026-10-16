@@ -18,12 +18,14 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.ComboBox
 import com.intellij.openapi.ui.Messages
 import com.intellij.ui.components.JBCheckBox
+import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBList
 import com.intellij.ui.components.JBPasswordField
 import com.intellij.ui.components.JBScrollPane
 import com.intellij.ui.components.JBTextField
 import com.intellij.util.ui.FormBuilder
 import com.intellij.util.ui.JBUI
+import org.jetbrains.annotations.TestOnly
 import java.awt.BorderLayout
 import java.awt.Dimension
 import java.awt.FlowLayout
@@ -51,6 +53,8 @@ class LanguageManagerSettingsConfigurable(
     private var ignoreDuplicateValueIssuesBox: JBCheckBox? = null
     private var ignoreUnusedKeyIssuesBox: JBCheckBox? = null
     private var quickInlineEditBox: JBCheckBox? = null
+    private var editorKeyHoverBox: JBCheckBox? = null
+    private var editorKeyHoverDelaySpinner: JSpinner? = null
     private var aiProviderBox: ComboBox<AiProviderType>? = null
     private var aiEndpointField: JBTextField? = null
     private var aiModelField: JBTextField? = null
@@ -79,6 +83,19 @@ class LanguageManagerSettingsConfigurable(
         ignoreDuplicateValueIssuesBox = JBCheckBox(message("settings.issues.ignore.duplicate.values"))
         ignoreUnusedKeyIssuesBox = JBCheckBox(message("settings.issues.ignore.unused.keys"))
         quickInlineEditBox = JBCheckBox(message("settings.table.quick.edit"))
+        editorKeyHoverDelaySpinner =
+            JSpinner(
+                SpinnerNumberModel(
+                    editorKeyHoverDelaySeconds(DEFAULT_EDITOR_KEY_HOVER_DELAY_MS),
+                    MIN_EDITOR_KEY_HOVER_DELAY_MS / 1_000.0,
+                    MAX_EDITOR_KEY_HOVER_DELAY_MS / 1_000.0,
+                    0.1,
+                ),
+            ).apply { editor = JSpinner.NumberEditor(this, "0.0") }
+        editorKeyHoverBox =
+            JBCheckBox(message("settings.experimental.editor.hover")).apply {
+                addActionListener { updateEditorKeyHoverDelayEnabled() }
+            }
         aiProviderBox =
             ComboBox(AiProviderType.entries.toTypedArray()).apply {
                 renderer = localizedRenderer { value -> (value as? AiProviderType)?.let { message(it.messageKey()) } }
@@ -102,6 +119,21 @@ class LanguageManagerSettingsConfigurable(
                 .addComponent(quickInlineEditBox!!)
                 .addTooltip(message("settings.table.quick.edit.help"))
                 .addSeparator()
+                .addComponent(javax.swing.JLabel(message("settings.experimental.title")))
+                .addComponent(
+                    JBLabel(message("settings.experimental.description")).apply {
+                        foreground = JBUI.CurrentTheme.ContextHelp.FOREGROUND
+                    },
+                ).addComponent(editorKeyHoverBox!!)
+                .addTooltip(message("settings.experimental.editor.hover.help"))
+                .addLabeledComponent(message("settings.experimental.editor.hover.delay"), editorKeyHoverDelaySpinner!!)
+                .addTooltip(
+                    message(
+                        "settings.experimental.editor.hover.delay.help",
+                        editorKeyHoverDelaySeconds(MIN_EDITOR_KEY_HOVER_DELAY_MS),
+                        editorKeyHoverDelaySeconds(MAX_EDITOR_KEY_HOVER_DELAY_MS),
+                    ),
+                ).addSeparator()
                 .addComponent(javax.swing.JLabel(message("settings.ai.title")))
                 .addLabeledComponent(message("settings.ai.provider"), aiProviderBox!!)
                 .addLabeledComponent(message("settings.ai.endpoint"), aiEndpointField!!)
@@ -161,6 +193,8 @@ class LanguageManagerSettingsConfigurable(
             ignoreDuplicateValueIssuesBox?.isSelected != settings.ignoreDuplicateValueIssues ||
             ignoreUnusedKeyIssuesBox?.isSelected != settings.ignoreUnusedKeyIssues ||
             quickInlineEditBox?.isSelected != settings.quickInlineEditEnabled ||
+            editorKeyHoverBox?.isSelected != settings.editorKeyHoverEnabled ||
+            selectedEditorKeyHoverDelayMs() != settings.editorKeyHoverDelayMs ||
             aiProviderBox?.selectedItem != settings.aiProvider ||
             aiEndpointField?.text?.trim() != settings.aiEndpoint ||
             aiModelField?.text?.trim() != settings.aiModel ||
@@ -200,6 +234,8 @@ class LanguageManagerSettingsConfigurable(
         settings.ignoreDuplicateValueIssues = ignoreDuplicateValueIssuesBox?.isSelected ?: false
         settings.ignoreUnusedKeyIssues = ignoreUnusedKeyIssuesBox?.isSelected ?: false
         settings.quickInlineEditEnabled = quickInlineEditBox?.isSelected ?: true
+        settings.editorKeyHoverEnabled = editorKeyHoverBox?.isSelected ?: false
+        settings.editorKeyHoverDelayMs = selectedEditorKeyHoverDelayMs()
         settings.aiProvider = aiProviderBox?.selectedItem as? AiProviderType ?: AiProviderType.OPENAI_COMPATIBLE
         settings.aiEndpoint = aiEndpointField?.text.orEmpty()
         settings.aiModel = aiModelField?.text.orEmpty()
@@ -222,12 +258,15 @@ class LanguageManagerSettingsConfigurable(
         ignoreDuplicateValueIssuesBox?.isSelected = settings.ignoreDuplicateValueIssues
         ignoreUnusedKeyIssuesBox?.isSelected = settings.ignoreUnusedKeyIssues
         quickInlineEditBox?.isSelected = settings.quickInlineEditEnabled
+        editorKeyHoverBox?.isSelected = settings.editorKeyHoverEnabled
+        editorKeyHoverDelaySpinner?.value = editorKeyHoverDelaySeconds(settings.editorKeyHoverDelayMs)
         aiProviderBox?.selectedItem = settings.aiProvider
         aiEndpointField?.text = settings.aiEndpoint
         aiModelField?.text = settings.aiModel
         aiTemperatureField?.text = settings.aiTemperature
         aiTokenField?.text = AiProviderCredentialStore.getToken()
         updateParentLevelsEnabled()
+        updateEditorKeyHoverDelayEnabled()
     }
 
     override fun disposeUIResources() {
@@ -243,12 +282,27 @@ class LanguageManagerSettingsConfigurable(
         ignoreDuplicateValueIssuesBox = null
         ignoreUnusedKeyIssuesBox = null
         quickInlineEditBox = null
+        editorKeyHoverBox = null
+        editorKeyHoverDelaySpinner = null
         aiProviderBox = null
         aiEndpointField = null
         aiModelField = null
         aiTemperatureField = null
         aiTokenField = null
     }
+
+    private fun selectedEditorKeyHoverDelayMs(): Int =
+        editorKeyHoverDelayMsFromSeconds((editorKeyHoverDelaySpinner?.value as? Number)?.toDouble() ?: Double.NaN)
+
+    private fun updateEditorKeyHoverDelayEnabled() {
+        editorKeyHoverDelaySpinner?.isEnabled = editorKeyHoverBox?.isSelected == true
+    }
+
+    @TestOnly
+    internal fun editorKeyHoverBoxForTest(): JBCheckBox? = editorKeyHoverBox
+
+    @TestOnly
+    internal fun editorKeyHoverDelaySpinnerForTest(): JSpinner? = editorKeyHoverDelaySpinner
 
     private fun updateParentLevelsEnabled() {
         parentLevelsSpinner?.isEnabled = basePathModeBox?.selectedItem == DefaultBasePathMode.PARENT_LEVELS

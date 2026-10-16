@@ -454,7 +454,7 @@ The **Usage Locations** tab is disabled and empty by default, so ordinary scheme
 
 ### Editor translation key hover (experimental)
 
-This feature is experimental and off by default. Turn it on in **Settings → Tools → LanguageManager → Experimental → Show a translation menu when hovering a translation key in the editor**; the same page sets the **Hover delay** (default 0.7 seconds, 0.2–5 seconds).
+This feature is experimental and off by default. Turn it on with **Show a translation menu when hovering a translation key in the editor** in the **Experimental** section of **Settings → Tools → LanguageManager**; the same section sets the **Hover delay** (default 0.7 seconds, 0.2–5 seconds).
 
 - It works only in writable main editors. Read-only files (the editor tab shows a lock), viewers, Diff, console, and preview editors are skipped.
 - A scheme must be active, and the file must be inside the scheme **Scan base path**, not excluded by its file/folder exclusions, and not one of the scheme's language files.
@@ -584,4 +584,4 @@ After a Marketplace update is uploaded, the current version section from [CHANGE
 | 1.8.1 | Saving a value keeps the original file text | [#26](https://github.com/creamgod45/LanguageManage/issues/26) | [Saving keeps the original file text](#saving-keeps-the-original-file-text) |
 | 1.8.1 | Namespaces filter for schemes with several namespaces | [#27](https://github.com/creamgod45/LanguageManage/issues/27) | [Visible columns and context menu](#visible-columns-and-context-menu) |
 | 1.8.1 | Open a tool window view in an editor tab | [#29](https://github.com/creamgod45/LanguageManage/issues/29) | [Open in an editor tab](#open-in-an-editor-tab) |
-| 1.9.0 | Experimental settings page and editor translation key hover | [#38](https://github.com/creamgod45/LanguageManage/issues/38) | [Editor translation key hover (experimental)](#editor-translation-key-hover-experimental) |
+| 1.9.0 | Experimental settings section and editor translation key hover | [#38](https://github.com/creamgod45/LanguageManage/issues/38) | [Editor translation key hover (experimental)](#editor-translation-key-hover-experimental) |

@@ -29,7 +29,7 @@ LanguageManager 是支援 JetBrains IDE split mode 的在地化檔案管理插�
 - 兩種動態來源編輯器都能捲動並支援批次貼上 Key，可選換行、逗號、分號或自訂純文字分隔符。將游標移到有效的 `@languageManager` 標記可查看說明，也能從編輯器右鍵選單或浮動式代碼工具欄使用「編輯在地化動態使用標記」修改既有或複製的標記。
 - 可在任一動態來源編輯表單無痛轉換為另一種表示方式。轉換以可回復流程一起更新來源檔與方案規則，並重新載入 VFS／Document、清除快取及重算。開啟的編輯器會為兩種類型顯示裝訂區圖示：marker 圖示在程式碼中導航，非侵入式圖示則開啟並定位對應 Tool Window 規則。
 - 有效的非侵入式規則也會在目標程式碼上一行顯示輕量 block inlay，並與登錄的程式碼位置對齊，外觀類似參數名稱提示。提示會顯示去重後的動態 key 數量，懸停可查看規則細節，點擊則定位到確切規則；失效座標不會被插入無關程式碼。
-- **實驗功能：**在「Settings → Tools → LanguageManager → 實驗功能 → 編輯器翻譯 key 快捷選單」開啟後，滑鼠移到可編輯編輯器中的翻譯 key 會顯示類似超連結的底線。Key 以作用中方案的使用率 Regex 偵測，只在方案 base path 內、未被排除的檔案生效（唯讀／顯示鎖頭的編輯器不顯示）。停留超過可調整的時間（預設 0.7 秒）後顯示快捷選單，以可捲動、不超出螢幕的 popup 列出所有語言的翻譯，並提供「在翻譯表中開啟」與「編輯翻譯」；尚未建立翻譯的 key 則顯示「建立翻譯」並預填 key。
+- **實驗功能：**在「Settings → Tools → LanguageManager」的「實驗功能」區段勾選「滑鼠停在編輯器中的翻譯 key 上時顯示翻譯快捷選單」後，滑鼠移到可編輯編輯器中的翻譯 key 會顯示類似超連結的底線。Key 以作用中方案的使用率 Regex 偵測，只在方案 base path 內、未被排除的檔案生效（唯讀／顯示鎖頭的編輯器不顯示）。停留超過可調整的時間（預設 0.7 秒）後顯示快捷選單，以可捲動、不超出螢幕的 popup 列出所有語言的翻譯，並提供「在翻譯表中開啟」與「編輯翻譯」；尚未建立翻譯的 key 則顯示「建立翻譯」並預填 key。
 - 雙擊翻譯 row 的「使用次數」cell 才會啟用按需載入的「使用位置」Tab；位置紀錄只保留於 backend，frontend 僅請求該 key 當頁最多 100 筆，開啟 row 時才計算及快取行／欄，再把 IDE 游標移到精確位置。
 - 預設使用率排除清單包含 `.git`、`.github`、`docs`、`vendor`、`storage`、`database`、`gradle`、`.gradle`、`build`、`out`、`dist`、`target`、`node_modules`，以及 `.idea`、`.fleet`、`.vs`、`.settings`、`.metadata`、`nbproject` 等 IDE 目錄，並允許使用者自訂。
 - 修復或刪除前顯示 IDE 雙欄 Diff；套用前驗證 SHA-256，避免覆蓋預覽後產生的外部修改。
@@ -123,8 +123,7 @@ flowchart LR
 | `localization/IssueVisibility.kt` | 根據全域偏好過濾重複值與可能未使用建議，共用於問題表、數量與批量操作 |
 | `localization/SchemeSettingsTransferDialog.kt` | 方案 JSON 安全讀寫、原子匯出與匯入逐檔預覽表格 |
 | `settings/LanguageManagerSettings.kt` | 持久化顯示語言、issue 顯示偏好、新方案 base path、Regex 與排除清單，並負責舊預設遷移 |
-| `settings/LanguageManagerSettingsConfigurable.kt` | IDE Settings 頁面；編輯插件語言、issue 顯示偏好與新方案預設 |
-| `settings/LanguageManagerExperimentalConfigurable.kt` | 「實驗功能」設定子頁面（編輯器 key 快捷選單開關與停留時間） |
+| `settings/LanguageManagerSettingsConfigurable.kt` | IDE Settings 頁面；編輯插件語言、issue 顯示偏好、「實驗功能」區段與新方案預設 |
 | `localization/EditorKeyHoverService.kt` | 實驗功能編輯器 key 快捷選單：滑鼠追蹤、超連結強調、停留計時、事件驅動的掃描快取與編輯／建立對話框 |
 | `localization/EditorKeyHoverPopup.kt`／`EditorKeyHoverSupport.kt` | 列出各語言翻譯與操作的 popup；可測試的編輯器資格、匹配查詢與螢幕尺寸限制邏輯 |
 | `localization/SchemeUsageSettingsDialog.kt` | Tool Window 目前方案的列管檔案、掃描路徑、Regex 與排除清單編輯視窗 |
