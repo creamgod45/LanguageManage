@@ -590,3 +590,4 @@ After a Marketplace update is uploaded, the current version section from [CHANGE
 | 1.8.2 | Properties base bundle gets its own `fallback` column | [#34](https://github.com/creamgod45/LanguageManage/issues/34) | [JetBrains/Java ResourceBundle Properties](#jetbrainsjava-resourcebundle-properties) |
 | 1.8.2 | Edit language notes in Scheme Settings | [#36](https://github.com/creamgod45/LanguageManage/issues/36) | [Add locale version](#add-locale-version) |
 | 1.9.0 | Experimental settings section and editor translation key hover | [#38](https://github.com/creamgod45/LanguageManage/issues/38) | [Editor translation key hover (experimental)](#editor-translation-key-hover-experimental) |
+| 1.9.1 | Language notes in Scheme Settings restored (missing from 1.9.0) | [#36](https://github.com/creamgod45/LanguageManage/issues/36) | [Add locale version](#add-locale-version) |

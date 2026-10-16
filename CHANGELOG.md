@@ -1,5 +1,19 @@
 # Language Manager Changelog
 
+## 1.9.1
+
+### English
+
+- Restore **Language notes** in **Scheme Settings** ([#36](https://github.com/creamgod45/LanguageManage/issues/36)), which were missing from 1.9.0 because the change had been merged into a side branch instead of main. Each loaded language (including `fallback`) has an optional note that AI translation receives as a hidden hint, for example "English (default fallback)"; notes can be edited at any time and cleared to remove them.
+- Build with Gradle 9.8.1.
+
+---
+
+### 繁體中文
+
+- 恢復「**方案設定**」的「**語言備註**」（[#36](https://github.com/creamgod45/LanguageManage/issues/36)）。1.9.0 缺少這項功能，原因是當時的修改被合併到其他分支，沒有進入 main。每個已載入的語言（包含 `fallback`）都可填寫選填備註，AI 翻譯時會作為隱藏提示傳入，例如「English（預設 fallback）」；備註可隨時編輯，清空即可移除。
+- 改用 Gradle 9.8.1 建置。
+
 ## 1.9.0
 
 ### English

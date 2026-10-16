@@ -590,3 +590,4 @@ Regex 命中、程式碼備註標記及已儲存的非侵入式規則會合併�
 | 1.8.2 | Properties base bundle 獨立顯示為 `fallback` 欄位 | [#34](https://github.com/creamgod45/LanguageManage/issues/34) | [JetBrains／Java ResourceBundle Properties](#jetbrainsjava-resourcebundle-properties) |
 | 1.8.2 | 在方案設定編輯語言備註 | [#36](https://github.com/creamgod45/LanguageManage/issues/36) | [新增語言版本](#新增語言版本) |
 | 1.9.0 | 實驗功能設定區段與編輯器翻譯 key 快捷選單 | [#38](https://github.com/creamgod45/LanguageManage/issues/38) | [編輯器翻譯 key 快捷選單（實驗功能）](#編輯器翻譯-key-快捷選單實驗功能) |
+| 1.9.1 | 恢復方案設定的語言備註（1.9.0 缺少） | [#36](https://github.com/creamgod45/LanguageManage/issues/36) | [新增語言版本](#新增語言版本) |
