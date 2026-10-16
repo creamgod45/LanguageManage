@@ -897,10 +897,15 @@ internal class LocalizationManagerPanel(
 
     private fun editSchemeSettings() {
         val scheme = activeScheme() ?: return showError(message("error.no.active.scheme"))
-        val dialog = SchemeUsageSettingsDialog(project, scheme)
+        val locales =
+            current.entries
+                .map { it.locale }
+                .filter(String::isNotBlank)
+                .distinct()
+        val dialog = SchemeUsageSettingsDialog(project, scheme, locales)
         if (dialog.showAndGet()) {
             val result = dialog.result()
-            runAction { repository.updateSchemeSettings(scheme.id, result.name, result.usageSettings) }
+            runAction { repository.updateSchemeSettings(scheme.id, result.name, result.usageSettings, result.localeNotes) }
         }
     }
 

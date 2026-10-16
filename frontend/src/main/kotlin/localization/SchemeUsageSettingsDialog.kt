@@ -10,6 +10,7 @@ import cg.creamgod45.localization.HARD_MAX_ENTRIES_PER_SCHEME
 import cg.creamgod45.localization.HARD_MAX_LANGUAGE_FILE_KB
 import cg.creamgod45.localization.HARD_MAX_LANGUAGE_SCHEME_MB
 import cg.creamgod45.localization.LanguageSchemeDto
+import cg.creamgod45.localization.MAX_LOCALE_NOTE_CHARS
 import cg.creamgod45.localization.MAX_SCHEME_NAME_LENGTH
 import cg.creamgod45.localization.UsageScanSettingsDto
 import cg.creamgod45.localization.normalizeSchemeName
@@ -23,6 +24,7 @@ import com.intellij.ui.components.JBList
 import com.intellij.ui.components.JBScrollPane
 import com.intellij.ui.components.JBTextArea
 import com.intellij.ui.components.JBTextField
+import com.intellij.ui.table.JBTable
 import com.intellij.util.ui.FormBuilder
 import com.intellij.util.ui.JBUI
 import java.awt.BorderLayout
@@ -35,15 +37,18 @@ import javax.swing.JComponent
 import javax.swing.JPanel
 import javax.swing.JSpinner
 import javax.swing.SpinnerNumberModel
+import javax.swing.table.DefaultTableModel
 
 internal data class SchemeSettingsResult(
     val name: String,
     val usageSettings: UsageScanSettingsDto,
+    val localeNotes: Map<String, String>,
 )
 
 internal class SchemeUsageSettingsDialog(
     private val dialogProject: Project,
     private val scheme: LanguageSchemeDto,
+    locales: Collection<String>,
 ) : DialogWrapper(dialogProject) {
     private val schemeNameField = JBTextField(scheme.name)
     private val filesArea =
@@ -62,6 +67,23 @@ internal class SchemeUsageSettingsDialog(
         JSpinner(SpinnerNumberModel(scheme.usageScanSettings.maxEntriesPerFile, 1, HARD_MAX_ENTRIES_PER_FILE, 1_000))
     private val maxEntriesPerSchemeSpinner =
         JSpinner(SpinnerNumberModel(scheme.usageScanSettings.maxEntriesPerScheme, 1, HARD_MAX_ENTRIES_PER_SCHEME, 5_000))
+    private val localeNotesModel =
+        object : DefaultTableModel(
+            arrayOf<Any>(message("settings.locale.notes.column.locale"), message("settings.locale.notes.column.note")),
+            0,
+        ) {
+            override fun isCellEditable(
+                row: Int,
+                column: Int,
+            ): Boolean = column == 1
+        }.apply { localeNoteRows(locales, scheme.localeNotes).forEach { (locale, note) -> addRow(arrayOf<Any>(locale, note)) } }
+    private val localeNotesTable =
+        JBTable(localeNotesModel).apply {
+            putClientProperty("terminateEditOnFocusLost", true)
+            emptyText.text = message("settings.locale.notes.empty")
+            columnModel.getColumn(0).preferredWidth = JBUI.scale(140)
+            columnModel.getColumn(1).preferredWidth = JBUI.scale(480)
+        }
 
     init {
         title = message("dialog.scheme.settings.title", scheme.name)
@@ -81,6 +103,7 @@ internal class SchemeUsageSettingsDialog(
                     maxEntriesPerFile = maxEntriesPerFileSpinner.value as Int,
                     maxEntriesPerScheme = maxEntriesPerSchemeSpinner.value as Int,
                 ),
+            localeNotes = editedLocaleNotes(localeNoteValues()),
         )
 
     override fun createCenterPanel(): JComponent {
@@ -128,6 +151,12 @@ internal class SchemeUsageSettingsDialog(
                         pathPicker = true,
                     ),
                 ).addTooltip(message("settings.usage.exclusions.help"))
+                .addLabeledComponent(
+                    message("settings.locale.notes"),
+                    JBScrollPane(localeNotesTable).apply {
+                        preferredSize = Dimension(JBUI.scale(620), JBUI.scale(140))
+                    },
+                ).addTooltip(message("settings.locale.notes.help", MAX_LOCALE_NOTE_CHARS))
                 .panel
         return JBScrollPane(panel).apply {
             border = JBUI.Borders.empty()
@@ -139,6 +168,9 @@ internal class SchemeUsageSettingsDialog(
         if (normalizeSchemeName(schemeNameField.text) == null) {
             return ValidationInfo(message("error.scheme.name.length", MAX_SCHEME_NAME_LENGTH), schemeNameField)
         }
+        localeNoteValues().firstOrNull { (_, note) -> !isValidLocaleNote(note) }?.let { (locale, _) ->
+            return ValidationInfo(message("settings.locale.notes.invalid", locale, MAX_LOCALE_NOTE_CHARS), localeNotesTable)
+        }
         return if ((maxEntriesPerFileSpinner.value as Int) > (maxEntriesPerSchemeSpinner.value as Int)) {
             ValidationInfo(message("settings.load.entries.order"), maxEntriesPerFileSpinner)
         } else {
@@ -147,6 +179,13 @@ internal class SchemeUsageSettingsDialog(
     }
 
     override fun getPreferredFocusedComponent(): JComponent = schemeNameField
+
+    private fun localeNoteValues(): List<Pair<String, String>> {
+        if (localeNotesTable.isEditing) localeNotesTable.cellEditor?.stopCellEditing()
+        return (0 until localeNotesModel.rowCount).map { row ->
+            localeNotesModel.getValueAt(row, 0).toString() to localeNotesModel.getValueAt(row, 1)?.toString().orEmpty()
+        }
+    }
 
     private fun chooseBasePath() {
         val descriptor =
@@ -316,6 +355,18 @@ private class BulkExclusionDialog(
             preferredSize = Dimension(JBUI.scale(560), JBUI.scale(220))
         }
 }
+
+/** Rows for the language-notes table: every loaded locale plus any locale that already has a note, so stale notes can be cleared. */
+internal fun localeNoteRows(
+    locales: Collection<String>,
+    notes: Map<String, String>,
+): List<Pair<String, String>> = (locales + notes.keys).distinct().sorted().map { it to notes[it].orEmpty() }
+
+/** Trimmed notes keyed by locale; blank notes are dropped, which removes them from the scheme. */
+internal fun editedLocaleNotes(rows: List<Pair<String, String>>): Map<String, String> =
+    rows.associate { (locale, note) -> locale to note.trim() }.filterValues(String::isNotBlank)
+
+internal fun isValidLocaleNote(note: String): Boolean = note.trim().let { it.length <= MAX_LOCALE_NOTE_CHARS && it.none(Char::isISOControl) }
 
 internal fun parseBulkListValues(input: String): List<String> =
     input
