@@ -121,12 +121,15 @@ lang/zh_TW/validation.php  -> locale: zh_TW, namespace: validation
 
 ### JetBrains/Java ResourceBundle Properties
 
-The base filename is the namespace. A bundle without a locale suffix is treated as English:
+The base filename is the namespace. A bundle without a locale suffix is the ResourceBundle fallback and gets its own `fallback` column, so it never merges with an explicit `_en` file:
 
 ```text
-LanguageManagerBundle.properties        -> locale: en, namespace: LanguageManagerBundle
+LanguageManagerBundle.properties        -> locale: fallback, namespace: LanguageManagerBundle
+LanguageManagerBundle_en.properties     -> locale: en, namespace: LanguageManagerBundle
 LanguageManagerBundle_zh_TW.properties  -> locale: zh_TW, namespace: LanguageManagerBundle
 ```
+
+`fallback` is reserved: it cannot be used as the name of a new language version. AI translation and Create Translation from Editor Selection use `en` as the default source and fall back to `fallback` when a scheme has no `en` column.
 
 ## 5. Using the Translation Table
 
@@ -584,4 +587,5 @@ After a Marketplace update is uploaded, the current version section from [CHANGE
 | 1.8.1 | Saving a value keeps the original file text | [#26](https://github.com/creamgod45/LanguageManage/issues/26) | [Saving keeps the original file text](#saving-keeps-the-original-file-text) |
 | 1.8.1 | Namespaces filter for schemes with several namespaces | [#27](https://github.com/creamgod45/LanguageManage/issues/27) | [Visible columns and context menu](#visible-columns-and-context-menu) |
 | 1.8.1 | Open a tool window view in an editor tab | [#29](https://github.com/creamgod45/LanguageManage/issues/29) | [Open in an editor tab](#open-in-an-editor-tab) |
+| 1.8.2 | Properties base bundle gets its own `fallback` column | [#34](https://github.com/creamgod45/LanguageManage/issues/34) | [JetBrains/Java ResourceBundle Properties](#jetbrainsjava-resourcebundle-properties) |
 | 1.9.0 | Experimental settings section and editor translation key hover | [#38](https://github.com/creamgod45/LanguageManage/issues/38) | [Editor translation key hover (experimental)](#editor-translation-key-hover-experimental) |

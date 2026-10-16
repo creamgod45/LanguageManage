@@ -46,6 +46,36 @@ class TranslationEditorSupportTest {
     }
 
     @Test
+    fun `resource bundle base and explicit English files stay separate edit targets`() {
+        val root = Path.of("workspace", "messages").toAbsolutePath()
+        val files = listOf("messages.properties", "messages_en.properties", "messages_zh_TW.properties").map { root.resolve(it).toString() }
+        val scheme = LanguageSchemeDto("scheme", "Bundle", files, 1)
+        val entries =
+            listOf(
+                LanguageEntryDto("1", "scheme", files[0], "fallback", "messages", "greeting", "Hello fallback"),
+                LanguageEntryDto("2", "scheme", files[1], "en", "messages", "greeting", "Hello"),
+            )
+
+        val targets = TranslationEditorSupport.targets(scheme, entries)
+
+        assertEquals(
+            listOf("en" to files[1], "fallback" to files[0], "zh_TW" to files[2]),
+            targets.map { it.locale to it.filePath },
+        )
+    }
+
+    @Test
+    fun `infers BCP 47 resource bundle locales for empty files like the backend`() {
+        val root = Path.of("workspace", "messages").toAbsolutePath()
+        val files = listOf("messages_zh-Hant.properties", "messages_es-419.properties").map { root.resolve(it).toString() }
+
+        val targets = TranslationEditorSupport.targets(LanguageSchemeDto("scheme", "Bundle", files, 1), emptyList())
+
+        assertEquals(listOf("es-419", "zh-Hant"), targets.map { it.locale })
+        assertEquals(setOf("messages"), targets.map { it.namespace }.toSet())
+    }
+
+    @Test
     fun `infers resource bundle locale and namespace for empty files`() {
         val root = Path.of("workspace", "messages").toAbsolutePath()
         val files =
@@ -57,7 +87,7 @@ class TranslationEditorSupportTest {
 
         val targets = TranslationEditorSupport.targets(scheme, emptyList())
 
-        assertEquals(listOf("en", "ja"), targets.map { it.locale })
+        assertEquals(listOf("fallback", "ja"), targets.map { it.locale })
         assertEquals(setOf("LanguageManagerBundle"), targets.map { it.namespace }.toSet())
     }
 

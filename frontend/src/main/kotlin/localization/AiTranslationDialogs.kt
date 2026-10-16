@@ -3,6 +3,7 @@ package cg.creamgod45.localization.ui
 import cg.creamgod45.LanguageManagerBundle.message
 import cg.creamgod45.localization.AiTranslationSuggestionDto
 import cg.creamgod45.localization.JoinedTranslationRow
+import cg.creamgod45.localization.preferredSourceLocale
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.ComboBox
 import com.intellij.openapi.ui.DialogWrapper
@@ -58,7 +59,10 @@ internal class AiTranslationRequestDialog(
 
     init {
         title = message("dialog.ai.translation.title")
-        source.selectedIndex = sourceChoices.indexOfFirst { it.locale?.equals("en", true) == true }.takeIf { it >= 0 } ?: 0
+        source.selectedIndex =
+            preferredSourceLocale(locales)
+                ?.let { preferred -> sourceChoices.indexOfFirst { it.locale == preferred } }
+                ?.takeIf { it >= 0 } ?: 0
         source.addActionListener { refreshTargetsAndPreview(false) }
         refreshTargetsAndPreview(true)
         init()
