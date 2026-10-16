@@ -6,7 +6,9 @@ import cg.creamgod45.localization.IssueSeverity
 import cg.creamgod45.localization.LanguageFileCandidateDto
 import cg.creamgod45.localization.LanguageIssueDto
 import cg.creamgod45.localization.LanguageLoadBudget
+import cg.creamgod45.localization.PROPERTIES_FALLBACK_LOCALE
 import cg.creamgod45.localization.UsageScanSettingsDto
+import cg.creamgod45.localization.propertiesBundleIdentity
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.ModalityState
 import com.intellij.openapi.fileEditor.FileDocumentManager
@@ -43,7 +45,6 @@ internal data class ParsedLanguageFile(
     val issues: MutableList<LanguageIssueDto> = mutableListOf(),
 )
 
-private val PROPERTIES_LOCALE_SUFFIX = Regex("^(.+)_([a-z]{2,3}(?:[-_](?:[A-Za-z]{2,4}|[0-9]{3}))*)$")
 private val PHP_LOCALE_DIRECTORY = Regex("^[A-Za-z]{2,3}(?:[-_](?:[A-Za-z]{2,4}|[0-9]{3}))*$")
 
 private data class PhpFileIdentity(
@@ -72,11 +73,7 @@ private fun phpIdentity(path: Path): PhpFileIdentity {
     )
 }
 
-private fun propertiesIdentity(path: Path): Pair<String, String> {
-    val stem = path.nameWithoutExtension
-    val match = PROPERTIES_LOCALE_SUFFIX.matchEntire(stem)
-    return if (match == null) stem to "en" else match.groupValues[1] to match.groupValues[2]
-}
+private fun propertiesIdentity(path: Path): Pair<String, String> = propertiesBundleIdentity(path.nameWithoutExtension)
 
 internal object SafeLanguageFileAccess {
     private const val MAX_FILE_BYTES = 10L * 1024 * 1024
@@ -364,7 +361,11 @@ internal object LanguageLocaleVersionSupport {
         targetLocale: String,
     ): List<LocaleVersionTarget> {
         require(sourceLocale.matches(localePattern)) { backendMessage("locale.invalid") }
-        require(targetLocale.matches(localePattern) && targetLocale.uppercase() !in windowsDevices) { backendMessage("locale.invalid") }
+        require(
+            targetLocale.matches(localePattern) &&
+                targetLocale.uppercase() !in windowsDevices &&
+                !targetLocale.equals(PROPERTIES_FALLBACK_LOCALE, ignoreCase = true),
+        ) { backendMessage("locale.invalid") }
         require(!sourceLocale.equals(targetLocale, ignoreCase = true)) { backendMessage("locale.version.same") }
         require(
             documents.none { it.locale.equals(targetLocale, ignoreCase = true) },
@@ -545,9 +546,7 @@ internal object LanguageNamespaceFileSupport {
         val parent = reference.path.parent ?: error(backendMessage("locale.version.path.invalid"))
         val family = documents.filter { it.path.extension.equals("properties", true) && it.path.parent == parent }
         return family.map { it.locale }.distinct().map { locale ->
-            val usesUnsuffixedEnglish =
-                locale == "en" && family.any { it.locale == locale && it.path.nameWithoutExtension == it.namespace }
-            val fileName = if (usesUnsuffixedEnglish) "$namespace.properties" else "${namespace}_$locale.properties"
+            val fileName = if (locale == PROPERTIES_FALLBACK_LOCALE) "$namespace.properties" else "${namespace}_$locale.properties"
             emptyTarget(parent.resolve(fileName), locale, namespace)
         }
     }

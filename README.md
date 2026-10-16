@@ -109,7 +109,7 @@ The root project uses the IntelliJ Platform Gradle Plugin to assemble three cont
 
 | File | Purpose |
 | --- | --- |
-| `LocalizationModels.kt` | Scheme, locale-note, entry, issue, usage-default, row-filter, folder-recognition, AI-request, mutation, and Diff-preview DTOs |
+| `LocalizationModels.kt` | Scheme, locale-note, entry, issue, usage-default, row-filter, folder-recognition, AI-request, mutation, and Diff-preview DTOs; shared ResourceBundle locale rules (`PROPERTIES_FALLBACK_LOCALE`, `propertiesBundleIdentity()` used by both the backend parser and frontend dialogs, and `preferredSourceLocale()`) |
 | `LocalizationManagerRpcApi.kt` | Shared `@Rpc` contract; every remote call identifies its project with `ProjectId` |
 | `EntrySearch.kt` | Pure search, `namespace + key` JOIN, missing/zero-usage filters, and pagination capped at 100 rows |
 
@@ -285,7 +285,7 @@ sequenceDiagram
 - Literal dots in sentence-style JSON keys are preserved through `keyPaths` and do not create accidental nesting.
 - YAML supports space-indented `key: value` pairs and nested maps; tab indentation is rejected.
 - PHP parses strings, numbers, booleans, nested arrays, static string concatenation, and multiline heredoc/nowdoc values inside `return [...]` or `return array(...)`. For example, `'first'."\n\n".'second'` becomes one translation value. A heredoc/nowdoc delimiter is not fixed to `TEXT`; any matching valid PHP identifier such as `EOT`, `HTML`, or `MESSAGE_2026` works with `<<<LABEL`, `<<<"LABEL"`, or `<<<'LABEL'`. The identifier only marks the string boundary and does not determine its content type. Variables, interpolation, functions, and arbitrary expressions are rejected and never executed. When files are grouped below a language directory, `en/components/pagination.php` is identified as locale `en` and namespace `components.pagination`.
-- Properties supports Java ResourceBundle comments, separators, continuations, and escaping. The base bundle is treated as English; `Bundle_zh_TW.properties` derives locale `zh_TW` and namespace `Bundle`.
+- Properties supports Java ResourceBundle comments, separators, continuations, and escaping. The base bundle without a locale suffix is shown as its own `fallback` column (never merged with `Bundle_en.properties`); `Bundle_zh_TW.properties` derives locale `zh_TW` and namespace `Bundle`.
 - `lang/en.json` derives locale `en` with an empty namespace.
 - `lang/en/messages.php` derives locale `en` and namespace `messages`.
 

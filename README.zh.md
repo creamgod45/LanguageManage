@@ -104,7 +104,7 @@ flowchart LR
 
 | 檔案 | 關鍵資訊 |
 | --- | --- |
-| `LocalizationModels.kt` | 方案、locale 備註、entry、issue、使用率預設、翻譯 row filter、AI request、資料夾識別結果、mutation 與 Diff preview DTO |
+| `LocalizationModels.kt` | 方案、locale 備註、entry、issue、使用率預設、翻譯 row filter、AI request、資料夾識別結果、mutation 與 Diff preview DTO；共用的 ResourceBundle locale 規則（`PROPERTIES_FALLBACK_LOCALE`、backend parser 與 frontend 對話框共用的 `propertiesBundleIdentity()`，以及 `preferredSourceLocale()`） |
 | `LocalizationManagerRpcApi.kt` | frontend/backend 共用的 `@Rpc` 契約，所有遠端呼叫以 `ProjectId` 定位專案 |
 | `EntrySearch.kt` | 純函式形式的搜尋、`namespace + key` JOIN、缺少翻譯／零使用次數篩選及最多 100 列分頁 |
 
@@ -279,7 +279,7 @@ sequenceDiagram
 - JSON 句子型 key 中的字面句點會透過 `keyPaths` 保留，不會誤建巢狀物件。
 - YAML 支援以空白縮排的 `key: value` 與巢狀 map；不接受 tab 縮排。
 - PHP 可解析 `return [...]` 或 `return array(...)` 中的字串、數字、布林值、巢狀 array、靜態字串串接及多行 heredoc／nowdoc；例如 `'第一段'."\n\n".'第二段'` 會合併為單一翻譯值。heredoc／nowdoc 識別字並非固定為 `TEXT`，`EOT`、`HTML`、`MESSAGE_2026` 等任何前後一致的合法 PHP identifier，搭配 `<<<LABEL`、`<<<"LABEL"` 或 `<<<'LABEL'` 都可使用；名稱只負責標示字串邊界，不代表內容類型。變數、interpolation、函式及任意 expression 仍會拒絕且絕不執行。語言目錄下依分類建立子目錄時，`en/components/pagination.php` 會辨識為 locale `en`、namespace `components.pagination`。
-- Properties 支援 Java ResourceBundle 的註解、分隔符、續行及跳脫；base bundle 視為英文，`Bundle_zh_TW.properties` 推導 locale 為 `zh_TW`、namespace 為 `Bundle`。
+- Properties 支援 Java ResourceBundle 的註解、分隔符、續行及跳脫；沒有 locale 後綴的 base bundle 獨立顯示為 `fallback` 欄位（不會與 `Bundle_en.properties` 合併），`Bundle_zh_TW.properties` 推導 locale 為 `zh_TW`、namespace 為 `Bundle`。
 - `lang/en.json` 推導 locale 為 `en`、namespace 為空。
 - `lang/en/messages.php` 推導 locale 為 `en`、namespace 為 `messages`。
 
