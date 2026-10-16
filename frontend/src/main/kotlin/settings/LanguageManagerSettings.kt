@@ -73,6 +73,10 @@ internal class LanguageManagerSettings : PersistentStateComponent<LanguageManage
 
         // Missing in settings saved before 1.8.0, so existing users keep the default (enabled).
         var quickInlineEditEnabled: Boolean = true
+
+        // Experimental features (issue #38): off until the user opts in on the Experimental settings page.
+        var editorKeyHoverEnabled: Boolean = false
+        var editorKeyHoverDelayMs: Int = DEFAULT_EDITOR_KEY_HOVER_DELAY_MS
         var aiProvider: String = AiProviderType.OPENAI_COMPATIBLE.name
         var aiEndpoint: String = "https://api.openai.com/v1/chat/completions"
         var aiModel: String = ""
@@ -155,6 +159,18 @@ internal class LanguageManagerSettings : PersistentStateComponent<LanguageManage
             settingsState.quickInlineEditEnabled = value
         }
 
+    var editorKeyHoverEnabled: Boolean
+        get() = settingsState.editorKeyHoverEnabled
+        set(value) {
+            settingsState.editorKeyHoverEnabled = value
+        }
+
+    var editorKeyHoverDelayMs: Int
+        get() = normalizeEditorKeyHoverDelayMs(settingsState.editorKeyHoverDelayMs)
+        set(value) {
+            settingsState.editorKeyHoverDelayMs = normalizeEditorKeyHoverDelayMs(value)
+        }
+
     var aiProvider: AiProviderType
         get() = runCatching { AiProviderType.valueOf(settingsState.aiProvider) }.getOrDefault(AiProviderType.OPENAI_COMPATIBLE)
         set(value) {
@@ -211,9 +227,29 @@ internal class LanguageManagerSettings : PersistentStateComponent<LanguageManage
         fun quickInlineEditEnabled(): Boolean =
             ApplicationManager.getApplication()?.getService(LanguageManagerSettings::class.java)?.quickInlineEditEnabled ?: true
 
+        /** Read on every mouse move, so toggling the experimental hover applies to open editors immediately. */
+        fun editorKeyHoverEnabled(): Boolean =
+            ApplicationManager.getApplication()?.getService(LanguageManagerSettings::class.java)?.editorKeyHoverEnabled ?: false
+
+        fun editorKeyHoverDelayMs(): Int =
+            ApplicationManager.getApplication()?.getService(LanguageManagerSettings::class.java)?.editorKeyHoverDelayMs
+                ?: DEFAULT_EDITOR_KEY_HOVER_DELAY_MS
+
         fun getInstance(): LanguageManagerSettings = ApplicationManager.getApplication().getService(LanguageManagerSettings::class.java)
     }
 }
+
+internal const val DEFAULT_EDITOR_KEY_HOVER_DELAY_MS = 700
+internal const val MIN_EDITOR_KEY_HOVER_DELAY_MS = 200
+internal const val MAX_EDITOR_KEY_HOVER_DELAY_MS = 5_000
+
+internal fun normalizeEditorKeyHoverDelayMs(value: Int): Int = value.coerceIn(MIN_EDITOR_KEY_HOVER_DELAY_MS, MAX_EDITOR_KEY_HOVER_DELAY_MS)
+
+/** The settings page edits the hover delay in seconds with one decimal; storage keeps whole milliseconds. */
+internal fun editorKeyHoverDelayMsFromSeconds(seconds: Double): Int =
+    if (seconds.isFinite()) normalizeEditorKeyHoverDelayMs(Math.round(seconds * 1_000).toInt()) else DEFAULT_EDITOR_KEY_HOVER_DELAY_MS
+
+internal fun editorKeyHoverDelaySeconds(milliseconds: Int): Double = normalizeEditorKeyHoverDelayMs(milliseconds) / 1_000.0
 
 internal fun resolveDefaultBasePath(
     projectBasePath: String?,

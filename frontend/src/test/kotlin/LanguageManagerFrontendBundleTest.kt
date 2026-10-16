@@ -24,6 +24,14 @@ class LanguageManagerFrontendBundleTest {
             assertEquals("Rust i18n", localized.getProperty("settings.regex.preset.rust.i18n"), locale)
             assertNotEquals(english.getProperty("tab.issues"), localized.getProperty("tab.issues"), locale)
             assertNotEquals(english.getProperty("action.dropdown"), localized.getProperty("action.dropdown"), locale)
+            // Experimental editor key hover (issue #38).
+            listOf(
+                "editor.hover.action.create",
+                "editor.hover.action.edit",
+                "editor.hover.action.open.table",
+                "settings.experimental.editor.hover",
+            ).forEach { key -> assertNotEquals(english.getProperty(key), localized.getProperty(key), "$locale $key") }
+            assertEquals(english.getProperty("editor.hover.row.identity"), localized.getProperty("editor.hover.row.identity"), locale)
         }
     }
 

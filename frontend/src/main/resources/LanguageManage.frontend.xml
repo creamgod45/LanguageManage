@@ -19,6 +19,7 @@
         <fileEditorProvider implementation="cg.creamgod45.toolWindow.LanguageManagerFileEditorProvider"/>
         <notificationGroup id="LanguageManager" displayType="BALLOON"/>
         <postStartupActivity implementation="cg.creamgod45.localization.ui.DynamicSourceGutterStartupActivity"/>
+        <postStartupActivity implementation="cg.creamgod45.localization.ui.EditorKeyHoverStartupActivity"/>
     </extensions>
 
     <actions>

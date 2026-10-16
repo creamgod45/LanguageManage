@@ -78,4 +78,21 @@ class LocalizationModelsTest {
         assertEquals(mapOf("es-MX" to "formal"), restored.localeNotes)
         assertTrue(oldPortable.localeNotes.isEmpty())
     }
+
+    @Test
+    fun `editor key scan results round trip and default to no matches`() {
+        val result =
+            EditorKeyScanResultDto(
+                EditorKeyScanStatus.OK,
+                listOf(EditorKeyMatchDto(4, 20, "messages.welcome", listOf(EditorKeyTargetDto("messages", "welcome")))),
+            )
+
+        assertEquals(
+            result,
+            Json.decodeFromString<EditorKeyScanResultDto>(Json.encodeToString(EditorKeyScanResultDto.serializer(), result)),
+        )
+        val excluded = Json.decodeFromString<EditorKeyScanResultDto>("""{"status":"EXCLUDED"}""")
+        assertTrue(excluded.matches.isEmpty())
+        assertEquals(false, excluded.truncated)
+    }
 }

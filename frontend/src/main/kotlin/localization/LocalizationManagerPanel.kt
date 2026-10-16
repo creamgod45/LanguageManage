@@ -498,7 +498,37 @@ internal class LocalizationManagerPanel(
                 tabs.selectedIndex = 3
                 dynamicSourcePanel.focusRule(command.ruleId)
             }
+
+            is LocalizationUiCommand.FocusTranslation -> {
+                focusTranslation(command.namespace, command.key)
+            }
         }
+    }
+
+    private fun focusTranslation(
+        namespace: String,
+        key: String,
+    ) {
+        excludedNamespaces.remove(namespace)
+        updateNamespaceFilter()
+        updatingFilters = true
+        try {
+            searchMode.selectedItem = SearchMode.EXACT
+            rowFilterBox.selectedItem = TranslationRowFilter.ALL
+            localeBox.selectedItem = message("filter.locale.all")
+        } finally {
+            updatingFilters = false
+        }
+        searchField.text = key
+        tabs.selectedIndex = 0
+        applyFilter()
+        val modelRow = entryModel.items.indexOfFirst { it.namespace == namespace && it.key == key }
+        if (modelRow < 0) return
+        val viewRow = entryTable.convertRowIndexToView(modelRow)
+        if (viewRow < 0) return
+        entryTable.setRowSelectionInterval(viewRow, viewRow)
+        entryTable.scrollRectToVisible(entryTable.getCellRect(viewRow, 0, true))
+        entryTable.requestFocusInWindow()
     }
 
     private fun refreshStatus(issues: List<LanguageIssueDto> = displayedIssues(current.issues)) {

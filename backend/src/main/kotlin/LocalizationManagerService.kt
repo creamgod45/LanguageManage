@@ -464,6 +464,42 @@ class LocalizationManagerService(
             resolved
         }
 
+    /**
+     * Experimental editor key hover (issue #38). Read-only and lock-free: it reads the latest published state, so a
+     * long scheme load never blocks mouse hovers. Mutations stay serialized by [mutex].
+     */
+    fun scanEditorKeys(
+        schemeId: String,
+        request: EditorKeyScanRequestDto,
+    ): EditorKeyScanResultDto {
+        val state = mutableState.value
+        val scheme = state.schemes.firstOrNull { it.id == schemeId }
+        if (scheme == null || state.activeSchemeId != schemeId) return EditorKeyScanResultDto(EditorKeyScanStatus.NOT_ACTIVE)
+        if (state.busy && state.entries.isEmpty()) return EditorKeyScanResultDto(EditorKeyScanStatus.LOADING)
+        if (request.text.length > MAX_EDITOR_KEY_SCAN_CHARS) return EditorKeyScanResultDto(EditorKeyScanStatus.UNSUPPORTED)
+        val file =
+            runCatching { SafeLanguageFileAccess.validateSourceFile(request.filePath) }.getOrNull()
+                ?: return EditorKeyScanResultDto(EditorKeyScanStatus.UNSUPPORTED)
+        val root =
+            runCatching { usageScanRoot(scheme) }.getOrNull()
+                ?: return EditorKeyScanResultDto(EditorKeyScanStatus.OUTSIDE_BASE_PATH)
+        val settings = scheme.usageScanSettings
+        val status = UsageScanSupport.sourceFileStatus(root, file, scheme.files, settings)
+        if (status != EditorKeyScanStatus.OK) return EditorKeyScanResultDto(status)
+        return EditorKeyScanSupport.scan(request.text, editorKeyPatterns(settings.regexPatterns), state.entries)
+    }
+
+    @Volatile
+    private var compiledEditorKeyPatterns: Pair<List<String>, List<Regex>> = emptyList<String>() to emptyList()
+
+    private fun editorKeyPatterns(patterns: List<String>): List<Regex> {
+        val cached = compiledEditorKeyPatterns
+        if (cached.first == patterns) return cached.second
+        val compiled = patterns.mapNotNull { runCatching { Regex(it) }.getOrNull() }
+        compiledEditorKeyPatterns = patterns to compiled
+        return compiled
+    }
+
     suspend fun usageLocations(
         schemeId: String,
         entryIds: List<String>,

@@ -455,6 +455,19 @@ The scanner applies the scheme Regex to the complete content of every regular fi
 
 The **Usage Locations** tab is disabled and empty by default, so ordinary scheme loading does not build a Swing table for unused location records. Location records remain in the backend and are not included in the normal state Flow. Double-click the **Usage** cell of one translation row to select that logical `namespace + key`, enable the tab, and request only its current page from the backend. The table shows source file, line, column, and occurrences with at most 100 rows per RPC page. Initially line and column say **On open**: the scan caches only the character offset and source modification time. Double-click a location or click **Open Location** to calculate line/column in the backend, cache the result, and navigate the IDE caret. If the source changed after scanning, the plugin refuses the stale offset and asks for a reload.
 
+### Editor translation key hover (experimental)
+
+This feature is experimental and off by default. Turn it on with **Show a translation menu when hovering a translation key in the editor** in the **Experimental** section of **Settings → Tools → LanguageManager**; the same section sets the **Hover delay** (default 0.7 seconds, 0.2–5 seconds).
+
+- It works only in writable main editors. Read-only files (the editor tab shows a lock), viewers, Diff, console, and preview editors are skipped.
+- A scheme must be active, and the file must be inside the scheme **Scan base path**, not excluded by its file/folder exclusions, and not one of the scheme's language files.
+- The file text is matched with the active scheme's **Usage detection regular expressions**, using the same `(?<key>...)` / first-group rule and the same `namespace.key`, `namespace/with/slashes.key`, and `package::` resolution as the usage scan. The scan runs in the backend and is requested only when the mouse moves over an editor whose result is out of date.
+- Moving the mouse over a matched key underlines it like a link. After the hover delay, a menu shows every language's translation of that key. Long or many translations scroll inside the menu, which never grows beyond about 560×420 pixels or the screen.
+  - **Open in Translation Table** shows the Language Manager tool window, filters the table to the key, and selects its row.
+  - **Edit Translation** opens the usual edit dialog for all languages.
+  - A key without translations shows **Create Translation** instead; the add dialog opens with the key (and a recognized `namespace.` prefix) prefilled.
+- Typing, scrolling, clicking elsewhere, or pressing Esc closes the menu.
+
 ### Excluded files and directories
 
 Defaults include:
@@ -561,7 +574,7 @@ Before submitting, remove passwords, tokens, client names, and other sensitive c
 
 After a Marketplace update is uploaded, the current version section from [CHANGELOG.md](../CHANGELOG.md) is displayed in the plugin page’s **What’s New** section and in the IDE Plugin Manager. The build generates this metadata directly from the matching version instead of maintaining a separate summary.
 
-### Changes in 1.8.x and where they are described
+### Changes in 1.8.x–1.9.x and where they are described
 
 | Version | Change | Issue | Manual section |
 |---|---|---|---|
@@ -575,3 +588,4 @@ After a Marketplace update is uploaded, the current version section from [CHANGE
 | 1.8.1 | Namespaces filter for schemes with several namespaces | [#27](https://github.com/creamgod45/LanguageManage/issues/27) | [Visible columns and context menu](#visible-columns-and-context-menu) |
 | 1.8.1 | Open a tool window view in an editor tab | [#29](https://github.com/creamgod45/LanguageManage/issues/29) | [Open in an editor tab](#open-in-an-editor-tab) |
 | 1.8.2 | Properties base bundle gets its own `fallback` column | [#34](https://github.com/creamgod45/LanguageManage/issues/34) | [JetBrains/Java ResourceBundle Properties](#jetbrainsjava-resourcebundle-properties) |
+| 1.9.0 | Experimental settings section and editor translation key hover | [#38](https://github.com/creamgod45/LanguageManage/issues/38) | [Editor translation key hover (experimental)](#editor-translation-key-hover-experimental) |

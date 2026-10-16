@@ -1,6 +1,7 @@
 package cg.creamgod45
 
 import cg.creamgod45.localization.DynamicSourceRuleDto
+import cg.creamgod45.localization.EditorKeyScanStatus
 import cg.creamgod45.localization.HARD_MAX_ENTRIES_PER_FILE
 import cg.creamgod45.localization.HARD_MAX_ENTRIES_PER_SCHEME
 import cg.creamgod45.localization.HARD_MAX_LANGUAGE_FILE_KB
@@ -144,17 +145,7 @@ internal object UsageScanSupport {
         val counts = entries.associate { it.id to 0 }.toMutableMap()
         val locationCounts = linkedMapOf<UsageLocationKey, Int>()
         var locationsTruncated = false
-        val needleOwners = mutableMapOf<String, MutableSet<String>>()
-        entries.forEach { entry ->
-            cancellationCheck()
-            setOf(
-                entry.key,
-                if (entry.namespace.isBlank()) entry.key else "${entry.namespace}.${entry.key}",
-                if (entry.namespace.isBlank()) entry.key else "${entry.namespace.replace('.', '/')}.${entry.key}",
-            ).forEach { needle ->
-                needleOwners.getOrPut(needle) { linkedSetOf() } += entry.id
-            }
-        }
+        val keyIndex = UsageKeyIndex(entries, cancellationCheck)
 
         fun record(
             candidate: String,
@@ -162,12 +153,7 @@ internal object UsageScanSupport {
             offset: Int,
             modifiedAt: Long,
         ) {
-            val matchingIds =
-                buildSet {
-                    addAll(needleOwners[candidate].orEmpty())
-                    if ("::" in candidate) addAll(needleOwners[candidate.substringAfter("::")].orEmpty())
-                }
-            matchingIds.forEach { id ->
+            keyIndex.owners(candidate).forEach { id ->
                 counts[id] = counts.getValue(id) + 1
                 val key = UsageLocationKey(id, file.toString(), offset, modifiedAt)
                 if (key in locationCounts || locationCounts.size < MAX_USAGE_LOCATION_RECORDS) {
@@ -249,6 +235,33 @@ internal object UsageScanSupport {
         return count
     }
 
+    /**
+     * Whether [file] is one the usage scan would read: inside [root], not excluded by
+     * [UsageScanSettingsDto.excludedDirectories] (the file itself or any folder between [root] and it), and not one of
+     * the scheme's [languageFiles]. Both paths must already be real paths, as the scan walker sees them.
+     */
+    fun sourceFileStatus(
+        root: Path,
+        file: Path,
+        languageFiles: List<String>,
+        settings: UsageScanSettingsDto,
+    ): EditorKeyScanStatus {
+        if (file == root || !file.startsWith(root)) return EditorKeyScanStatus.OUTSIDE_BASE_PATH
+        val exclusions = UsagePathExclusions(root, settings.excludedDirectories)
+        var directory = file.parent
+        while (directory != null && directory != root) {
+            if (exclusions.excludesDirectory(directory)) return EditorKeyScanStatus.EXCLUDED
+            directory = directory.parent
+        }
+        if (exclusions.excludesFile(file)) return EditorKeyScanStatus.EXCLUDED
+        val isLanguageFile =
+            languageFiles.any { raw ->
+                val configured = runCatching { Path.of(raw).toAbsolutePath().normalize() }.getOrNull() ?: return@any false
+                configured == file || runCatching { configured.toRealPath() }.getOrNull() == file
+            }
+        return if (isLanguageFile) EditorKeyScanStatus.LANGUAGE_FILE else EditorKeyScanStatus.OK
+    }
+
     private fun walkCandidateFiles(
         root: Path,
         languageFiles: List<String>,
@@ -286,8 +299,8 @@ internal object UsageScanSupport {
         )
     }
 
-    private fun extractCandidateOccurrences(
-        line: String,
+    internal fun extractCandidateOccurrences(
+        line: CharSequence,
         patterns: List<Regex>,
         cancellationCheck: () -> Unit,
     ): Set<CandidateOccurrence> =
@@ -296,15 +309,18 @@ internal object UsageScanSupport {
                 cancellationCheck()
                 pattern.findAll(line).forEach { match ->
                     cancellationCheck()
-                    val named = runCatching { match.groups["key"] }.getOrNull()
-                    val capturedGroup = named ?: (1 until match.groups.size).firstNotNullOfOrNull { match.groups[it] }
-                    val captured = capturedGroup?.value ?: match.value
-                    if (captured.length in 1..256) {
-                        add(CandidateOccurrence(captured, capturedGroup?.range ?: match.range))
-                    }
+                    candidateOf(match)?.let(::add)
                 }
             }
         }
+
+    /** The `key` named group, else the first participating group, else the whole match; `null` when too long. */
+    internal fun candidateOf(match: MatchResult): CandidateOccurrence? {
+        val named = runCatching { match.groups["key"] }.getOrNull()
+        val capturedGroup = named ?: (1 until match.groups.size).firstNotNullOfOrNull { match.groups[it] }
+        val captured = capturedGroup?.value ?: match.value
+        return if (captured.length in 1..256) CandidateOccurrence(captured, capturedGroup?.range ?: match.range) else null
+    }
 
     private fun readTextCancellable(
         file: Path,
@@ -322,17 +338,47 @@ internal object UsageScanSupport {
             }
         }
 
-    private data class CandidateOccurrence(
-        val candidate: String,
-        val range: IntRange,
-    )
-
     private data class UsageLocationKey(
         val entryId: String,
         val filePath: String,
         val offset: Int,
         val sourceModifiedAtEpochMs: Long,
     )
+}
+
+internal data class CandidateOccurrence(
+    val candidate: String,
+    val range: IntRange,
+)
+
+/**
+ * Resolves a usage-regex capture to the entries it refers to. A capture matches an entry by its bare key,
+ * `namespace.key`, or `namespace/with/slashes.key`; a `package::` prefix (Laravel package translations) is ignored.
+ */
+internal class UsageKeyIndex(
+    entries: List<LanguageEntryDto>,
+    cancellationCheck: () -> Unit = {},
+) {
+    private val needleOwners = hashMapOf<String, MutableSet<String>>()
+
+    init {
+        entries.forEach { entry ->
+            cancellationCheck()
+            setOf(
+                entry.key,
+                if (entry.namespace.isBlank()) entry.key else "${entry.namespace}.${entry.key}",
+                if (entry.namespace.isBlank()) entry.key else "${entry.namespace.replace('.', '/')}.${entry.key}",
+            ).forEach { needle ->
+                needleOwners.getOrPut(needle) { linkedSetOf() } += entry.id
+            }
+        }
+    }
+
+    fun owners(candidate: String): Set<String> =
+        buildSet {
+            addAll(needleOwners[candidate].orEmpty())
+            if ("::" in candidate) addAll(needleOwners[candidate.substringAfter("::")].orEmpty())
+        }
 }
 
 internal data class UsageScanResult(

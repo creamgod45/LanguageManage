@@ -1,5 +1,19 @@
 # Language Manager Changelog
 
+## 1.9.0
+
+### English
+
+- Add an **Experimental** section to the **Settings → Tools → LanguageManager** page for features that may still change ([#38](https://github.com/creamgod45/LanguageManage/issues/38)). Experimental features are off until turned on there.
+- Add the experimental **editor translation key hover** ([#38](https://github.com/creamgod45/LanguageManage/issues/38)). In writable editors, a translation key matched by the active scheme's usage Regex is underlined like a link when the mouse is over it. The file must be inside the scheme base path, not excluded, and not a language file; read-only (locked) editors, viewers, Diff, and console editors are skipped. After the hover delay (default 0.7 seconds, adjustable from 0.2 to 5 seconds) a menu lists every language's translation in a scrollable popup that stays within the screen, with **Open in Translation Table** (filters the table and selects the row) and **Edit Translation**. A key without translations offers **Create Translation** with the key prefilled. Edit and create use the same dialog and save flow as the translation table. Matching runs in the backend through a new `scanEditorKeys` RPC with a time budget and match cap, and is requested only when the mouse moves over an editor whose result is out of date, so there is no polling.
+
+---
+
+### 繁體中文
+
+- 在「Settings → Tools → LanguageManager」新增「**實驗功能**」區段（[#38](https://github.com/creamgod45/LanguageManage/issues/38)），收納之後仍可能調整的功能；實驗功能預設關閉，需在此區段開啟。
+- 新增實驗功能「**編輯器翻譯 key 快捷選單**」（[#38](https://github.com/creamgod45/LanguageManage/issues/38)）。在可編輯的編輯器中，滑鼠移到作用中方案使用率 Regex 匹配的翻譯 key 時，會顯示類似超連結的底線。檔案必須位於方案 base path 內、未被排除且不是語言檔；唯讀（顯示鎖頭）、viewer、Diff 與 Console 編輯器不會顯示。停留超過設定時間（預設 0.7 秒，可調整 0.2–5 秒）後顯示快捷選單，以可捲動且不超出螢幕的 popup 列出所有語言的翻譯，並提供「**在翻譯表中開啟**」（篩選翻譯表並選取該列）與「**編輯翻譯**」。尚未建立翻譯的 key 改為「**建立翻譯**」並預填 key。編輯與建立沿用翻譯表相同的對話框與儲存流程。匹配由 backend 透過新的 `scanEditorKeys` RPC 執行，設有時間預算與匹配數上限，只在滑鼠移到結果過期的編輯器時才請求，不輪詢。
+
 ## 1.8.2
 
 ### English

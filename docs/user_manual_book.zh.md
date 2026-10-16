@@ -455,6 +455,19 @@ Regex 命中、程式碼備註標記及已儲存的非侵入式規則會合併�
 
 「使用位置」Tab 預設停用且保持空白，一般方案載入不會替未互動的位置資料建立 Swing table。位置紀錄只保留於 backend，不再包含於一般狀態 Flow。雙擊某一翻譯 row 的「使用次數」cell，才會選取該 `namespace + key`、啟用 Tab，並向 backend 請求該 key 的當頁資料。表格包含來源檔、行號、欄位與命中次數，每個 RPC 分頁最多 100 筆。初始行／欄顯示「開啟時計算」：掃描階段只快取字元 offset 與來源檔修改時間；雙擊位置或按「開啟位置」後，backend 才計算行／欄、更新快取並把 IDE 游標移到該處。若來源檔在掃描後變更，插件會拒絕舊 offset 並要求重新讀取。
 
+### 編輯器翻譯 key 快捷選單（實驗功能）
+
+此功能為實驗功能，預設關閉。請在「Settings → Tools → LanguageManager」頁面的「實驗功能」區段勾選「滑鼠停在編輯器中的翻譯 key 上時顯示翻譯快捷選單」；同一區段可調整「停留時間」（預設 0.7 秒，可設 0.2–5 秒）。
+
+- 只在可編輯的主編輯器生效；唯讀檔案（編輯器頁籤顯示鎖頭）、viewer、Diff、Console 與預覽編輯器不會顯示。
+- 必須有作用中方案，且檔案位於方案的「掃描基準路徑」內、沒有被方案的檔案／資料夾排除清單排除，也不是方案的語言檔。
+- 檔案內容以作用中方案的「使用率判斷正規表示式」比對，沿用 `(?<key>...)`／第一個捕捉群組規則，以及使用率掃描相同的 `namespace.key`、`namespace/with/slashes.key` 與 `package::` 解析方式。掃描在 backend 執行，只在滑鼠移到掃描結果過期的編輯器時才請求。
+- 滑鼠移到匹配的 key 上會出現類似超連結的底線。停留超過設定時間後，選單會列出該 key 所有語言的翻譯；翻譯很多或很長時會在選單內捲動，選單最大約 560×420 像素且不會超出螢幕。
+  - 「在翻譯表中開啟」：開啟 Language Manager 工具視窗，將翻譯表篩選到該 key 並選取該列。
+  - 「編輯翻譯」：開啟一般的多語言編輯對話框。
+  - 尚未建立翻譯的 key 改為顯示「建立翻譯」，開啟新增翻譯對話框並預填 key（可辨識 `namespace.` 前綴時一併預選 namespace）。
+- 輸入文字、捲動、點擊其他位置或按 Esc 會關閉選單。
+
 ### 排除檔案與資料夾
 
 預設清單包含：
@@ -561,7 +574,7 @@ Regex 命中、程式碼備註標記及已儲存的非侵入式規則會合併�
 
 上傳 Marketplace 更新後，插件頁面的 **What’s New** 與 IDE 插件管理器會顯示 [CHANGELOG.md](../CHANGELOG.md) 中與目前版本相同的區段。建置會直接產生這份 metadata，不再另外維護容易不同步的摘要。
 
-### 1.8.x 變更與對應章節
+### 1.8.x–1.9.x 變更與對應章節
 
 | 版本 | 變更 | Issue | 手冊章節 |
 |---|---|---|---|
@@ -575,3 +588,4 @@ Regex 命中、程式碼備註標記及已儲存的非侵入式規則會合併�
 | 1.8.1 | 多個 Namespace 時提供 Namespace 過濾 | [#27](https://github.com/creamgod45/LanguageManage/issues/27) | [顯示欄位與右鍵選單](#顯示欄位與右鍵選單) |
 | 1.8.1 | 將工具視窗檢視開成編輯器頁籤 | [#29](https://github.com/creamgod45/LanguageManage/issues/29) | [在編輯器頁籤中開啟](#在編輯器頁籤中開啟) |
 | 1.8.2 | Properties base bundle 獨立顯示為 `fallback` 欄位 | [#34](https://github.com/creamgod45/LanguageManage/issues/34) | [JetBrains／Java ResourceBundle Properties](#jetbrainsjava-resourcebundle-properties) |
+| 1.9.0 | 實驗功能設定區段與編輯器翻譯 key 快捷選單 | [#38](https://github.com/creamgod45/LanguageManage/issues/38) | [編輯器翻譯 key 快捷選單（實驗功能）](#編輯器翻譯-key-快捷選單實驗功能) |
