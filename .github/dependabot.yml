@@ -4,3 +4,9 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+    ignore:
+      # Kotlin JVM, Kotlin serialization and the Fleet RPC compiler plugin ("rpc" in settings.gradle.kts) must be
+      # upgraded together: the rpc plugin is built against one Kotlin compiler version, and Kotlin 2.4.21 breaks it
+      # (ClassCastException in RpcComponentRegistrar, see #32 and #33). Upgrade these manually as a set.
+      - dependency-name: "org.jetbrains.kotlin.jvm"
+      - dependency-name: "org.jetbrains.kotlin.plugin.serialization"
