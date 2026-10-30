@@ -4,7 +4,7 @@
 
 LanguageManager is a localization file management plugin with JetBrains IDE split-mode support. It manages JSON, YAML/YML, Laravel PHP, and JetBrains/Java ResourceBundle Properties files. The plugin only processes files that the user explicitly selects in a scheme. It never automatically enrolls or rewrites other project files.
 
-The UI and diagnostics are available in English, Traditional Chinese, Simplified Chinese, Japanese, Korean, Spanish, and Thai. The display language follows the IDE by default and can be overridden in the plugin settings.
+The UI and diagnostics are available in English, Traditional Chinese, Simplified Chinese, Japanese, Korean, Spanish, Thai, and German. The display language follows the IDE by default and can be overridden in the plugin settings.
 
 ## Features
 
@@ -134,7 +134,7 @@ The root project uses the IntelliJ Platform Gradle Plugin to assemble three cont
 | `localization/SchemeUsageSettingsDialog.kt` | Edits managed files, scan path, Regex patterns, and exclusions for the active scheme |
 | `localization/ProjectViewExclusionActions.kt` | Provides the Project-tree action group and active-scheme exclusion shortcut |
 | `LanguageManagerBundle.kt` | Frontend resource bundle access |
-| `resources/messages/LanguageManagerFrontendBundle*.properties` | Seven-language UI dictionaries for buttons, tabs, fields, prompts, and Diff text |
+| `resources/messages/LanguageManagerFrontendBundle*.properties` | Eight-language UI dictionaries for buttons, tabs, fields, prompts, and Diff text |
 | `resources/icons/toolWindow*.svg` | LanguageManager Tool Window artwork in 16x16/20x20 Light and Dark variants selected automatically by the IDE |
 
 ### `backend`
@@ -157,7 +157,7 @@ The root project uses the IntelliJ Platform Gradle Plugin to assemble three cont
 | `TranslationInputValidation.kt` | Allows spaces, Unicode, and punctuation in keys while rejecting blank, control-character, and oversized input |
 | `LocalizationAnalysis.kt` | Builds diagnostics for empty values, duplicate keys/values, missing translations, and unused keys |
 | `LanguageManagerBackendBundle.kt` | Backend resource bundle access |
-| `resources/messages/LanguageManagerBackendBundle*.properties` | Seven-language parser, validation, and diagnostic dictionaries |
+| `resources/messages/LanguageManagerBackendBundle*.properties` | Eight-language parser, validation, and diagnostic dictionaries |
 
 ### Regression tests
 
@@ -232,7 +232,7 @@ Every service mutation is serialized with one coroutine `Mutex` per project. The
 2. Folder mode performs bounded, depth-limited, deduplicated discovery, skips dependency/build directories, safely reads supported files, and attempts to parse each one. The frontend popup shows successes and failures and can add more folders.
 3. After the user confirms the scheme name and selected recognized files, the backend validates and deduplicates every path again before persisting the scheme.
 4. `loadScheme()` computes a `lastModifiedTime XOR size` fingerprint for each file.
-5. If the cache format and all fingerprints match, `cache-{schemeId}.json` is loaded directly.
+5. If the cache format and all fingerprints match, and every cached entry still has the locale and namespace its file maps to under the current rules, `cache-{schemeId}.json` is loaded directly.
 6. On a cache miss, files are parsed independently and entries/parser issues are published before the usage scan finishes.
 7. The backend applies the scheme base path, Regex patterns, and exclusions to every regular file under the scan root, regardless of extension or IDE file type. Managed language files are excluded so definitions are not counted as usages.
 8. Quality analysis runs, the disk cache is updated, and the complete state is emitted through `StateFlow`.
@@ -338,8 +338,8 @@ build/distributions/LanguageManage-{version}.zip
 Test coverage includes:
 
 - `shared`: search, JOIN, locale/translation filters, usage defaults, Find in Files queries, and pagination.
-- `backend`: JSON/YAML/PHP/Properties parse/render, safe paths, arrays, sentence-style keys, usage Regex/exclusions/counts, analysis, read-only previews, and seven-language bundle parity.
-- `frontend`: setting defaults/migration, issue visibility, Tool Window API compatibility, explicit locale selection, controlled locale suggestions, and seven-language bundle parity.
+- `backend`: JSON/YAML/PHP/Properties parse/render, safe paths, arrays, sentence-style keys, usage Regex/exclusions/counts, analysis, read-only previews, and eight-language bundle parity.
+- `frontend`: setting defaults/migration, issue visibility, Tool Window API compatibility, explicit locale selection, controlled locale suggestions, and eight-language bundle parity, including no blank values.
 
 ## Version and License
 

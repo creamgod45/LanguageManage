@@ -3,6 +3,7 @@ package cg.creamgod45
 import cg.creamgod45.localization.DEFAULT_MAX_ENTRIES_PER_FILE
 import cg.creamgod45.localization.FolderDiscoveryDto
 import cg.creamgod45.localization.IssueSeverity
+import cg.creamgod45.localization.LanguageEntryDto
 import cg.creamgod45.localization.LanguageFileCandidateDto
 import cg.creamgod45.localization.LanguageIssueDto
 import cg.creamgod45.localization.LanguageLoadBudget
@@ -616,7 +617,8 @@ internal object LanguageFileCodec {
         return parseContent(path, schemeId, SafeLanguageFileAccess::read, maxEntries, cancellationCheck)
     }
 
-    private fun identity(path: Path): Pair<String, String> =
+    /** Locale and namespace a file maps to under the current parser rules, without reading the file. */
+    fun identity(path: Path): Pair<String, String> =
         when (path.extension.lowercase()) {
             "php" -> {
                 phpIdentity(path).let { it.locale to it.namespace }
@@ -629,6 +631,17 @@ internal object LanguageFileCodec {
             else -> {
                 path.nameWithoutExtension to ""
             }
+        }
+
+    /**
+     * True when every cached entry still maps to the locale and namespace its file gets today. A cache written before a
+     * locale rule change (such as `messages.properties` moving from `en` to `fallback`) would otherwise keep showing a
+     * locale that no backend operation can find.
+     */
+    fun entriesMatchIdentity(entries: List<LanguageEntryDto>): Boolean =
+        entries.groupBy { it.filePath }.all { (filePath, fileEntries) ->
+            val (locale, namespace) = runCatching { identity(Path.of(filePath)) }.getOrNull() ?: return@all false
+            fileEntries.all { it.locale == locale && it.namespace == namespace }
         }
 
     /** Parses [text] as the content of [path] without reading the file (used to compare before and after a patch). */

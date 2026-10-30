@@ -4,7 +4,7 @@
 
 ## 一句話定位
 
-JetBrains IDE 的多語系檔案管理插件（split-mode），只管理使用者在「方案（scheme）」中明確選取的語言檔，永不自動納管或改寫其他專案檔。UI 與診斷支援 7 種語言：英文、`zh_TW`、`zh_CN`、`ja`、`ko`、`es`、`th`。
+JetBrains IDE 的多語系檔案管理插件（split-mode），只管理使用者在「方案（scheme）」中明確選取的語言檔，永不自動納管或改寫其他專案檔。UI 與診斷支援 8 種語言：英文、`zh_TW`、`zh_CN`、`ja`、`ko`、`es`、`th`、`de`。
 
 ## 模組邊界
 
@@ -114,7 +114,7 @@ PHP **只 parse 不執行**：只接受選填的 `declare(strict_types=1);` + �
 
 ### 快取佈局
 - 方案清單：`.idea/language-manager/schemes.json`；每方案 `cache-{schemeId}.json`。
-- Cache 含 format version、file fingerprints、entries、issues；version 或任一 fingerprint 不符即淘汰重解析；刪方案刪對應 cache。
+- Cache 含 format version、file fingerprints、entries、issues；version 或任一 fingerprint 不符，或快取 entry 的 locale／namespace 與目前檔名規則推導結果不同，即淘汰重解析；刪方案刪對應 cache。
 - 記憶體以 `StateFlow` 保存當前權威狀態。
 
 ### 安全上限（硬約束）

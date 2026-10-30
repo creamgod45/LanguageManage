@@ -456,6 +456,7 @@ private fun DisplayLanguage.messageKey(): String =
         DisplayLanguage.KOREAN -> "settings.language.korean"
         DisplayLanguage.SPANISH -> "settings.language.spanish"
         DisplayLanguage.THAI -> "settings.language.thai"
+        DisplayLanguage.GERMAN -> "settings.language.german"
     }
 
 private fun DefaultBasePathMode.messageKey(): String =
