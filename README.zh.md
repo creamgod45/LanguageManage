@@ -226,7 +226,7 @@ flowchart LR
 2. 資料夾模式由 backend 對整批目錄限深、限量、去重並略過依賴／建置目錄，逐一安全讀取支援格式並嘗試解析；frontend popup 顯示成功與失敗原因並可繼續增加資料夾。
 3. 使用者確認方案名稱與勾選的可識別檔案後，backend 再次驗證路徑、去重並持久化方案。
 4. `loadScheme()` 計算每個檔案的 `lastModifiedTime XOR size` fingerprint。
-5. Cache format 與 fingerprints 都相符時直接載入 `cache-{schemeId}.json`。
+5. Cache format 與 fingerprints 都相符，且每筆快取 entry 的 locale／namespace 仍與目前規則推導的結果一致時，直接載入 `cache-{schemeId}.json`。
 6. Cache miss 時逐檔 parse，先發布 entries 與 parser issues，讓 UI 不必等待使用率掃描。
 7. Backend 依方案設定的 base path、Regex 與排除清單掃描根目錄下所有一般檔案，不以副檔名或 IDE 檔案類型額外過濾；方案列管語言檔本身會排除，避免把定義誤算成使用。
 8. 執行品質分析、更新磁碟 cache，再透過 `StateFlow` 推送完整狀態。

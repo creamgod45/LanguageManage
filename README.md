@@ -232,7 +232,7 @@ Every service mutation is serialized with one coroutine `Mutex` per project. The
 2. Folder mode performs bounded, depth-limited, deduplicated discovery, skips dependency/build directories, safely reads supported files, and attempts to parse each one. The frontend popup shows successes and failures and can add more folders.
 3. After the user confirms the scheme name and selected recognized files, the backend validates and deduplicates every path again before persisting the scheme.
 4. `loadScheme()` computes a `lastModifiedTime XOR size` fingerprint for each file.
-5. If the cache format and all fingerprints match, `cache-{schemeId}.json` is loaded directly.
+5. If the cache format and all fingerprints match, and every cached entry still has the locale and namespace its file maps to under the current rules, `cache-{schemeId}.json` is loaded directly.
 6. On a cache miss, files are parsed independently and entries/parser issues are published before the usage scan finishes.
 7. The backend applies the scheme base path, Regex patterns, and exclusions to every regular file under the scan root, regardless of extension or IDE file type. Managed language files are excluded so definitions are not counted as usages.
 8. Quality analysis runs, the disk cache is updated, and the complete state is emitted through `StateFlow`.

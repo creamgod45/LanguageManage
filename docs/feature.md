@@ -114,7 +114,7 @@ PHP **只 parse 不執行**：只接受選填的 `declare(strict_types=1);` + �
 
 ### 快取佈局
 - 方案清單：`.idea/language-manager/schemes.json`；每方案 `cache-{schemeId}.json`。
-- Cache 含 format version、file fingerprints、entries、issues；version 或任一 fingerprint 不符即淘汰重解析；刪方案刪對應 cache。
+- Cache 含 format version、file fingerprints、entries、issues；version 或任一 fingerprint 不符，或快取 entry 的 locale／namespace 與目前檔名規則推導結果不同，即淘汰重解析；刪方案刪對應 cache。
 - 記憶體以 `StateFlow` 保存當前權威狀態。
 
 ### 安全上限（硬約束）

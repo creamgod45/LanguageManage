@@ -34,7 +34,8 @@ class LocalizationManagerService(
     private val coroutineScope: CoroutineScope,
 ) {
     companion object {
-        private const val CACHE_FORMAT_VERSION = 7
+        // 8: unsuffixed .properties files moved from the `en` to the `fallback` locale (1.8.2, issue #44).
+        private const val CACHE_FORMAT_VERSION = 8
         private const val MAX_PERSISTED_STATE_BYTES = 10L * 1024 * 1024
         private const val MAX_DISK_CACHE_ENTRIES = 25_000
         private const val MAX_ESTIMATED_CACHE_CHARS = 5_000_000L
@@ -1586,7 +1587,8 @@ class LocalizationManagerService(
                     ?.takeIf {
                         it.formatVersion == CACHE_FORMAT_VERSION &&
                             it.fingerprints == fingerprints &&
-                            cacheFitsLimits(scheme, it)
+                            cacheFitsLimits(scheme, it) &&
+                            LanguageFileCodec.entriesMatchIdentity(it.entries)
                     }?.let { cache ->
                         loadController.ensureCurrent(generation)
                         LOG.info("Loaded localization scheme '${scheme.name}' from cache (${cache.entries.size} entries)")

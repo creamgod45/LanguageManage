@@ -729,6 +729,47 @@ class LanguageFileSupportTest {
     }
 
     @Test
+    fun `cache written before the fallback locale rule is rejected so add locale version sees fallback`() {
+        val base = temp.resolve("messages.properties").apply { writeText("hello=Hello\n") }
+        val japanese = temp.resolve("messages_ja.properties").apply { writeText("hello=こんにちは\n") }
+        fun entry(
+            path: Path,
+            locale: String,
+        ) = LanguageEntryDto(path.toString(), "scheme", path.toString(), locale, "messages", "hello", "Hello")
+
+        // Issue #44: a pre-1.8.2 cache still labels the base bundle "en", so the source dropdown offered "en"
+        // while the backend re-parsed the file as "fallback" and reported the source files as missing.
+        val staleCache = listOf(entry(base, "en"), entry(japanese, "ja"))
+        val freshCache = listOf(entry(base, "fallback"), entry(japanese, "ja"))
+        assertFalse(LanguageFileCodec.entriesMatchIdentity(staleCache))
+        assertTrue(LanguageFileCodec.entriesMatchIdentity(freshCache))
+        assertFalse(LanguageFileCodec.entriesMatchIdentity(listOf(entry(base, "fallback").copy(namespace = "other"))))
+
+        val documents = listOf(base, japanese).map { LanguageFileCodec.parse(it, "scheme") }
+        assertEquals(freshCache.map { it.locale }.toSet(), documents.map { it.locale }.toSet())
+        val target = LanguageLocaleVersionSupport.buildTargets(documents, "fallback", "de").single()
+        assertEquals("messages_de.properties", target.path.fileName.toString())
+    }
+
+    @Test
+    fun `cache identity check covers JSON and Laravel PHP locales`() {
+        val json = temp.resolve("en.json").apply { writeText("""{"hello":"Hello"}""") }
+        val php =
+            temp.resolve("lang/en/auth.php").apply {
+                parent.createDirectories()
+                writeText("<?php return ['failed' => 'Invalid'];")
+            }
+        val entries =
+            listOf(
+                LanguageEntryDto("1", "scheme", json.toString(), "en", "", "hello", "Hello"),
+                LanguageEntryDto("2", "scheme", php.toString(), "en", "auth", "failed", "Invalid"),
+            )
+
+        assertTrue(LanguageFileCodec.entriesMatchIdentity(entries))
+        assertFalse(LanguageFileCodec.entriesMatchIdentity(listOf(entries.last().copy(locale = "fallback"))))
+    }
+
+    @Test
     fun `new properties namespace creates both the fallback and the explicit English file`() {
         val documents =
             listOf("messages.properties", "messages_en.properties", "messages_zh_TW.properties").map { name ->
