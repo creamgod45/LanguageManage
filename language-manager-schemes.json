@@ -1,0 +1,146 @@
+{
+    "formatVersion": 3,
+    "schemes": [
+        {
+            "name": "jetbrain frontend",
+            "files": [
+                "frontend/src/main/resources/messages/LanguageManagerFrontendBundle_es.properties",
+                "frontend/src/main/resources/messages/LanguageManagerFrontendBundle_ja.properties",
+                "frontend/src/main/resources/messages/LanguageManagerFrontendBundle_ko.properties",
+                "frontend/src/main/resources/messages/LanguageManagerFrontendBundle_th.properties",
+                "frontend/src/main/resources/messages/LanguageManagerFrontendBundle_zh_CN.properties",
+                "frontend/src/main/resources/messages/LanguageManagerFrontendBundle_zh_TW.properties",
+                "frontend/src/main/resources/messages/LanguageManagerFrontendBundle.properties",
+                "frontend/src/main/resources/messages/LanguageManagerFrontendBundle_de.properties"
+            ],
+            "usageScanSettings": {
+                "regexPatterns": [
+                    "(?:message|messagePointer|lazyMessage)\\(\\s*(?<quote>[\\\"'])(?<key>[^\\r\\n]{1,256}?)\\k<quote>"
+                ],
+                "excludedDirectories": [
+                    ".git",
+                    ".github",
+                    "docs",
+                    "vendor",
+                    "storage",
+                    "database",
+                    "gradle",
+                    ".gradle",
+                    "build",
+                    "out",
+                    "dist",
+                    "target",
+                    "node_modules",
+                    ".idea",
+                    ".run",
+                    ".vscode",
+                    ".fleet",
+                    ".vs",
+                    ".settings",
+                    ".metadata",
+                    "nbproject",
+                    ".env",
+                    ".claude",
+                    ".codex",
+                    ".gemini",
+                    ".agents",
+                    ".ai",
+                    ".gitignore",
+                    ".intellijPlatform",
+                    ".kotlin",
+                    "AGENTS.md",
+                    "CHANGELOG.md",
+                    "gradle.properties",
+                    "gradlew",
+                    "gradlew.bat",
+                    "ktlint.bat",
+                    "LICENSE",
+                    "README.md",
+                    "README.zh.md",
+                    "example-for-php-filament"
+                ]
+            },
+            "dynamicSourceRules": [
+                {
+                    "id": "aca3a302-95e7-440c-aa7b-76c66a7fbf20",
+                    "filePath": "frontend/src/main/kotlin/localization/DynamicEditorActions.kt",
+                    "line": 66,
+                    "column": 5,
+                    "groups": [
+                        {
+                            "keys": [
+                                "LanguageManagerFrontendBundle.action.editor.dynamic.marker"
+                            ]
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "jetbrain backend",
+            "files": [
+                "backend/src/main/resources/messages/LanguageManagerBackendBundle_es.properties",
+                "backend/src/main/resources/messages/LanguageManagerBackendBundle_ja.properties",
+                "backend/src/main/resources/messages/LanguageManagerBackendBundle_ko.properties",
+                "backend/src/main/resources/messages/LanguageManagerBackendBundle_th.properties",
+                "backend/src/main/resources/messages/LanguageManagerBackendBundle_zh_CN.properties",
+                "backend/src/main/resources/messages/LanguageManagerBackendBundle_zh_TW.properties",
+                "backend/src/main/resources/messages/LanguageManagerBackendBundle.properties",
+                "backend/src/main/resources/messages/LanguageManagerBackendBundle_de.properties"
+            ],
+            "usageScanSettings": {
+                "regexPatterns": [
+                    "(?:message|messagePointer|lazyMessage|backendMessage)\\(\\s*(?<quote>[\\\"'])(?<key>[^\\r\\n]{1,256}?)\\k<quote>"
+                ],
+                "excludedDirectories": [
+                    ".git",
+                    ".github",
+                    "docs",
+                    "vendor",
+                    "storage",
+                    "database",
+                    "gradle",
+                    ".gradle",
+                    "build",
+                    "out",
+                    "dist",
+                    "target",
+                    "node_modules",
+                    ".idea",
+                    ".run",
+                    ".vscode",
+                    ".fleet",
+                    ".vs",
+                    ".settings",
+                    ".metadata",
+                    "nbproject",
+                    ".env",
+                    ".claude",
+                    ".codex",
+                    ".gemini",
+                    ".agents",
+                    ".ai",
+                    ".gitignore",
+                    ".intellijPlatform",
+                    ".kotlin",
+                    "AGENTS.md",
+                    "build.gradle.kts",
+                    "CHANGELOG.md",
+                    "example-for-php-filament",
+                    "gradle.properties",
+                    "gradlew",
+                    "gradlew.bat",
+                    "ktlint",
+                    "ktlint.bat",
+                    "LICENSE",
+                    "README.md",
+                    "README.zh.md",
+                    "settings.gradle.kts"
+                ]
+            },
+            "localeNotes": {
+                "fallback": "en"
+            }
+        }
+    ]
+}
