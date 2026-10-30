@@ -4,7 +4,7 @@
 
 ## 一句話定位
 
-JetBrains IDE 的多語系檔案管理插件（split-mode），只管理使用者在「方案（scheme）」中明確選取的語言檔，永不自動納管或改寫其他專案檔。UI 與診斷支援 7 種語言：英文、`zh_TW`、`zh_CN`、`ja`、`ko`、`es`、`th`。
+JetBrains IDE 的多語系檔案管理插件（split-mode），只管理使用者在「方案（scheme）」中明確選取的語言檔，永不自動納管或改寫其他專案檔。UI 與診斷支援 8 種語言：英文、`zh_TW`、`zh_CN`、`ja`、`ko`、`es`、`th`、`de`。
 
 ## 模組邊界
 

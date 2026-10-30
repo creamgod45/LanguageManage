@@ -4,7 +4,7 @@
 
 LanguageManager is a localization file management plugin with JetBrains IDE split-mode support. It manages JSON, YAML/YML, Laravel PHP, and JetBrains/Java ResourceBundle Properties files. The plugin only processes files that the user explicitly selects in a scheme. It never automatically enrolls or rewrites other project files.
 
-The UI and diagnostics are available in English, Traditional Chinese, Simplified Chinese, Japanese, Korean, Spanish, and Thai. The display language follows the IDE by default and can be overridden in the plugin settings.
+The UI and diagnostics are available in English, Traditional Chinese, Simplified Chinese, Japanese, Korean, Spanish, Thai, and German. The display language follows the IDE by default and can be overridden in the plugin settings.
 
 ## Features
 
@@ -134,7 +134,7 @@ The root project uses the IntelliJ Platform Gradle Plugin to assemble three cont
 | `localization/SchemeUsageSettingsDialog.kt` | Edits managed files, scan path, Regex patterns, and exclusions for the active scheme |
 | `localization/ProjectViewExclusionActions.kt` | Provides the Project-tree action group and active-scheme exclusion shortcut |
 | `LanguageManagerBundle.kt` | Frontend resource bundle access |
-| `resources/messages/LanguageManagerFrontendBundle*.properties` | Seven-language UI dictionaries for buttons, tabs, fields, prompts, and Diff text |
+| `resources/messages/LanguageManagerFrontendBundle*.properties` | Eight-language UI dictionaries for buttons, tabs, fields, prompts, and Diff text |
 | `resources/icons/toolWindow*.svg` | LanguageManager Tool Window artwork in 16x16/20x20 Light and Dark variants selected automatically by the IDE |
 
 ### `backend`
@@ -157,7 +157,7 @@ The root project uses the IntelliJ Platform Gradle Plugin to assemble three cont
 | `TranslationInputValidation.kt` | Allows spaces, Unicode, and punctuation in keys while rejecting blank, control-character, and oversized input |
 | `LocalizationAnalysis.kt` | Builds diagnostics for empty values, duplicate keys/values, missing translations, and unused keys |
 | `LanguageManagerBackendBundle.kt` | Backend resource bundle access |
-| `resources/messages/LanguageManagerBackendBundle*.properties` | Seven-language parser, validation, and diagnostic dictionaries |
+| `resources/messages/LanguageManagerBackendBundle*.properties` | Eight-language parser, validation, and diagnostic dictionaries |
 
 ### Regression tests
 
@@ -338,8 +338,8 @@ build/distributions/LanguageManage-{version}.zip
 Test coverage includes:
 
 - `shared`: search, JOIN, locale/translation filters, usage defaults, Find in Files queries, and pagination.
-- `backend`: JSON/YAML/PHP/Properties parse/render, safe paths, arrays, sentence-style keys, usage Regex/exclusions/counts, analysis, read-only previews, and seven-language bundle parity.
-- `frontend`: setting defaults/migration, issue visibility, Tool Window API compatibility, explicit locale selection, controlled locale suggestions, and seven-language bundle parity.
+- `backend`: JSON/YAML/PHP/Properties parse/render, safe paths, arrays, sentence-style keys, usage Regex/exclusions/counts, analysis, read-only previews, and eight-language bundle parity.
+- `frontend`: setting defaults/migration, issue visibility, Tool Window API compatibility, explicit locale selection, controlled locale suggestions, and eight-language bundle parity, including no blank values.
 
 ## Version and License
 

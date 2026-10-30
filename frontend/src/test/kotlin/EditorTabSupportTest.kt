@@ -15,7 +15,7 @@ class EditorTabSupportTest {
     @Test
     fun `every editor tab view and action has localized text`() {
         val keys = LanguageManagerView.entries.map { it.titleKey } + listOf("action.open.in.editor.tab", "editor.tab.title")
-        listOf("", "_zh_TW", "_zh_CN", "_ja", "_ko", "_es", "_th").forEach { suffix ->
+        listOf("", "_zh_TW", "_zh_CN", "_ja", "_ko", "_es", "_th", "_de").forEach { suffix ->
             val bundle = load("LanguageManagerFrontendBundle$suffix.properties")
             keys.forEach { key -> assertTrue(bundle.getProperty(key).isNullOrBlank().not(), "$key missing in '$suffix'") }
         }

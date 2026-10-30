@@ -4,7 +4,7 @@
 
 LanguageManager 是支援 JetBrains IDE split mode 的在地化檔案管理插件，用來管理 JSON、YAML/YML、Laravel PHP 與 JetBrains/Java ResourceBundle Properties 語言檔。插件只會處理使用者在「方案」中明確選擇的檔案，不會自動納管或改寫專案內其他檔案。
 
-目前介面與診斷支援英文、繁體中文、簡體中文、日文、韓文、西班牙文及泰文；顯示語言預設跟隨 IDE，也可在插件設定中明確指定。
+目前介面與診斷支援英文、繁體中文、簡體中文、日文、韓文、西班牙文、泰文及德文；顯示語言預設跟隨 IDE，也可在插件設定中明確指定。
 
 ## 主要功能
 
@@ -129,7 +129,7 @@ flowchart LR
 | `localization/SchemeUsageSettingsDialog.kt` | Tool Window 目前方案的列管檔案、掃描路徑、Regex 與排除清單編輯視窗 |
 | `localization/ProjectViewExclusionActions.kt` | Project 檔案樹的插件操作群組與目前方案排除快捷操作 |
 | `LanguageManagerBundle.kt` | frontend `DynamicBundle` 存取入口 |
-| `resources/messages/LanguageManagerFrontendBundle*.properties` | 按鈕、頁籤、欄位、提示及 Diff 的七語言字典 |
+| `resources/messages/LanguageManagerFrontendBundle*.properties` | 按鈕、頁籤、欄位、提示及 Diff 的八語言字典 |
 | `resources/icons/toolWindow*.svg` | IDE 自動選用的 LanguageManager Tool Window 16×16／20×20 Light、Dark 四種圖示資源 |
 
 ### `backend`
@@ -151,7 +151,7 @@ flowchart LR
 | `TranslationInputValidation.kt` | 翻譯 key 輸入驗證；允許空格、Unicode 與標點，拒絕空白、控制字元與超長 key |
 | `LocalizationAnalysis.kt` | 建立缺失值、重複鍵／值、缺少翻譯及未使用 key 的診斷 |
 | `LanguageManagerBackendBundle.kt` | backend `DynamicBundle` 存取入口 |
-| `resources/messages/LanguageManagerBackendBundle*.properties` | parser、驗證與診斷的七語言字典 |
+| `resources/messages/LanguageManagerBackendBundle*.properties` | parser、驗證與診斷的八語言字典 |
 
 ### 關鍵回歸測試
 
@@ -332,8 +332,8 @@ build/distributions/LanguageManage-{version}.zip
 測試範圍：
 
 - `shared`: 搜尋、JOIN、語言／翻譯狀態篩選、使用率預設及分頁。
-- `backend`: JSON/YAML/PHP/Properties parse/render、安全路徑、array、語言目錄巢狀分類、句子型 key、使用率 Regex／排除計數、分析、唯讀 preview 與七語資源鍵完整性。
-- `frontend`: 設定預設與遷移、issue 顯示過濾、Tool Window API 相容性與七語資源鍵完整性。
+- `backend`: JSON/YAML/PHP/Properties parse/render、安全路徑、array、語言目錄巢狀分類、句子型 key、使用率 Regex／排除計數、分析、唯讀 preview 與八語資源鍵完整性。
+- `frontend`: 設定預設與遷移、issue 顯示過濾、Tool Window API 相容性與八語資源鍵完整性（含不得有空白值）。
 
 ## 版本與授權
 

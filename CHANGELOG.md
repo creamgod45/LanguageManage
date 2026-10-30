@@ -4,12 +4,14 @@
 
 ### English
 
+- Add **German (Deutsch)** as an interface language. The UI, backend diagnostics, and Marketplace plugin description are now available in German, and **Plugin display language** in **Settings → Tools → LanguageManager** offers **German**. With **Automatic (follow IDE)**, German is used when the IDE runs in a German locale. Backend diagnostics follow the IDE locale, as for the other languages.
 - Fix **Add Language Version** failing with "No files were found for source locale en" after upgrading to 1.8.2 or later ([#44](https://github.com/creamgod45/LanguageManage/issues/44)). 1.8.2 moved Properties base bundles such as `messages.properties` from the `en` column to `fallback`, but the disk cache was not invalidated, so a scheme loaded from an old cache kept showing those rows as `en`. The source dropdown then offered `en` while the backend, which re-reads the files, only found `fallback`. The same stale column also affected other actions that look files up by locale. The cache format is now bumped, and a cache is also discarded whenever a cached row's locale or namespace no longer matches what its file name maps to, so future locale rule changes reload automatically.
 
 ---
 
 ### 繁體中文
 
+- 新增介面語言「**德文（Deutsch）**」。介面、backend 診斷訊息與 Marketplace 插件說明都提供德文版本，「Settings → Tools → LanguageManager」的「**插件顯示語言**」也可選擇「**德文**」；設為「**自動（跟隨 IDE）**」時，IDE 使用德文 locale 就會顯示德文。backend 診斷訊息與其他語言相同，跟隨 IDE locale。
 - 修正升級到 1.8.2 之後「**新增語言版本**」選擇 `en` 作為範本時出現「找不到來源語言 en 的檔案」（[#44](https://github.com/creamgod45/LanguageManage/issues/44)）。1.8.2 將 `messages.properties` 這類 Properties base bundle 從 `en` 欄位改為 `fallback`，但沒有讓磁碟快取失效，從舊快取載入的方案仍把這些列顯示為 `en`；來源語言下拉選單因此提供 `en`，而重新讀檔的 backend 只找得到 `fallback`。依 locale 尋找檔案的其他操作也受同一個過期欄位影響。現在已遞增快取格式版本，並在快取列的 locale 或 namespace 與檔名推導結果不一致時捨棄快取，之後若再調整 locale 規則也會自動重新讀取。
 
 ## 1.9.1

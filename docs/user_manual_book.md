@@ -30,6 +30,7 @@ The plugin follows the IDE display language by default and includes:
 - Korean
 - Spanish
 - Thai
+- German
 
 ## 2. Installing the Plugin
 

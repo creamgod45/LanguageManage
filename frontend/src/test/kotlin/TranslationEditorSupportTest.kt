@@ -111,7 +111,7 @@ class TranslationEditorSupportTest {
 
     @Test
     fun `duplicate key message resolves in every frontend bundle`() {
-        listOf(null, "zh_TW", "zh_CN", "ja", "ko", "es", "th").forEach { locale ->
+        listOf(null, "zh_TW", "zh_CN", "ja", "ko", "es", "th", "de").forEach { locale ->
             val bundle =
                 java.util.ResourceBundle.getBundle(
                     "messages.LanguageManagerFrontendBundle",
