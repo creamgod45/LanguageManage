@@ -41,6 +41,33 @@ class EntryMutationSupportTest {
     }
 
     @Test
+    fun `accepts a scheme file configured through a symlinked directory`() {
+        val root = Files.createTempDirectory("language-manager-symlink").toRealPath()
+        try {
+            val realDir = Files.createDirectories(root.resolve("volume/lang/en"))
+            val realFile = realDir.resolve("budget.php").apply { writeText("<?php\nreturn [];\n") }
+            val link = root.resolve("home-link")
+            Files.createSymbolicLink(link, root.resolve("volume"))
+            val configuredPath = link.resolve("lang/en/budget.php").toString()
+            val document = LanguageFileCodec.parse(SafeLanguageFileAccess.validate(configuredPath), "scheme")
+            assertEquals(realFile, document.path)
+
+            val changed =
+                EntryMutationSupport.apply(
+                    listOf(document),
+                    emptyList(),
+                    listOf(EntryMutationDto(null, configuredPath, "en", "budget", "test", "test")),
+                    String::trim,
+                )
+
+            assertEquals(listOf(document), changed)
+            assertEquals("test", document.values["test"])
+        } finally {
+            root.toFile().deleteRecursively()
+        }
+    }
+
+    @Test
     fun `rejects duplicate targets before applying the batch`() {
         val path = Files.createTempFile("language-manager-duplicate-target", ".json").toAbsolutePath().normalize()
         try {
