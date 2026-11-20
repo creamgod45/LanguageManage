@@ -23,7 +23,7 @@ internal object EntryMutationSupport {
     ): List<ParsedLanguageFile> {
         require(mutations.isNotEmpty()) { backendMessage("entry.mutations.required") }
         require(
-            mutations.distinctBy { Triple(it.filePath, it.namespace, it.key) }.size == mutations.size,
+            mutations.distinctBy { Triple(canonicalPath(Path.of(it.filePath)), it.namespace, it.key) }.size == mutations.size,
         ) { backendMessage("entry.mutations.duplicate.target") }
         val sourceIds = mutations.mapNotNull { it.id?.takeIf(String::isNotBlank) }
         require(sourceIds.distinct().size == sourceIds.size) { backendMessage("entry.mutations.duplicate.source") }
