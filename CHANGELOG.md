@@ -1,5 +1,17 @@
 # Language Manager Changelog
 
+## 1.9.3
+
+### English
+
+- Fix **Add Translation** and other edits failing with "The target file is not in this scheme" when a scheme file was selected through a symbolic link, for example a project opened from `~/PhpstormProjects` that links to an external drive under `/Volumes/...`. Files are read through their real path, but the edit target was still compared using the symlinked path, so the two never matched. Both sides are now resolved to the real path before comparing.
+
+---
+
+### 繁體中文
+
+- 修正方案檔案經由符號連結選取時，「**新增翻譯**」等編輯操作出現「目標檔案不在此方案」的問題。例如專案從 `~/PhpstormProjects` 開啟，而該目錄實際連結到 `/Volumes/...` 外接硬碟。讀檔時會使用真實路徑，但比對編輯目標時仍使用符號連結路徑，兩者永遠對不上。現在比對前會把兩邊都解析成真實路徑。
+
 ## 1.9.2
 
 ### English

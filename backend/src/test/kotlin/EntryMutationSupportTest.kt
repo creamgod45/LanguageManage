@@ -2,7 +2,9 @@ package cg.creamgod45
 
 import cg.creamgod45.localization.EntryMutationDto
 import cg.creamgod45.localization.LanguageEntryDto
+import java.io.IOException
 import java.nio.file.Files
+import java.nio.file.Path
 import kotlin.io.path.writeText
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -39,6 +41,73 @@ class EntryMutationSupportTest {
             root.toFile().deleteRecursively()
         }
     }
+
+    @Test
+    fun `accepts a scheme file configured through a symlinked directory`() {
+        val root = Files.createTempDirectory("language-manager-symlink").toRealPath()
+        try {
+            val realDir = Files.createDirectories(root.resolve("volume/lang/en"))
+            val realFile = realDir.resolve("budget.php").apply { writeText("<?php\nreturn [];\n") }
+            val link = root.resolve("home-link")
+            // Some environments (e.g. Windows without Developer Mode) cannot create symlinks; nothing to verify there.
+            if (!tryCreateSymbolicLink(link, root.resolve("volume"))) return
+            val configuredPath = link.resolve("lang/en/budget.php").toString()
+            val document = LanguageFileCodec.parse(SafeLanguageFileAccess.validate(configuredPath), "scheme")
+            assertEquals(realFile, document.path)
+
+            val changed =
+                EntryMutationSupport.apply(
+                    listOf(document),
+                    emptyList(),
+                    listOf(EntryMutationDto(null, configuredPath, "en", "budget", "test", "test")),
+                    String::trim,
+                )
+
+            assertEquals(listOf(document), changed)
+            assertEquals("test", document.values["test"])
+        } finally {
+            root.toFile().deleteRecursively()
+        }
+    }
+
+    @Test
+    fun `rejects duplicate targets that reach the same file through a symlink`() {
+        val root = Files.createTempDirectory("language-manager-symlink-duplicate").toRealPath()
+        try {
+            val realFile = Files.createDirectories(root.resolve("volume")).resolve("en.json").apply { writeText("{}") }
+            val link = root.resolve("home-link")
+            if (!tryCreateSymbolicLink(link, root.resolve("volume"))) return
+            val document = ParsedLanguageFile(realFile, "en", "", linkedMapOf())
+
+            assertFailsWith<IllegalArgumentException> {
+                EntryMutationSupport.apply(
+                    listOf(document),
+                    emptyList(),
+                    listOf(
+                        EntryMutationDto(null, realFile.toString(), "en", "", "welcome", "Welcome"),
+                        EntryMutationDto(null, link.resolve("en.json").toString(), "en", "", "welcome", "Hello"),
+                    ),
+                    String::trim,
+                )
+            }
+            assertEquals(emptyMap(), document.values)
+        } finally {
+            root.toFile().deleteRecursively()
+        }
+    }
+
+    private fun tryCreateSymbolicLink(
+        link: Path,
+        target: Path,
+    ): Boolean =
+        try {
+            Files.createSymbolicLink(link, target)
+            true
+        } catch (_: UnsupportedOperationException) {
+            false
+        } catch (_: IOException) {
+            false
+        }
 
     @Test
     fun `rejects duplicate targets before applying the batch`() {

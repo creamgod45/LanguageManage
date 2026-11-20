@@ -6,6 +6,15 @@ import java.nio.file.Path
 import cg.creamgod45.LanguageManagerBackendBundle.message as backendMessage
 
 internal object EntryMutationSupport {
+    /**
+     * Scheme files may be configured through a symlink (e.g. `~/Projects` -> `/Volumes/Disk/Projects`)
+     * while parsed documents carry the real path, so compare both sides by their resolved real path.
+     */
+    internal fun canonicalPath(path: Path): Path {
+        val normalized = path.toAbsolutePath().normalize()
+        return runCatching { normalized.toRealPath() }.getOrDefault(normalized)
+    }
+
     fun apply(
         documents: List<ParsedLanguageFile>,
         currentEntries: List<LanguageEntryDto>,
@@ -14,12 +23,12 @@ internal object EntryMutationSupport {
     ): List<ParsedLanguageFile> {
         require(mutations.isNotEmpty()) { backendMessage("entry.mutations.required") }
         require(
-            mutations.distinctBy { Triple(it.filePath, it.namespace, it.key) }.size == mutations.size,
+            mutations.distinctBy { Triple(canonicalPath(Path.of(it.filePath)), it.namespace, it.key) }.size == mutations.size,
         ) { backendMessage("entry.mutations.duplicate.target") }
         val sourceIds = mutations.mapNotNull { it.id?.takeIf(String::isNotBlank) }
         require(sourceIds.distinct().size == sourceIds.size) { backendMessage("entry.mutations.duplicate.source") }
 
-        val documentsByPath = documents.associateBy { it.path.toAbsolutePath().normalize() }
+        val documentsByPath = documents.associateBy { canonicalPath(it.path) }
         val entriesById = currentEntries.associateBy(LanguageEntryDto::id)
         val changed = linkedMapOf<Path, ParsedLanguageFile>()
         val knownArrayDepths =
@@ -34,7 +43,7 @@ internal object EntryMutationSupport {
                 }.groupBy({ it.first }, { it.second })
 
         mutations.forEach { mutation ->
-            val targetPath = Path.of(mutation.filePath).toAbsolutePath().normalize()
+            val targetPath = canonicalPath(Path.of(mutation.filePath))
             val targetDocument = documentsByPath[targetPath] ?: error(backendMessage("entry.target.outside"))
             var structuredValue = false
             var originalKey: String? = null
@@ -43,7 +52,7 @@ internal object EntryMutationSupport {
 
             mutation.id?.takeIf(String::isNotBlank)?.let { id ->
                 val original = entriesById[id] ?: error(backendMessage("entry.not.found"))
-                val originalPath = Path.of(original.filePath).toAbsolutePath().normalize()
+                val originalPath = canonicalPath(Path.of(original.filePath))
                 val originalDocument = documentsByPath[originalPath] ?: error(backendMessage("entry.target.outside"))
                 originalKey = original.key
                 structuredValue = original.key in originalDocument.structuredValueKeys
